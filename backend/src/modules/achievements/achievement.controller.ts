@@ -1,0 +1,52 @@
+import { Request, Response } from 'express';
+import { sendSuccess } from '../../shared/utils/apiResponse';
+import { AchievementService } from './achievement.service';
+import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
+
+function isAdminRequest(req: Request): boolean {
+  return req.user!.roles.some((role) => ['ADMIN', 'ADMIN_MASTER'].includes(role));
+}
+
+export class AchievementController {
+  public static async list(_req: Request, res: Response): Promise<Response> {
+    const achievements = await AchievementService.list();
+    return sendSuccess(res, achievements, 200, { total: achievements.length });
+  }
+
+  public static async getById(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const achievement = await AchievementService.getById(id);
+    return sendSuccess(res, achievement, 200);
+  }
+
+  public static async create(req: Request, res: Response): Promise<Response> {
+    const data = req.body as CreateAchievementDTO;
+    const adminId = req.user!.id;
+    const achievement = await AchievementService.create(data, adminId);
+    return sendSuccess(res, achievement, 201);
+  }
+
+  public static async update(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const data = req.body as UpdateAchievementDTO;
+    const adminId = req.user!.id;
+    const achievement = await AchievementService.update(id, data, adminId);
+    return sendSuccess(res, achievement, 200);
+  }
+
+  public static async delete(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const adminId = req.user!.id;
+    const result = await AchievementService.delete(id, adminId);
+    return sendSuccess(res, result, 200);
+  }
+
+  /** GET /achievements/users/:userId — Conquistas desbloqueadas por um usuário */
+  public static async listUnlockedForUser(req: Request, res: Response): Promise<Response> {
+    const { userId } = req.params;
+    const requestingUserId = req.user!.id;
+    const isAdmin = isAdminRequest(req);
+    const unlocked = await AchievementService.listUnlockedForUser(userId, requestingUserId, isAdmin);
+    return sendSuccess(res, unlocked, 200, { total: unlocked.length });
+  }
+}

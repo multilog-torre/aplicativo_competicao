@@ -1,0 +1,446 @@
+// Prisma Schema — Sistema Corporativo de Competição e Gamificação
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// 1. USUÁRIOS, DEPARTAMENTOS E RBAC
+// -------------------------------------------------------------
+
+model User {
+  id            String   @id @default(uuid())
+  corporateId   String?  @unique @map("corporate_id")
+  email         String   @unique
+  name          String
+  passwordHash  String?  @map("password_hash")
+  departmentId  String?  @map("department_id")
+  position      String?
+  avatarType    String   @default("INITIALS") @map("avatar_type")
+  avatarUrl     String?  @map("avatar_url")
+  status        String   @default("ACTIVE")
+  totalPoints   Int      @default(0) @map("total_points")
+  levelId       String?  @map("level_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  department          Department?           @relation(fields: [departmentId], references: [id])
+  level               Level?                @relation(fields: [levelId], references: [id])
+  userRoles           UserRole[]
+  activities          UserActivity[]        @relation("UserActivities")
+  validatedActivities UserActivity[]        @relation("ValidatedActivities")
+  pointsTransactions  PointsTransaction[]   @relation("UserPoints")
+  createdTransactions PointsTransaction[]   @relation("CreatedTransactions")
+  userAchievements    UserAchievement[]
+  challenges          ChallengeParticipant[]
+  userRewards         UserReward[]
+  posts               Post[]
+  comments            Comment[]
+  postLikes           PostLike[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([corporateId])
+  @@index([departmentId])
+  @@map("users")
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("departments")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // PARTICIPANTE, ADMIN, ADMIN_MASTER
+  description String?
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// -------------------------------------------------------------
+// 2. MODALIDADES, ATIVIDADES E EVIDÊNCIAS
+// -------------------------------------------------------------
+
+model ActivityType {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  description      String?
+  category         String   @default("SPORTS") // SPORTS, HEALTH, EDUCATION, SOCIAL, OTHER
+  icon             String   @default("activity")
+  rulesDescription String?  @map("rules_description")
+  scoringType      String   @default("FIXED") @map("scoring_type") // FIXED, QUANTITY, TIME, MULTIPLIER
+  basePoints       Int      @default(10) @map("base_points")
+  unit             String?
+  multiplier       Float    @default(1.0)
+  dailyLimit       Int?     @map("daily_limit")
+  weeklyLimit      Int?     @map("weekly_limit")
+  monthlyLimit     Int?     @map("monthly_limit")
+  requiresEvidence Boolean  @default(true) @map("requires_evidence")
+  allowedFileTypes String   @default("jpg,jpeg,png,pdf") @map("allowed_file_types")
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  activities UserActivity[]
+  challenges Challenge[]
+
+  @@map("activity_types")
+}
+
+model UserActivity {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  activityTypeId   String    @map("activity_type_id")
+  activityDate     DateTime  @map("activity_date")
+  quantity         Float     @default(1)
+  unit             String?
+  description      String?
+  calculatedPoints Int       @map("calculated_points")
+  status           String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  submittedAt      DateTime  @default(now()) @map("submitted_at")
+  validatedAt      DateTime? @map("validated_at")
+  validatedBy      String?   @map("validated_by")
+  rejectionReason  String?   @map("rejection_reason")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user               User                @relation("UserActivities", fields: [userId], references: [id])
+  activityType       ActivityType        @relation(fields: [activityTypeId], references: [id])
+  validator          User?               @relation("ValidatedActivities", fields: [validatedBy], references: [id])
+  evidences          ActivityEvidence[]
+  pointsTransactions PointsTransaction[]
+
+  @@index([userId])
+  @@index([activityTypeId])
+  @@index([status])
+  @@index([activityDate])
+  @@map("user_activities")
+}
+
+model ActivityEvidence {
+  id              String   @id @default(uuid())
+  activityId      String   @map("activity_id")
+  fileName        String   @map("file_name")
+  fileType        String   @map("file_type")
+  fileSize        Int      @map("file_size")
+  storageProvider String   @default("local") @map("storage_provider")
+  storagePath     String   @map("storage_path")
+  storageUrl      String?  @map("storage_url")
+  uploadedBy      String   @map("uploaded_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  activity UserActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@map("activity_evidence")
+}
+
+// -------------------------------------------------------------
+// 3. LEDGER IMUTÁVEL DE TRANSAÇÕES DE PONTOS
+// -------------------------------------------------------------
+
+model PointsTransaction {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  activityId      String?  @map("activity_id")
+  challengeId     String?  @map("challenge_id")
+  achievementId   String?  @map("achievement_id")
+  rewardId        String?  @map("reward_id")
+  transactionType String   @map("transaction_type") // ACTIVITY, BONUS, PENALTY, ADJUSTMENT, CHALLENGE, ACHIEVEMENT, REWARD, REVERSAL
+  points          Int
+  description     String
+  referenceType   String?  @map("reference_type")
+  referenceId     String?  @map("reference_id")
+  createdBy       String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user        User          @relation("UserPoints", fields: [userId], references: [id])
+  activity    UserActivity? @relation(fields: [activityId], references: [id])
+  challenge   Challenge?    @relation(fields: [challengeId], references: [id])
+  achievement Achievement?  @relation(fields: [achievementId], references: [id])
+  reward      Reward?       @relation(fields: [rewardId], references: [id])
+  creator     User?         @relation("CreatedTransactions", fields: [createdBy], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([activityId])
+  @@index([transactionType])
+  @@map("points_transactions")
+}
+
+// -------------------------------------------------------------
+// 4. NÍVEIS, CONQUISTAS E DESAFIOS (GAMIFICAÇÃO)
+// -------------------------------------------------------------
+
+model Level {
+  id          String   @id @default(uuid())
+  levelNumber Int      @unique @map("level_number")
+  name        String
+  minPoints   Int      @unique @map("min_points")
+  badgeIcon   String   @default("award") @map("badge_icon")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("levels")
+}
+
+model Achievement {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String
+  icon         String   @default("trophy")
+  pointsReward Int      @default(50) @map("points_reward")
+  ruleType     String   @map("rule_type") // ACTIVITY_COUNT, TOTAL_POINTS, STREAK_DAYS, SPECIFIC_MODALITY
+  ruleValue    String   @map("rule_value")
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  userAchievements   UserAchievement[]
+  pointsTransactions PointsTransaction[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  achievementId String   @map("achievement_id")
+  unlockedAt    DateTime @default(now()) @map("unlocked_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@map("user_achievements")
+}
+
+model Challenge {
+  id             String    @id @default(uuid())
+  title          String
+  description    String
+  startDate      DateTime  @map("start_date")
+  endDate        DateTime  @map("end_date")
+  activityTypeId String?   @map("activity_type_id")
+  targetGoal     Float     @map("target_goal")
+  unit           String?
+  rewardPoints   Int       @default(100) @map("reward_points")
+  scope          String    @default("INDIVIDUAL") // INDIVIDUAL, DEPARTMENT, COMPANY
+  status         String    @default("ACTIVE") // UPCOMING, ACTIVE, COMPLETED, CANCELLED
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  activityType       ActivityType?          @relation(fields: [activityTypeId], references: [id])
+  participants       ChallengeParticipant[]
+  pointsTransactions PointsTransaction[]
+
+  @@map("challenges")
+}
+
+model ChallengeParticipant {
+  id              String    @id @default(uuid())
+  challengeId     String    @map("challenge_id")
+  userId          String    @map("user_id")
+  currentProgress Float     @default(0) @map("current_progress")
+  completed       Boolean   @default(false)
+  completedAt     DateTime? @map("completed_at")
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@map("challenge_participants")
+}
+
+// -------------------------------------------------------------
+// 5. PREMIAÇÕES E RECOMPENSAS
+// -------------------------------------------------------------
+
+model Reward {
+  id                String   @id @default(uuid())
+  title             String
+  description       String
+  imageUrl          String?  @map("image_url")
+  pointsCost        Int      @map("points_cost")
+  quantityAvailable Int      @default(0) @map("quantity_available")
+  status            String   @default("AVAILABLE") // AVAILABLE, OUT_OF_STOCK, INACTIVE
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  userRewards        UserReward[]
+  pointsTransactions PointsTransaction[]
+
+  @@map("rewards")
+}
+
+model UserReward {
+  id          String    @id @default(uuid())
+  rewardId    String    @map("reward_id")
+  userId      String    @map("user_id")
+  status      String    @default("REQUESTED") // REQUESTED, APPROVED, DELIVERED, CANCELLED
+  redeemedAt  DateTime  @default(now()) @map("redeemed_at")
+  processedAt DateTime? @map("processed_at")
+  processedBy String?   @map("processed_by")
+
+  reward Reward @relation(fields: [rewardId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("user_rewards")
+}
+
+// -------------------------------------------------------------
+// 6. MURAL SOCIAL (POSTS, COMENTÁRIOS, CURTIDAS)
+// -------------------------------------------------------------
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  content   String
+  imageUrl  String?  @map("image_url")
+  status    String   @default("PUBLISHED") // PUBLISHED, HIDDEN, MODERATED
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    PostLike[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_likes")
+}
+
+// -------------------------------------------------------------
+// 7. NOTIFICAÇÕES E AUDITORIA
+// -------------------------------------------------------------
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  title       String
+  message     String
+  type        String   @default("INFO")
+  isRead      Boolean  @default(false) @map("is_read")
+  referenceId String?  @map("reference_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  oldValues String?  @map("old_values")
+  newValues String?  @map("new_values")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// -------------------------------------------------------------
+// 8. REGRAS DO JOGO ("Como funciona?" — configurável pelo admin)
+// -------------------------------------------------------------
+
+model GameRuleStep {
+  id          String   @id @default(uuid())
+  stepNumber  Int      @unique @map("step_number")
+  title       String
+  description String
+  icon        String   @default("info")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("game_rule_steps")
+}
