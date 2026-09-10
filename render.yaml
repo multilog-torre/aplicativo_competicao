@@ -15,7 +15,11 @@ services:
     # --include=dev é necessário mesmo com NODE_ENV=production: sem ele o
     # npm pula as devDependencies (typescript, @types/*), e o build (tsc) falha.
     buildCommand: npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npm run build
-    startCommand: npx prisma migrate deploy --schema=prisma/schema.prisma && npm start
+    # O seed é idempotente (upserts) e seguro de rodar em todo restart — garante
+    # que os usuários/dados de demonstração sempre existam após um deploy.
+    # Atenção: modalidades/níveis/conquistas/regras editadas pelo admin voltam
+    # aos valores originais do seed em cada novo deploy (usuários não são afetados).
+    startCommand: npx prisma migrate deploy --schema=prisma/schema.prisma && npx tsx prisma/seed.ts && npm start
     envVars:
       - key: NODE_ENV
         value: production
