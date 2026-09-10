@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../config/database';
 import { sendSuccess } from '../../shared/utils/apiResponse';
-import { LoginDTO, RefreshTokenDTO } from './auth.dto';
+import { env } from '../../config/env';
+import { LoginDTO, RefreshTokenDTO, RegisterDTO } from './auth.dto';
 import { AuthService } from './auth.service';
 
 export class AuthController {
@@ -9,6 +10,20 @@ export class AuthController {
     const data = req.body as LoginDTO;
     const result = await AuthService.login(data);
     return sendSuccess(res, result, 200);
+  }
+
+  public static async register(req: Request, res: Response): Promise<Response> {
+    const data = req.body as RegisterDTO;
+    const result = await AuthService.register(data);
+    return sendSuccess(
+      res,
+      {
+        ...result,
+        defaultPassword: env.DEFAULT_USER_PASSWORD,
+        message: 'Conta criada com sucesso! Aguarde a aprovação de um administrador para poder acessar a plataforma.',
+      },
+      201,
+    );
   }
 
   public static async getMe(req: Request, res: Response): Promise<Response> {

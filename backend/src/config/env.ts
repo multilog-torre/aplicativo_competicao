@@ -18,6 +18,11 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   REFRESH_TOKEN_SECRET: z.string().default('super_secret_refresh_token_torre_gamificacao_2026_dev'),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default('30d'),
+  // Autocadastro (POST /auth/register) — só aceita e-mails deste domínio
+  // corporativo, e toda conta nova nasce com esta senha padrão (o próprio
+  // usuário troca depois via PATCH /profile/password).
+  SIGNUP_ALLOWED_EMAIL_DOMAIN: z.string().default('multilog.com.br'),
+  DEFAULT_USER_PASSWORD: z.string().min(6).default('Torre@2026'),
   STORAGE_PROVIDER: z.enum(['local', 'azure', 's3', 'cloudinary']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('../storage/uploads'),
   MAX_UPLOAD_SIZE_MB: z.string().transform(Number).default('10'),

@@ -3,13 +3,14 @@ import { ensureAuthenticated, requireRoles } from '../../shared/middlewares/auth
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { AuthController } from './auth.controller';
-import { loginSchema, refreshTokenSchema } from './auth.dto';
+import { loginSchema, refreshTokenSchema, registerSchema } from './auth.dto';
 
 const router = Router();
 
 // Rotas Públicas
 router.post('/login', validateRequest({ body: loginSchema }), asyncHandler(AuthController.login));
 router.post('/refresh', validateRequest({ body: refreshTokenSchema }), asyncHandler(AuthController.refreshToken));
+router.post('/register', validateRequest({ body: registerSchema }), asyncHandler(AuthController.register));
 
 // Rotas Protegidas por Autenticação JWT
 router.post('/logout', ensureAuthenticated, asyncHandler(AuthController.logout));

@@ -58,6 +58,11 @@ export function ProfilePage() {
       </div>
 
       <section className="card">
+        <h2 className="card__title">Segurança</h2>
+        <ChangePasswordForm />
+      </section>
+
+      <section className="card">
         <h2 className="card__title">Resumo</h2>
         <div className="stat-grid">
           <div className="stat-card">
@@ -234,6 +239,88 @@ function AvatarPicker({ profile, onChanged }: { profile: ProfileData; onChanged:
         </div>
       )}
     </div>
+  );
+}
+
+function ChangePasswordForm() {
+  const { showToast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (newPassword !== confirmPassword) {
+      setError('A confirmação não corresponde à nova senha.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.patch('/profile/password', { currentPassword, newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast('Senha alterada com sucesso!', 'success');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível trocar a senha.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      {error && <div className="alert alert--error">{error}</div>}
+
+      <label className="field">
+        <span className="field__label">Senha atual</span>
+        <input
+          type="password"
+          required
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+      </label>
+
+      <div className="form__row">
+        <label className="field">
+          <span className="field__label">Nova senha (mín. 6 caracteres)</span>
+          <input
+            type="password"
+            required
+            minLength={6}
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span className="field__label">Confirmar nova senha</span>
+          <input
+            type="password"
+            required
+            minLength={6}
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="form__actions">
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Alterando…' : 'Trocar senha'}
+        </button>
+      </div>
+    </form>
   );
 }
 

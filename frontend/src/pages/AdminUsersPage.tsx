@@ -12,6 +12,18 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN_MASTER: 'Administrador Master',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Ativo',
+  INACTIVE: 'Inativo',
+  PENDING_APPROVAL: 'Pendente de aprovação',
+};
+
+const STATUS_BADGE_TONE: Record<string, string> = {
+  ACTIVE: 'success',
+  INACTIVE: 'neutral',
+  PENDING_APPROVAL: 'warning',
+};
+
 export function AdminUsersPage() {
   const { showToast } = useToast();
   const { user: currentUser } = useAuth();
@@ -43,6 +55,16 @@ export function AdminUsersPage() {
     api.get<Department[]>('/departments').then(({ data }) => setDepartments(data)).catch(() => undefined);
     api.get<RoleCatalogItem[]>('/roles').then(({ data }) => setRoles(data)).catch(() => undefined);
   }, []);
+
+  async function onApprove(userId: string) {
+    try {
+      await api.patch(`/admin/users/${userId}`, { status: 'ACTIVE' });
+      showToast('Cadastro aprovado — o usuário já pode fazer login.', 'success');
+      load();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível aprovar o cadastro.', 'error');
+    }
+  }
 
   return (
     <div className="page">
@@ -91,11 +113,14 @@ export function AdminUsersPage() {
                     ))}
                   </td>
                   <td data-label="Status">
-                    <span className={`badge badge--${u.status === 'ACTIVE' ? 'success' : 'neutral'}`}>
-                      {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
-                    </span>
+                    <span className={`badge badge--${STATUS_BADGE_TONE[u.status] ?? 'neutral'}`}>{STATUS_LABELS[u.status] ?? u.status}</span>
                   </td>
                   <td data-label="Ações" className="table__actions">
+                    {u.status === 'PENDING_APPROVAL' && (
+                      <button type="button" className="btn btn--small btn--primary" onClick={() => onApprove(u.id)}>
+                        Aprovar
+                      </button>
+                    )}
                     <button type="button" className="btn btn--small btn--secondary" onClick={() => setEditing(u)}>
                       Editar
                     </button>
@@ -350,6 +375,7 @@ function EditUserModal({
           <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={isSelf}>
             <option value="ACTIVE">Ativo</option>
             <option value="INACTIVE">Inativo</option>
+            <option value="PENDING_APPROVAL">Pendente de aprovação</option>
           </select>
           {isSelf && <span className="field__hint">Você não pode desativar a própria conta.</span>}
         </label>

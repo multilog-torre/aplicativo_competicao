@@ -969,6 +969,11 @@ textarea {
   color: var(--color-danger);
 }
 
+.alert--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
 .state-block {
   display: flex;
   flex-direction: column;
@@ -1152,4 +1157,15 @@ textarea {
   text-align: center;
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+.auth-card__link {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.auth-card__link:hover {
+  text-decoration: underline;
 }

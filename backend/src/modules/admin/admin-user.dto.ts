@@ -18,7 +18,7 @@ export const UpdateUserSchema = z.object({
   name: z.string().min(2).optional(),
   position: z.string().nullable().optional(),
   departmentId: z.string().uuid('ID de departamento inválido.').nullable().optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING_APPROVAL']).optional(),
 });
 
 export type UpdateUserDTO = z.infer<typeof UpdateUserSchema>;
@@ -32,7 +32,7 @@ export type SetUserRolesDTO = z.infer<typeof SetUserRolesSchema>;
 export const ListUsersQuerySchema = z.object({
   search: z.string().optional(),
   role: RoleNameSchema.optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING_APPROVAL']).optional(),
   page: z
     .string()
     .optional()

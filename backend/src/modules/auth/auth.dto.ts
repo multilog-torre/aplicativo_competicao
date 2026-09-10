@@ -12,3 +12,21 @@ export const refreshTokenSchema = z.object({
 });
 
 export type RefreshTokenDTO = z.infer<typeof refreshTokenSchema>;
+
+/**
+ * Autocadastro (tela de login -> "Criar conta"). Diferente da criação de
+ * usuário pelo ADMIN_MASTER (admin-user.dto.ts), aqui a senha NUNCA é
+ * escolhida pela pessoa — nasce com a senha padrão da empresa
+ * (env.DEFAULT_USER_PASSWORD) e status PENDING_APPROVAL, exigindo aprovação
+ * administrativa antes do primeiro login (planejamento.md — decisão de
+ * negócio ampliando o escopo original, a pedido do usuário).
+ */
+export const registerSchema = z.object({
+  name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.').max(120),
+  email: z.string().email('E-mail corporativo inválido.'),
+  corporateId: z.string().max(60).optional(),
+  position: z.string().max(120).optional(),
+  departmentId: z.string().uuid('ID de departamento inválido.').optional(),
+});
+
+export type RegisterDTO = z.infer<typeof registerSchema>;

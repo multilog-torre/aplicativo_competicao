@@ -2,8 +2,9 @@ import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
-import { UnauthorizedError } from '../../shared/errors/AppError';
-import { LoginDTO } from './auth.dto';
+import { AppError, NotFoundError, UnauthorizedError } from '../../shared/errors/AppError';
+import { NotificationService } from '../notifications/notification.service';
+import { LoginDTO, RegisterDTO } from './auth.dto';
 
 interface TokenPayload {
   sub: string;
@@ -42,6 +43,10 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedError('Credenciais corporativas inválidas (e-mail ou senha incorretos)');
+    }
+
+    if (user.status === 'PENDING_APPROVAL') {
+      throw new UnauthorizedError('Sua conta ainda está pendente de aprovação por um administrador.');
     }
 
     if (user.status !== 'ACTIVE') {
@@ -237,5 +242,105 @@ export class AuthService {
     } catch {
       throw new UnauthorizedError('Refresh token inválido ou expirado');
     }
+  }
+
+  /**
+   * Autocadastro (tela de login -> "Criar conta") — decisão de negócio a
+   * pedido do usuário. Diferente da criação pelo ADMIN_MASTER
+   * (admin-user.service.ts), aqui:
+   * - Só e-mails do domínio corporativo configurado podem se cadastrar.
+   * - A senha nunca é escolhida pela pessoa — nasce com a senha padrão da
+   *   empresa (env.DEFAULT_USER_PASSWORD), trocável depois em Meu Perfil.
+   * - A conta nasce com status PENDING_APPROVAL: só pode logar depois que
+   *   um ADMIN_MASTER aprovar em Admin > Usuários (mesmo endpoint de
+   *   ativação já existente, PATCH /admin/users/:id).
+   */
+  public static async register(dto: RegisterDTO) {
+    const email = dto.email.toLowerCase().trim();
+    const domain = email.split('@')[1] ?? '';
+
+    if (domain !== env.SIGNUP_ALLOWED_EMAIL_DOMAIN.toLowerCase()) {
+      throw new AppError(
+        `O autocadastro está disponível apenas para e-mails do domínio @${env.SIGNUP_ALLOWED_EMAIL_DOMAIN}.`,
+        422,
+        'EMAIL_DOMAIN_NOT_ALLOWED',
+      );
+    }
+
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail) {
+      throw new AppError(`Já existe uma conta cadastrada com o e-mail '${email}'.`, 409, 'CONFLICT');
+    }
+
+    if (dto.corporateId) {
+      const existingCorporateId = await prisma.user.findUnique({ where: { corporateId: dto.corporateId } });
+      if (existingCorporateId) {
+        throw new AppError(`Já existe uma conta cadastrada com a matrícula '${dto.corporateId}'.`, 409, 'CONFLICT');
+      }
+    }
+
+    if (dto.departmentId) {
+      const department = await prisma.department.findUnique({ where: { id: dto.departmentId } });
+      if (!department) throw new NotFoundError(`Departamento com ID '${dto.departmentId}' não foi encontrado.`);
+    }
+
+    const participanteRole = await prisma.role.findUnique({ where: { name: 'PARTICIPANTE' } });
+    if (!participanteRole) {
+      throw new AppError('Papel PARTICIPANTE não encontrado no sistema. Contate o administrador.', 500, 'ROLE_NOT_FOUND');
+    }
+
+    const passwordHash = await bcrypt.hash(env.DEFAULT_USER_PASSWORD, 10);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: dto.name,
+          email,
+          passwordHash,
+          corporateId: dto.corporateId,
+          position: dto.position,
+          departmentId: dto.departmentId,
+          status: 'PENDING_APPROVAL',
+        },
+      });
+
+      await tx.userRole.create({ data: { userId: user.id, roleId: participanteRole.id } });
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'SELF_REGISTER',
+          entity: 'User',
+          entityId: user.id,
+          newValues: JSON.stringify({ name: user.name, email: user.email, status: user.status }),
+        },
+      });
+
+      return user;
+    });
+
+    // Avisa todo ADMIN_MASTER que existe um cadastro esperando aprovação.
+    const admins = await prisma.user.findMany({
+      where: { userRoles: { some: { role: { name: 'ADMIN_MASTER' } } } },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        NotificationService.create({
+          userId: admin.id,
+          title: 'Novo cadastro pendente de aprovação 👤',
+          message: `${created.name} (${created.email}) se cadastrou e está aguardando aprovação para acessar a plataforma.`,
+          type: 'NEW_USER_PENDING',
+          referenceId: created.id,
+        }),
+      ),
+    );
+
+    return {
+      id: created.id,
+      name: created.name,
+      email: created.email,
+      status: created.status,
+    };
   }
 }

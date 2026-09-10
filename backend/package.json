@@ -39,7 +39,8 @@
     "test:history": "tsx src/test-history.ts",
     "test:admin-dashboard": "tsx src/test-admin-dashboard.ts",
     "test:game-rules": "tsx src/test-game-rules.ts",
-    "test:admin-users": "tsx src/test-admin-users.ts"
+    "test:admin-users": "tsx src/test-admin-users.ts",
+    "test:registration": "tsx src/test-registration.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

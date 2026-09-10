@@ -12,6 +12,7 @@ export type NotificationType =
   | 'ACHIEVEMENT_UNLOCKED'
   | 'CHALLENGE_COMPLETED'
   | 'REWARD_UPDATE'
+  | 'NEW_USER_PENDING'
   | 'INFO';
 
 export class NotificationService {

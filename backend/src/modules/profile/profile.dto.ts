@@ -23,3 +23,15 @@ export const UpdateProfileSchema = z.object({
 });
 
 export type UpdateProfileDTO = z.infer<typeof UpdateProfileSchema>;
+
+/**
+ * Troca de senha pelo próprio usuário — necessária desde que o autocadastro
+ * (auth.service.ts registerSchema) passou a existir: toda conta nova nasce
+ * com a senha padrão da empresa, e a pessoa precisa conseguir trocá-la.
+ */
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Informe a senha atual.'),
+  newPassword: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres.'),
+});
+
+export type ChangePasswordDTO = z.infer<typeof ChangePasswordSchema>;

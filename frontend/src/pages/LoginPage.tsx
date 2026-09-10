@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 
@@ -60,6 +60,10 @@ export function LoginPage() {
         <button type="submit" className="btn btn--primary btn--block" disabled={submitting}>
           {submitting ? 'Entrando…' : 'Entrar'}
         </button>
+
+        <Link to="/cadastro" className="auth-card__link">
+          Ainda não tenho conta — criar conta
+        </Link>
       </form>
     </div>
   );

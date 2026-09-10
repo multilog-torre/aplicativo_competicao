@@ -4,7 +4,7 @@ import { uploadSingleFile } from '../../shared/middlewares/uploadMiddleware';
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { ProfileController } from './profile.controller';
-import { SetAvatarSchema, UpdateProfileSchema } from './profile.dto';
+import { ChangePasswordSchema, SetAvatarSchema, UpdateProfileSchema } from './profile.dto';
 
 const router = Router();
 
@@ -15,6 +15,7 @@ router.use(ensureAuthenticated);
 // 1. Perfil próprio (completo) e autoedição de nome/cargo/departamento
 router.get('/', asyncHandler(ProfileController.getOwn));
 router.patch('/', validateRequest({ body: UpdateProfileSchema }), asyncHandler(ProfileController.updateOwn));
+router.patch('/password', validateRequest({ body: ChangePasswordSchema }), asyncHandler(ProfileController.changePassword));
 
 // 2. Catálogo de avatares pré-definidos e troca de avatar
 // (precisam vir ANTES de '/:userId' para não colidir com o parâmetro genérico)

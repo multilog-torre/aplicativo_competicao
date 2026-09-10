@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database';
 import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { UploadedFile } from '../../shared/types/upload';
@@ -5,7 +6,7 @@ import { assertAllowedFile } from '../../shared/utils/fileValidation';
 import { AchievementService } from '../achievements/achievement.service';
 import { RankingService } from '../ranking/ranking.service';
 import { getStorageProvider } from '../storage/storage.factory';
-import { UpdateProfileDTO } from './profile.dto';
+import { ChangePasswordDTO, UpdateProfileDTO } from './profile.dto';
 
 const ALLOWED_AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png'];
 
@@ -154,6 +155,36 @@ export class ProfileService {
       position: updated.position,
       department: updated.department ? { id: updated.department.id, name: updated.department.name } : null,
     };
+  }
+
+  /**
+   * Troca de senha pelo próprio usuário — exige a senha atual (evita que
+   * alguém que sequestre uma sessão já aberta troque a senha sem saber a
+   * original). Nunca registra o valor da senha na auditoria, só o evento.
+   */
+  public static async changePassword(userId: string, dto: ChangePasswordDTO) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.passwordHash) throw new NotFoundError(`Usuário com ID '${userId}' não foi encontrado.`);
+
+    const isCurrentValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      throw new AppError('A senha atual informada está incorreta.', 422, 'INVALID_CURRENT_PASSWORD');
+    }
+
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash } });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CHANGE_PASSWORD',
+        entity: 'User',
+        entityId: userId,
+        newValues: JSON.stringify({ changedAt: new Date() }),
+      },
+    });
+
+    return { message: 'Senha alterada com sucesso.' };
   }
 
   // ─── Avatar ────────────────────────────────────────────────────────────────────

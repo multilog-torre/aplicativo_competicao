@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../shared/utils/apiResponse';
 import { ProfileService } from './profile.service';
-import { SetAvatarDTO, UpdateProfileDTO } from './profile.dto';
+import { ChangePasswordDTO, SetAvatarDTO, UpdateProfileDTO } from './profile.dto';
 
 function isAdminRequest(req: Request): boolean {
   return req.user!.roles.some((role) => ['ADMIN', 'ADMIN_MASTER'].includes(role));
@@ -26,6 +26,13 @@ export class ProfileController {
     const userId = req.user!.id;
     const data = req.body as UpdateProfileDTO;
     const result = await ProfileService.updateOwnProfile(userId, data);
+    return sendSuccess(res, result, 200);
+  }
+
+  public static async changePassword(req: Request, res: Response): Promise<Response> {
+    const userId = req.user!.id;
+    const data = req.body as ChangePasswordDTO;
+    const result = await ProfileService.changePassword(userId, data);
     return sendSuccess(res, result, 200);
   }
 
