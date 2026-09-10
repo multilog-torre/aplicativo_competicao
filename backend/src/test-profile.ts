@@ -221,18 +221,29 @@ async function main() {
   const updateProfileRes = await reqJson(
     'PATCH',
     '/profile',
-    { name: 'Renan Lima Editado', position: 'Engenheiro de Software Sênior', departmentId: otherDepartment.id },
+    {
+      name: 'Renan Lima Editado',
+      position: 'Engenheiro de Software Sênior',
+      departmentId: otherDepartment.id,
+      birthDate: '1988-03-20',
+      gender: 'MALE',
+    },
     participantToken,
   );
   assert('Atualização de perfil executada com sucesso (200)', updateProfileRes.status === 200);
-  type UpdateProfileBody = { data?: { name?: string; position?: string; department?: { id?: string; name?: string } } };
+  type UpdateProfileBody = {
+    data?: { name?: string; position?: string; department?: { id?: string; name?: string }; birthDate?: string; gender?: string };
+  };
   const updatedProfileData = (updateProfileRes.data as UpdateProfileBody)?.data;
   assert('Nome retornado reflete a alteração', updatedProfileData?.name === 'Renan Lima Editado');
   assert('Departamento retornado reflete a alteração', updatedProfileData?.department?.id === otherDepartment.id);
+  assert('Data de nascimento retornada reflete a alteração', !!updatedProfileData?.birthDate?.startsWith('1988-03-20'));
+  assert('Gênero retornado reflete a alteração', updatedProfileData?.gender === 'MALE');
 
   const profileAfterUpdateRes = await reqJson('GET', '/profile', undefined, participantToken);
   const profileAfterUpdate = (profileAfterUpdateRes.data as UpdateProfileBody)?.data;
   assert('GET /profile também reflete o novo nome', profileAfterUpdate?.name === 'Renan Lima Editado');
+  assert('GET /profile também reflete a nova data de nascimento', !!profileAfterUpdate?.birthDate?.startsWith('1988-03-20'));
 
   // ── PASSO 17: departmentId inexistente ────────────────────────────────────────
   console.log('\n1️⃣3️⃣ Testando departamento inexistente na autoedição...');

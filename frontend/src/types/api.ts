@@ -26,6 +26,15 @@ export interface AvatarPreset {
   icon: string;
 }
 
+export type Gender = 'MALE' | 'FEMALE' | 'OTHER' | 'UNDISCLOSED';
+
+export const GENDER_LABELS: Record<Gender, string> = {
+  MALE: 'Masculino',
+  FEMALE: 'Feminino',
+  OTHER: 'Outro',
+  UNDISCLOSED: 'Prefiro não informar',
+};
+
 export interface ProfileData {
   id: string;
   name: string;
@@ -40,6 +49,9 @@ export interface ProfileData {
   achievementsCount: number;
   achievements?: Array<{ id: string; unlockedAt: string; achievement: { id: string; name: string; description: string; icon: string; pointsReward: number } }>;
   recentActivities?: UserActivity[];
+  // Só presentes no perfil PRÓPRIO — nunca no perfil público de outro colega.
+  birthDate?: string | null;
+  gender?: Gender | null;
 }
 
 export interface ActivityType {
@@ -174,6 +186,8 @@ export interface AdminUser {
   name: string;
   email: string;
   position: string | null;
+  birthDate: string | null;
+  gender: Gender | null;
   status: string;
   totalPoints: number;
   department: { id: string; name: string } | null;

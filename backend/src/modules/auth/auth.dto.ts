@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BirthDateSchema, GenderSchema } from '../../shared/dto/user-fields.dto';
 
 export const loginSchema = z.object({
   email: z.string().email('E-mail corporativo inválido'),
@@ -27,6 +28,8 @@ export const registerSchema = z.object({
   corporateId: z.string().max(60).optional(),
   position: z.string().max(120).optional(),
   departmentId: z.string().uuid('ID de departamento inválido.').optional(),
+  birthDate: BirthDateSchema.optional(),
+  gender: GenderSchema.optional(),
 });
 
 export type RegisterDTO = z.infer<typeof registerSchema>;

@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { AdminUser, Department, RoleCatalogItem } from '../types/api';
+import { AdminUser, Department, Gender, GENDER_LABELS, RoleCatalogItem } from '../types/api';
+
+const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
@@ -197,6 +199,8 @@ function CreateUserModal({
   const [corporateId, setCorporateId] = useState('');
   const [position, setPosition] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['PARTICIPANTE']);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,6 +225,8 @@ function CreateUserModal({
         corporateId: corporateId || undefined,
         position: position || undefined,
         departmentId: departmentId || undefined,
+        birthDate: birthDate || undefined,
+        gender: gender || undefined,
         roles: selectedRoles,
       });
       onCreated();
@@ -277,6 +283,24 @@ function CreateUserModal({
           </label>
         </div>
 
+        <div className="form__row">
+          <label className="field">
+            <span className="field__label">Data de nascimento (opcional)</span>
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+          </label>
+          <label className="field">
+            <span className="field__label">Sexo (opcional)</span>
+            <select value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value="">— Não informar —</option>
+              {GENDER_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {GENDER_LABELS[g]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <fieldset className="field">
           <legend className="field__label">Papéis</legend>
           {roles.map((r) => (
@@ -317,6 +341,8 @@ function EditUserModal({
   const [name, setName] = useState(user.name);
   const [position, setPosition] = useState(user.position ?? '');
   const [departmentId, setDepartmentId] = useState(user.department?.id ?? '');
+  const [birthDate, setBirthDate] = useState(user.birthDate ? user.birthDate.slice(0, 10) : '');
+  const [gender, setGender] = useState(user.gender ?? '');
   const [status, setStatus] = useState(user.status);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +356,8 @@ function EditUserModal({
         name,
         position: position || null,
         departmentId: departmentId || null,
+        birthDate: birthDate || null,
+        gender: gender || null,
         status,
       });
       onSaved();
@@ -364,6 +392,24 @@ function EditUserModal({
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="form__row">
+          <label className="field">
+            <span className="field__label">Data de nascimento</span>
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+          </label>
+          <label className="field">
+            <span className="field__label">Sexo</span>
+            <select value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value="">— Não informar —</option>
+              {GENDER_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {GENDER_LABELS[g]}
                 </option>
               ))}
             </select>

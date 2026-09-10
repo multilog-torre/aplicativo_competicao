@@ -98,6 +98,10 @@ export class ProfileService {
 
     return {
       ...base,
+      // Dados pessoais (aniversário/sexo) — nunca expostos no perfil público
+      // de outro colega, só ao próprio usuário ou a um admin.
+      birthDate: user.birthDate,
+      gender: user.gender,
       achievements,
       recentActivities: recentActivities.map((a) => ({
         id: a.id,
@@ -134,6 +138,8 @@ export class ProfileService {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.position !== undefined ? { position: dto.position } : {}),
         ...(dto.departmentId !== undefined ? { departmentId: dto.departmentId } : {}),
+        ...(dto.birthDate !== undefined ? { birthDate: dto.birthDate } : {}),
+        ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
       },
       include: { department: true },
     });
@@ -144,8 +150,20 @@ export class ProfileService {
         action: 'UPDATE_PROFILE',
         entity: 'User',
         entityId: userId,
-        oldValues: JSON.stringify({ name: existing.name, position: existing.position, departmentId: existing.departmentId }),
-        newValues: JSON.stringify({ name: updated.name, position: updated.position, departmentId: updated.departmentId }),
+        oldValues: JSON.stringify({
+          name: existing.name,
+          position: existing.position,
+          departmentId: existing.departmentId,
+          birthDate: existing.birthDate,
+          gender: existing.gender,
+        }),
+        newValues: JSON.stringify({
+          name: updated.name,
+          position: updated.position,
+          departmentId: updated.departmentId,
+          birthDate: updated.birthDate,
+          gender: updated.gender,
+        }),
       },
     });
 
@@ -154,6 +172,8 @@ export class ProfileService {
       name: updated.name,
       position: updated.position,
       department: updated.department ? { id: updated.department.id, name: updated.department.name } : null,
+      birthDate: updated.birthDate,
+      gender: updated.gender,
     };
   }
 

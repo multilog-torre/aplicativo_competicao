@@ -14,6 +14,10 @@
  * 10. Login com a senha antiga (padrão) para de funcionar após a troca
  * 11. Login com a nova senha funciona
  * 12. Troca de senha exige autenticação (401 sem token)
+ * 13. Valor de gênero inválido é bloqueado (422)
+ * 14. Data de nascimento no futuro é bloqueada (422)
+ * 15. birthDate e gender informados no autocadastro são persistidos e
+ *     retornados em GET /profile
  */
 
 import http from 'http';
@@ -80,12 +84,28 @@ async function main() {
   const registerRes = await reqJson('POST', '/auth/register', {
     name: 'Funcionário de Teste',
     email: newEmail,
+    birthDate: '1990-05-14',
+    gender: 'FEMALE',
   });
   assert('Autocadastro funciona (201)', registerRes.status === 201);
   const registered = (registerRes.data as RegisterBody)?.data;
   assert('Conta nasce com status PENDING_APPROVAL', registered?.status === 'PENDING_APPROVAL');
   assert('Resposta informa a senha padrão', registered?.defaultPassword === env.DEFAULT_USER_PASSWORD);
   const newUserId = registered?.id ?? '';
+
+  const invalidGenderRes = await reqJson('POST', '/auth/register', {
+    name: 'Teste Gênero Inválido',
+    email: `outro.${Date.now()}@${env.SIGNUP_ALLOWED_EMAIL_DOMAIN}`,
+    gender: 'INVALIDO',
+  });
+  assert('Valor de gênero inválido é bloqueado (422)', invalidGenderRes.status === 422);
+
+  const futureBirthDateRes = await reqJson('POST', '/auth/register', {
+    name: 'Teste Data Futura',
+    email: `futuro.${Date.now()}@${env.SIGNUP_ALLOWED_EMAIL_DOMAIN}`,
+    birthDate: '2099-01-01',
+  });
+  assert('Data de nascimento no futuro é bloqueada (422)', futureBirthDateRes.status === 422);
 
   // ── PASSO 3: e-mail duplicado ──────────────────────────────────────────────────
   const duplicateRes = await reqJson('POST', '/auth/register', { name: 'Outro Nome', email: newEmail });
@@ -119,6 +139,16 @@ async function main() {
   const loginAfterApprovalRes = await reqJson('POST', '/auth/login', { email: newEmail, password: env.DEFAULT_USER_PASSWORD });
   assert('Login após aprovação funciona (200)', loginAfterApprovalRes.status === 200);
   const newUserToken = (loginAfterApprovalRes.data as LoginBody)?.data?.tokens?.accessToken ?? '';
+
+  console.log('\n6️⃣.1 Testando persistência de data de nascimento e gênero...');
+  const profileRes = await reqJson('GET', '/profile', undefined, newUserToken);
+  type ProfileBody = { data?: { birthDate?: string; gender?: string } };
+  const profileData = (profileRes.data as ProfileBody)?.data;
+  assert(
+    'birthDate informado no autocadastro foi persistido',
+    !!profileData?.birthDate && profileData.birthDate.startsWith('1990-05-14'),
+  );
+  assert('gender informado no autocadastro foi persistido', profileData?.gender === 'FEMALE');
 
   // ── PASSO 8-9: troca de senha ───────────────────────────────────────────────────
   console.log('\n7️⃣ Testando troca de senha...');

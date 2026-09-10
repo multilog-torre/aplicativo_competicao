@@ -21,6 +21,8 @@ model User {
   passwordHash  String?  @map("password_hash")
   departmentId  String?  @map("department_id")
   position      String?
+  birthDate     DateTime? @map("birth_date")
+  gender        String?
   avatarType    String   @default("INITIALS") @map("avatar_type")
   avatarUrl     String?  @map("avatar_url")
   status        String   @default("ACTIVE")

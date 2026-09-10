@@ -1,6 +1,8 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { AvatarPreset, Department, ProfileData } from '../types/api';
+import { AvatarPreset, Department, Gender, GENDER_LABELS, ProfileData } from '../types/api';
+
+const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 import { LoadingState, ErrorState, EmptyState } from '../components/ui/States';
 import { Avatar, StatusBadge } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
@@ -330,6 +332,8 @@ function ProfileInfoForm({ profile, onSaved }: { profile: ProfileData; onSaved: 
   const [name, setName] = useState(profile.name);
   const [position, setPosition] = useState(profile.position ?? '');
   const [departmentId, setDepartmentId] = useState(profile.department?.id ?? '');
+  const [birthDate, setBirthDate] = useState(profile.birthDate ? profile.birthDate.slice(0, 10) : '');
+  const [gender, setGender] = useState(profile.gender ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -350,6 +354,8 @@ function ProfileInfoForm({ profile, onSaved }: { profile: ProfileData; onSaved: 
         name,
         position: position || null,
         departmentId: departmentId || null,
+        birthDate: birthDate || null,
+        gender: gender || null,
       });
       onSaved();
     } catch (err) {
@@ -386,6 +392,24 @@ function ProfileInfoForm({ profile, onSaved }: { profile: ProfileData; onSaved: 
           ))}
         </select>
       </label>
+
+      <div className="form__row">
+        <label className="field">
+          <span className="field__label">Data de nascimento</span>
+          <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+        </label>
+        <label className="field">
+          <span className="field__label">Sexo</span>
+          <select value={gender} onChange={(e) => setGender(e.target.value)}>
+            <option value="">— Não informar —</option>
+            {GENDER_OPTIONS.map((g) => (
+              <option key={g} value={g}>
+                {GENDER_LABELS[g]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="form__actions">
         <button type="submit" className="btn btn--primary" disabled={submitting}>

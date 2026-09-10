@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
-import { Department } from '../types/api';
+import { Department, Gender, GENDER_LABELS } from '../types/api';
 import { useAuth } from '../context/AuthContext';
+
+const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 
 /**
  * Autocadastro — decisão de negócio a pedido do usuário. Diferente da
@@ -20,6 +22,8 @@ export function RegisterPage() {
   const [corporateId, setCorporateId] = useState('');
   const [position, setPosition] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +46,8 @@ export function RegisterPage() {
         corporateId: corporateId || undefined,
         position: position || undefined,
         departmentId: departmentId || undefined,
+        birthDate: birthDate || undefined,
+        gender: gender || undefined,
       });
       setResult(data);
     } catch (err) {
@@ -116,6 +122,24 @@ export function RegisterPage() {
             ))}
           </select>
         </label>
+
+        <div className="form__row">
+          <label className="field">
+            <span className="field__label">Data de nascimento (opcional)</span>
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+          </label>
+          <label className="field">
+            <span className="field__label">Sexo (opcional)</span>
+            <select value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value="">— Não informar —</option>
+              {GENDER_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {GENDER_LABELS[g]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <p className="field__hint">
           Sua conta nasce com uma senha padrão e precisa ser aprovada por um administrador antes do primeiro acesso.

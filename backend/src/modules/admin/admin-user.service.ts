@@ -9,6 +9,8 @@ function toPublicShape(user: {
   name: string;
   email: string;
   position: string | null;
+  birthDate: Date | null;
+  gender: string | null;
   status: string;
   totalPoints: number;
   createdAt: Date;
@@ -21,6 +23,8 @@ function toPublicShape(user: {
     name: user.name,
     email: user.email,
     position: user.position,
+    birthDate: user.birthDate,
+    gender: user.gender,
     status: user.status,
     totalPoints: user.totalPoints,
     department: user.department,
@@ -110,6 +114,8 @@ export class AdminUserService {
           corporateId: dto.corporateId,
           position: dto.position,
           departmentId: dto.departmentId ?? undefined,
+          birthDate: dto.birthDate ?? undefined,
+          gender: dto.gender ?? undefined,
         },
       });
 
@@ -151,6 +157,8 @@ export class AdminUserService {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.position !== undefined ? { position: dto.position } : {}),
         ...(dto.departmentId !== undefined ? { departmentId: dto.departmentId } : {}),
+        ...(dto.birthDate !== undefined ? { birthDate: dto.birthDate } : {}),
+        ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
       include: USER_INCLUDE,
@@ -162,8 +170,22 @@ export class AdminUserService {
         action: 'UPDATE_USER',
         entity: 'User',
         entityId: id,
-        oldValues: JSON.stringify({ name: existing.name, position: existing.position, departmentId: existing.department?.id ?? null, status: existing.status }),
-        newValues: JSON.stringify({ name: updated.name, position: updated.position, departmentId: updated.department?.id ?? null, status: updated.status }),
+        oldValues: JSON.stringify({
+          name: existing.name,
+          position: existing.position,
+          departmentId: existing.department?.id ?? null,
+          birthDate: existing.birthDate,
+          gender: existing.gender,
+          status: existing.status,
+        }),
+        newValues: JSON.stringify({
+          name: updated.name,
+          position: updated.position,
+          departmentId: updated.department?.id ?? null,
+          birthDate: updated.birthDate,
+          gender: updated.gender,
+          status: updated.status,
+        }),
       },
     });
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BirthDateSchema, GenderSchema } from '../../shared/dto/user-fields.dto';
 
 export const SetAvatarSchema = z.object({
   avatarType: z.enum(['INITIALS', 'PRESET', 'UPLOAD']),
@@ -20,6 +21,8 @@ export const UpdateProfileSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.').max(120).optional(),
   position: z.string().max(120).nullable().optional(),
   departmentId: z.string().uuid('ID de departamento inválido.').nullable().optional(),
+  birthDate: BirthDateSchema.nullable().optional(),
+  gender: GenderSchema.nullable().optional(),
 });
 
 export type UpdateProfileDTO = z.infer<typeof UpdateProfileSchema>;

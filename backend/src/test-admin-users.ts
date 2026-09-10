@@ -54,7 +54,7 @@ function assert(label: string, condition: boolean, info?: unknown) {
   }
 }
 
-type CreateUserBody = { data?: { id?: string; email?: string; roles?: string[] } };
+type CreateUserBody = { data?: { id?: string; email?: string; roles?: string[]; birthDate?: string; gender?: string } };
 type LoginBody = { data?: { tokens?: { accessToken?: string }; user?: { id?: string } } };
 type ListBody = { data?: Array<{ id: string; email: string; roles: string[] }> };
 type AuditBody = { data?: Array<{ entityId: string; action: string }> };
@@ -107,12 +107,21 @@ async function main() {
   const createRes = await reqJson(
     'POST',
     '/admin/users',
-    { name: 'Usuário de Teste', email: newUserEmail, password: 'senha123', roles: ['PARTICIPANTE'] },
+    {
+      name: 'Usuário de Teste',
+      email: newUserEmail,
+      password: 'senha123',
+      roles: ['PARTICIPANTE'],
+      birthDate: '1995-11-02',
+      gender: 'OTHER',
+    },
     masterToken,
   );
   assert('Criação de usuário funciona (201)', createRes.status === 201);
   const newUserId = (createRes.data as CreateUserBody)?.data?.id ?? '';
   assert('Papel retornado é PARTICIPANTE', (createRes.data as CreateUserBody)?.data?.roles?.[0] === 'PARTICIPANTE');
+  assert('birthDate informado na criação foi persistido', !!(createRes.data as CreateUserBody)?.data?.birthDate);
+  assert('gender informado na criação foi persistido', (createRes.data as CreateUserBody)?.data?.gender === 'OTHER');
 
   const duplicateRes = await reqJson(
     'POST',

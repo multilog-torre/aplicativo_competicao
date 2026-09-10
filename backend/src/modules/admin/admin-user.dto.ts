@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BirthDateSchema, GenderSchema } from '../../shared/dto/user-fields.dto';
 
 export const RoleNameSchema = z.enum(['PARTICIPANTE', 'ADMIN', 'ADMIN_MASTER']);
 
@@ -9,6 +10,8 @@ export const CreateUserSchema = z.object({
   corporateId: z.string().optional(),
   position: z.string().optional(),
   departmentId: z.string().uuid('ID de departamento inválido.').optional().nullable(),
+  birthDate: BirthDateSchema.optional().nullable(),
+  gender: GenderSchema.optional().nullable(),
   roles: z.array(RoleNameSchema).min(1, 'Selecione ao menos um perfil.').default(['PARTICIPANTE']),
 });
 
@@ -18,6 +21,8 @@ export const UpdateUserSchema = z.object({
   name: z.string().min(2).optional(),
   position: z.string().nullable().optional(),
   departmentId: z.string().uuid('ID de departamento inválido.').nullable().optional(),
+  birthDate: BirthDateSchema.nullable().optional(),
+  gender: GenderSchema.nullable().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING_APPROVAL']).optional(),
 });
 

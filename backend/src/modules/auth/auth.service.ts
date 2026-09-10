@@ -300,6 +300,8 @@ export class AuthService {
           corporateId: dto.corporateId,
           position: dto.position,
           departmentId: dto.departmentId,
+          birthDate: dto.birthDate,
+          gender: dto.gender,
           status: 'PENDING_APPROVAL',
         },
       });
