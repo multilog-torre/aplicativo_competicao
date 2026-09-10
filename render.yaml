@@ -1,0 +1,44 @@
+# Blueprint do Render para o backend do Torre — permite "New Blueprint Instance"
+# no dashboard do Render apontando direto para este repositório, sem precisar
+# preencher build/start command manualmente.
+#
+# O banco (Neon) e o storage (Cloudinary) NÃO são criados por este blueprint —
+# são serviços externos gratuitos; as variáveis DATABASE_URL/CLOUDINARY_* devem
+# ser coladas manualmente no dashboard do Render após criar o serviço (aba
+# "Environment"), pois contêm segredos que não devem ficar neste arquivo.
+services:
+  - type: web
+    name: torre-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate --schema=prisma/schema.prisma && npm run build
+    startCommand: npx prisma migrate deploy --schema=prisma/schema.prisma && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        value: 30d
+      - key: STORAGE_PROVIDER
+        value: cloudinary
+      - key: MAX_UPLOAD_SIZE_MB
+        value: 10
+      # Preencher manualmente no dashboard (Environment) após criar o serviço:
+      # DATABASE_URL, JWT_SECRET, REFRESH_TOKEN_SECRET, FRONTEND_URL,
+      # CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

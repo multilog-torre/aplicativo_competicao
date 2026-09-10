@@ -18,9 +18,14 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   REFRESH_TOKEN_SECRET: z.string().default('super_secret_refresh_token_torre_gamificacao_2026_dev'),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default('30d'),
-  STORAGE_PROVIDER: z.enum(['local', 'azure', 's3']).default('local'),
+  STORAGE_PROVIDER: z.enum(['local', 'azure', 's3', 'cloudinary']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('../storage/uploads'),
   MAX_UPLOAD_SIZE_MB: z.string().transform(Number).default('10'),
+  // Necessárias apenas quando STORAGE_PROVIDER=cloudinary (ver storage.factory.ts) —
+  // usado em hospedagens sem disco persistente (ex.: Render free tier).
+  CLOUDINARY_CLOUD_NAME: z.string().default(''),
+  CLOUDINARY_API_KEY: z.string().default(''),
+  CLOUDINARY_API_SECRET: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
