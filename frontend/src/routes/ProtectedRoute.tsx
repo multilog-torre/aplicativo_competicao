@@ -34,3 +34,20 @@ export function AdminRoute() {
 
   return <Outlet />;
 }
+
+export function MasterRoute() {
+  const { user, loading, isAdminMaster } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="full-page-center">
+        <LoadingState label="Verificando sessão…" />
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isAdminMaster) return <Navigate to="/" replace />;
+
+  return <Outlet />;
+}

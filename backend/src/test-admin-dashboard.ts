@@ -3,7 +3,7 @@
  *
  * Cobre:
  * 1. Painel exige autenticação (401 sem token)
- * 2. Participante não pode acessar o painel administrativo (403)
+ * 2. Participante também acessa o painel geral (200) — visão consolidada aberta a todos
  * 3. Admin acessa o painel (200)
  * 4. indicators.totalUsers/activeUsers batem com a contagem real do banco
  * 5. indicators.activities reflete corretamente pendências e aprovações
@@ -108,8 +108,8 @@ async function main() {
   const unauthenticatedRes = await reqJson('GET', '/admin/dashboard');
   assert('Painel sem token retorna 401', unauthenticatedRes.status === 401);
 
-  const forbiddenRes = await reqJson('GET', '/admin/dashboard', undefined, participantToken);
-  assert('Participante não acessa o painel administrativo (403)', forbiddenRes.status === 403);
+  const participantRes = await reqJson('GET', '/admin/dashboard', undefined, participantToken);
+  assert('Participante também acessa o painel geral (200) — visão consolidada aberta a todos', participantRes.status === 200);
 
   // ── Prepara cenário: atividade pendente + aprovada + resgate ─────────────────
   const meditationType = await prisma.activityType.findFirst({ where: { name: { contains: 'Meditação' } } });

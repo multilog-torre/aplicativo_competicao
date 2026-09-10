@@ -5,6 +5,7 @@ import { Avatar } from '../ui/Badge';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
+  { to: '/painel', label: 'Painel Geral', icon: '📈' },
   { to: '/atividades', label: 'Atividades', icon: '🏃' },
   { to: '/ranking', label: 'Ranking', icon: '🏆' },
   { to: '/mural', label: 'Mural', icon: '📣' },
@@ -12,7 +13,7 @@ const NAV_ITEMS = [
 ];
 
 export function AppLayout() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isAdminMaster } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -70,12 +71,28 @@ export function AppLayout() {
                 <span aria-hidden="true">🏋️</span> Modalidades
               </NavLink>
               <NavLink
+                to="/admin/niveis"
+                className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span aria-hidden="true">🏅</span> Níveis
+              </NavLink>
+              <NavLink
                 to="/admin/pontos"
                 className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
                 onClick={() => setMenuOpen(false)}
               >
                 <span aria-hidden="true">💰</span> Gerenciar Pontos
               </NavLink>
+              {isAdminMaster && (
+                <NavLink
+                  to="/admin/usuarios"
+                  className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <span aria-hidden="true">👥</span> Gerenciar Usuários
+                </NavLink>
+              )}
             </>
           )}
         </nav>

@@ -4,6 +4,7 @@ import { activityTypeRoutes } from '../modules/activity-types/activity-type.rout
 import { achievementRoutes } from '../modules/achievements/achievement.routes';
 import { adminActivityRoutes } from '../modules/admin/admin-activity.routes';
 import { adminDashboardRoutes } from '../modules/admin/admin-dashboard.routes';
+import { adminUserRoutes } from '../modules/admin/admin-user.routes';
 import { auditLogRoutes } from '../modules/admin/audit-log.routes';
 import { authRoutes } from '../modules/auth/auth.routes';
 import { challengeRoutes } from '../modules/challenges/challenge.routes';
@@ -17,6 +18,7 @@ import { postRoutes } from '../modules/posts/post.routes';
 import { profileRoutes } from '../modules/profile/profile.routes';
 import { rankingRoutes } from '../modules/ranking/ranking.routes';
 import { rewardRoutes } from '../modules/rewards/reward.routes';
+import { roleRoutes } from '../modules/roles/role.routes';
 import { scoringRoutes } from '../modules/scoring/scoring.routes';
 
 const router = Router();
@@ -77,5 +79,11 @@ router.use('/game-rules', gameRuleRoutes);
 
 // Rotas de Perfil e Avatar (Fase 18)
 router.use('/profile', profileRoutes);
+
+// Rotas de Gestão de Usuários e Papéis — criar contas, conceder acesso administrativo
+router.use('/admin/users', adminUserRoutes);
+
+// Catálogo público de papéis (usado no seletor de gestão de usuários)
+router.use('/roles', roleRoutes);
 
 export { router as apiRouter };

@@ -2,16 +2,19 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppLayout } from './components/layout/AppLayout';
-import { ProtectedRoute, AdminRoute } from './routes/ProtectedRoute';
+import { ProtectedRoute, AdminRoute, MasterRoute } from './routes/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { RankingPage } from './pages/RankingPage';
 import { MuralPage } from './pages/MuralPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { OverviewPage } from './pages/OverviewPage';
 import { AdminApprovalsPage } from './pages/AdminApprovalsPage';
 import { AdminModalitiesPage } from './pages/AdminModalitiesPage';
+import { AdminLevelsPage } from './pages/AdminLevelsPage';
 import { AdminPointsPage } from './pages/AdminPointsPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
 
 export function App() {
   return (
@@ -24,6 +27,7 @@ export function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
+                <Route path="/painel" element={<OverviewPage />} />
                 <Route path="/atividades" element={<ActivitiesPage />} />
                 <Route path="/ranking" element={<RankingPage />} />
                 <Route path="/mural" element={<MuralPage />} />
@@ -32,7 +36,12 @@ export function App() {
                 <Route element={<AdminRoute />}>
                   <Route path="/admin/aprovacoes" element={<AdminApprovalsPage />} />
                   <Route path="/admin/modalidades" element={<AdminModalitiesPage />} />
+                  <Route path="/admin/niveis" element={<AdminLevelsPage />} />
                   <Route path="/admin/pontos" element={<AdminPointsPage />} />
+                </Route>
+
+                <Route element={<MasterRoute />}>
+                  <Route path="/admin/usuarios" element={<AdminUsersPage />} />
                 </Route>
               </Route>
             </Route>

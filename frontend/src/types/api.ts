@@ -136,6 +136,58 @@ export interface Comment {
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
 }
 
+export interface AdminUser {
+  id: string;
+  corporateId: string | null;
+  name: string;
+  email: string;
+  position: string | null;
+  status: string;
+  totalPoints: number;
+  department: { id: string; name: string } | null;
+  roles: string[];
+  createdAt: string;
+}
+
+export interface RoleCatalogItem {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface AdminDashboardData {
+  indicators: {
+    totalUsers: number;
+    activeUsers: number;
+    activities: { total: number; pending: number; approved: number; rejected: number; cancelled: number };
+    pendingRedemptions: number;
+    points: { totalDistributed: number; netCirculating: number };
+    topModality: { activityTypeId: string; name: string; icon: string; approvedCount: number } | null;
+    challenges: { total: number; active: number; completedParticipations: number };
+    rewardsCatalogCount: number;
+    totalRedemptions: number;
+  };
+  // Baseado em RankingService.getGeneralLeaderboard() — só traz id/name/points,
+  // sem avatar/departamento (esses só existem no /ranking completo, Fase 10).
+  topRanking: Array<{ position: number; id: string; name: string; points: number }>;
+  charts: {
+    activitiesOverTime: Array<{ date: string; approvedCount: number }>;
+    pointsDistributedOverTime: Array<{ date: string; points: number }>;
+    activitiesByModality: Array<{ activityTypeId: string; name: string; icon: string; approvedCount: number }>;
+    usersByDepartment: Array<{ departmentId: string; departmentName: string; count: number }>;
+    redemptionsByStatus: Array<{ status: string; count: number }>;
+  };
+}
+
+export interface Level {
+  id: string;
+  levelNumber: number;
+  name: string;
+  minPoints: number;
+  badgeIcon: string;
+  description: string | null;
+}
+
 export interface Pagination {
   total: number;
   page: number;

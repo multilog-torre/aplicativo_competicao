@@ -22,25 +22,30 @@ export function AdminPointsPage() {
   const [manualFormOpen, setManualFormOpen] = useState(false);
   const [reversingId, setReversingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  function loadUsers(keepSelection = false) {
     api
-      .get<RankingEntry[]>('/ranking?limit=200')
+      .get<RankingEntry[]>('/ranking?limit=100')
       .then(({ data }) => {
         setUsers(data);
-        if (data[0]) setSelectedUserId(data[0].userId);
+        if (!keepSelection && data[0]) setSelectedUserId(data[0].userId);
       })
       .catch(() => showToast('Não foi possível carregar a lista de usuários.', 'error'))
       .finally(() => setLoadingUsers(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => loadUsers(), []);
 
   function loadHistory() {
     if (!selectedUserId) return;
     setLoadingHistory(true);
     setError(null);
     api
-      .get<PointsTransaction[]>(`/scoring/transactions?userId=${selectedUserId}&limit=15`)
-      .then(({ data }) => setHistory(data))
+      // Diferente de /activities, /posts etc., este endpoint retorna o array
+      // dentro de data.transactions (não data diretamente) — contrato já
+      // estabelecido e testado nas Fases 5/19, mantido como está.
+      .get<{ transactions: PointsTransaction[] }>(`/scoring/transactions?userId=${selectedUserId}&limit=15`)
+      .then(({ data }) => setHistory(data.transactions))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o histórico.'))
       .finally(() => setLoadingHistory(false));
   }
@@ -56,6 +61,7 @@ export function AdminPointsPage() {
       showToast('Transação revertida com sucesso!', 'success');
       setReversingId(null);
       loadHistory();
+      loadUsers(true);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Não foi possível reverter a transação.', 'error');
     }
@@ -144,6 +150,7 @@ export function AdminPointsPage() {
             setManualFormOpen(false);
             showToast('Lançamento realizado com sucesso!', 'success');
             loadHistory();
+            loadUsers(true);
           }}
         />
       )}
