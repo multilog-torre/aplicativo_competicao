@@ -86,6 +86,38 @@ export interface UserActivity {
   rejectionReason?: string | null;
 }
 
+export interface EvidenceItem {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+  downloadUrl: string;
+}
+
+export interface ActivityDetail {
+  id: string;
+  quantity: number;
+  unit: string | null;
+  description: string | null;
+  calculatedPoints: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  activityDate: string;
+  createdAt: string;
+  rejectionReason: string | null;
+  user: { id: string; name: string; email: string };
+  activityType: {
+    id: string;
+    name: string;
+    icon: string;
+    description: string | null;
+    rulesDescription: string | null;
+    unit: string | null;
+    requiresEvidence: boolean;
+  };
+  evidences: EvidenceItem[];
+}
+
 export interface RankingEntry {
   position: number;
   userId: string;
