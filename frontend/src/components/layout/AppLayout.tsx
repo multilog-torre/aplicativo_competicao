@@ -84,6 +84,13 @@ export function AppLayout() {
               >
                 <span aria-hidden="true">💰</span> Gerenciar Pontos
               </NavLink>
+              <NavLink
+                to="/admin/ciclos"
+                className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span aria-hidden="true">🏁</span> Ciclos de Premiação
+              </NavLink>
               {isAdminMaster && (
                 <NavLink
                   to="/admin/usuarios"

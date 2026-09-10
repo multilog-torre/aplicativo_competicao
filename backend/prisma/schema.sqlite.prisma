@@ -41,6 +41,7 @@ model User {
   createdTransactions PointsTransaction[]   @relation("CreatedTransactions")
   userAchievements    UserAchievement[]
   challenges          ChallengeParticipant[]
+  cycleWins           CycleWinner[]
   userRewards         UserReward[]
   posts               Post[]
   comments            Comment[]
@@ -199,7 +200,7 @@ model PointsTransaction {
   challengeId     String?  @map("challenge_id")
   achievementId   String?  @map("achievement_id")
   rewardId        String?  @map("reward_id")
-  transactionType String   @map("transaction_type") // ACTIVITY, BONUS, PENALTY, ADJUSTMENT, CHALLENGE, ACHIEVEMENT, REWARD, REVERSAL
+  transactionType String   @map("transaction_type") // ACTIVITY, BONUS, PENALTY, ADJUSTMENT, CHALLENGE, ACHIEVEMENT, REWARD, REVERSAL, CYCLE_RESET
   points          Int
   description     String
   referenceType   String?  @map("reference_type")
@@ -306,6 +307,62 @@ model ChallengeParticipant {
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
+}
+
+// Ciclo de Premiação — competição periódica com data início/fim. Ao ser
+// encerrado (automaticamente, quando endDate passa), o pódio (1º/2º/3º) é
+// calculado a partir do ledger e registrado em CycleWinner, e a pontuação
+// de TODOS os usuários é zerada — nunca apagando o ledger (Regra de Ouro,
+// planejamento.md §10), e sim através de um lançamento de ajuste
+// (transactionType=CYCLE_RESET) que devolve o total a 0, auditável como
+// qualquer outra movimentação.
+model AwardCycle {
+  id        String    @id @default(uuid())
+  name      String
+  startDate DateTime  @map("start_date")
+  endDate   DateTime  @map("end_date")
+  status    String    @default("ACTIVE") // ACTIVE, CLOSED, CANCELLED
+  closedAt  DateTime? @map("closed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  prizes  CyclePrize[]
+  winners CycleWinner[]
+
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("award_cycles")
+}
+
+// Prêmio definido pelo admin para cada posição do pódio (1º/2º/3º) — só descritivo, entrega é externa ao sistema.
+model CyclePrize {
+  id          String  @id @default(uuid())
+  cycleId     String  @map("cycle_id")
+  position    Int // 1, 2 ou 3
+  title       String
+  description String?
+
+  cycle AwardCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, position])
+  @@map("cycle_prizes")
+}
+
+// Registro imutável de quem ficou em cada posição do pódio quando um ciclo encerrou.
+model CycleWinner {
+  id            String   @id @default(uuid())
+  cycleId       String   @map("cycle_id")
+  userId        String   @map("user_id")
+  position      Int
+  pointsAtClose Int      @map("points_at_close")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  cycle AwardCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, position])
+  @@map("cycle_winners")
 }
 
 // -------------------------------------------------------------

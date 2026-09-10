@@ -234,6 +234,34 @@ export interface Level {
   description: string | null;
 }
 
+export interface CyclePrize {
+  id: string;
+  position: 1 | 2 | 3;
+  title: string;
+  description: string | null;
+}
+
+export interface CycleWinner {
+  id: string;
+  position: 1 | 2 | 3;
+  pointsAtClose: number;
+  user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
+}
+
+export type CycleEffectiveStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CLOSED' | 'CANCELLED';
+
+export interface AwardCycle {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  effectiveStatus: CycleEffectiveStatus;
+  closedAt: string | null;
+  prizes: CyclePrize[];
+  winners: CycleWinner[];
+}
+
 export interface Pagination {
   total: number;
   page: number;

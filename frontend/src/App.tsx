@@ -15,6 +15,7 @@ import { AdminApprovalsPage } from './pages/AdminApprovalsPage';
 import { AdminModalitiesPage } from './pages/AdminModalitiesPage';
 import { AdminLevelsPage } from './pages/AdminLevelsPage';
 import { AdminPointsPage } from './pages/AdminPointsPage';
+import { AdminCyclesPage } from './pages/AdminCyclesPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 
 export function App() {
@@ -40,6 +41,7 @@ export function App() {
                   <Route path="/admin/modalidades" element={<AdminModalitiesPage />} />
                   <Route path="/admin/niveis" element={<AdminLevelsPage />} />
                   <Route path="/admin/pontos" element={<AdminPointsPage />} />
+                  <Route path="/admin/ciclos" element={<AdminCyclesPage />} />
                 </Route>
 
                 <Route element={<MasterRoute />}>

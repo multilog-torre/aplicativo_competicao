@@ -13,6 +13,7 @@ export type NotificationType =
   | 'CHALLENGE_COMPLETED'
   | 'REWARD_UPDATE'
   | 'NEW_USER_PENDING'
+  | 'CYCLE_ENDED'
   | 'INFO';
 
 export class NotificationService {

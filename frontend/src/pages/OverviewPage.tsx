@@ -1,12 +1,51 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { AdminDashboardData } from '../types/api';
+import { AdminDashboardData, AwardCycle } from '../types/api';
 import { LoadingState, ErrorState } from '../components/ui/States';
 import { LineChart } from '../components/ui/Charts';
 import { Avatar } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 
 const MEDALS: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+function CurrentCycleCard() {
+  const [cycle, setCycle] = useState<AwardCycle | null | undefined>(undefined);
+
+  useEffect(() => {
+    api
+      .get<AwardCycle | null>('/cycles/current')
+      .then(({ data }) => setCycle(data))
+      .catch(() => setCycle(null));
+  }, []);
+
+  if (cycle === undefined) return null; // ainda carregando — evita "pulo" de layout
+  if (cycle === null) return null; // nenhum ciclo em andamento agora
+
+  const daysLeft = Math.max(0, Math.ceil((new Date(cycle.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+  return (
+    <section className="card">
+      <h2 className="card__title">🏁 Ciclo Atual — {cycle.name}</h2>
+      <p>
+        Termina em <strong>{new Date(cycle.endDate).toLocaleDateString('pt-BR')}</strong>
+        {daysLeft > 0 ? ` (faltam ${daysLeft} dia${daysLeft === 1 ? '' : 's'})` : ' (hoje)'}. Ao final, o pódio é
+        premiado e a pontuação de todos reinicia para o próximo ciclo.
+      </p>
+      {cycle.prizes.length > 0 && (
+        <div className="form__row" style={{ flexWrap: 'wrap' }}>
+          {cycle.prizes.map((p) => (
+            <div key={p.id} className="stat-card" style={{ minWidth: 160 }}>
+              <span className="stat-card__label">
+                {MEDALS[p.position]} {p.position}º lugar
+              </span>
+              <span className="stat-card__value stat-card__value--small">{p.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** Painel Geral — visão consolidada do progresso de todos os colaboradores,
  * aberta a qualquer usuário autenticado (não é uma tela administrativa). */
@@ -65,6 +104,8 @@ export function OverviewPage() {
           <span className="stat-card__value">{engagementToday}</span>
         </div>
       </div>
+
+      <CurrentCycleCard />
 
       <div className="grid-2">
         <section className="card">
