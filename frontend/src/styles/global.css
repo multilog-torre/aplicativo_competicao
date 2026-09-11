@@ -7,14 +7,14 @@
    data-theme="light"/"dark" em <html>. Por isso o tema escuro aqui é
    `:root[data-theme="dark"]`, não `@media (prefers-color-scheme)`.
 
-   O menu (topbar + sidebar) é Deep Twilight fixo em QUALQUER tema — só
+   O menu (topbar + sidebar) é azul-marinho #001E42 fixo em QUALQUER tema — só
    o conteúdo (fundo branco ⇄ cinza-escuro) muda com o toggle. Por isso
    --color-nav-bg não é redefinido no bloco [data-theme="dark"].
 
    --color-accent (turquesa) é claro/vibrante, então o texto sobre ele
-   usa --color-accent-contrast (Deep Twilight, escuro) — branco não tem
+   usa --color-accent-contrast (azul-marinho #001E42, escuro) — branco não tem
    contraste suficiente. --color-primary-* é o par dos botões de ação
-   primária: Deep Twilight com texto branco no claro (casa com o menu);
+   primária: azul-marinho #001E42 com texto branco no claro (casa com o menu);
    no escuro cai pro turquesa (escuro-sobre-escuro não teria contraste).
    Cores semânticas (sucesso/aviso/perigo) ficam fora da paleta de
    marca de propósito — preservam o reconhecimento universal
@@ -24,11 +24,11 @@
   --color-bg: #ffffff;
   --color-surface: #ffffff;
   --color-border: #e4e7ed;
-  --color-text: #16116b;
+  --color-text: #001e42;
   --color-text-muted: #6b7280;
   --color-accent: #22d3ee;
-  --color-accent-contrast: #16116b;
-  --color-primary-bg: #16116b;
+  --color-accent-contrast: #001e42;
+  --color-primary-bg: #001e42;
   --color-primary-contrast: #ffffff;
   --color-success: #15803d;
   --color-success-bg: #dcfce7;
@@ -37,7 +37,7 @@
   --color-danger: #b91c1c;
   --color-danger-bg: #fee2e2;
   --color-neutral-bg: #e9ecf2;
-  --color-nav-bg: #16116b;
+  --color-nav-bg: #001e42;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -50,16 +50,16 @@
 :root[data-theme='dark'] {
   /* "Toda a parte que é branca" (fundo + cards) vira um tom neutro
      preto/cinza-escuro — não navy, para não competir com o menu, que
-     já é Deep Twilight fixo nos dois temas. */
+     já é azul-marinho #001E42 fixo nos dois temas. */
   --color-bg: #1e1e22;
   --color-surface: #26262b;
   --color-border: #3a3a41;
   --color-text: #f2f3f5;
   --color-text-muted: #a0a3ac;
   --color-accent: #22d3ee;
-  --color-accent-contrast: #16116b;
+  --color-accent-contrast: #001e42;
   --color-primary-bg: #22d3ee;
-  --color-primary-contrast: #16116b;
+  --color-primary-contrast: #001e42;
   --color-success: #4ade80;
   --color-success-bg: #14311f;
   --color-warning: #fbbf24;
@@ -111,7 +111,7 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  /* Fixo em Deep Twilight — o menu não segue o tema claro/escuro do conteúdo. */
+  /* Fixo em azul-marinho #001E42 — o menu não segue o tema claro/escuro do conteúdo. */
   background: var(--color-nav-bg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
@@ -135,7 +135,7 @@ textarea {
 }
 
 /* .brand-logo é reaproveitado no card de login/cadastro (fundo claro) e
-   aqui na topbar (fundo Deep Twilight) — por isso o texto é sobrescrito
+   aqui na topbar (fundo azul-marinho #001E42) — por isso o texto é sobrescrito
    para branco só dentro da topbar; o ícone já é turquesa nos dois casos. */
 .topbar__brand .brand-logo {
   color: #ffffff;
@@ -207,7 +207,7 @@ textarea {
   left: 0;
   bottom: 0;
   width: 240px;
-  /* Fixo em Deep Twilight, igual à topbar. */
+  /* Fixo em azul-marinho #001E42, igual à topbar. */
   background: var(--color-nav-bg);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: 16px 8px;
@@ -1226,7 +1226,7 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: #16116b;
+  background: #001e42;
 }
 
 .auth-card {
@@ -1281,7 +1281,7 @@ textarea {
 
 .auth-card .btn--primary {
   background: #17afcb;
-  color: #16116b;
+  color: #001e42;
   font-weight: 700;
 }
 
