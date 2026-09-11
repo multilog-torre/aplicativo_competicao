@@ -1,46 +1,58 @@
 /* ============================================================
-   TORRE — Design tokens (claro por padrão, respeita dark mode)
+   DADOS COMPETIÇÃO — Design tokens (claro por padrão, respeita dark mode)
+
+   Paleta da marca (do mais escuro ao mais claro):
+   #03045E Deep Twilight · #023E8A French Blue · #0077B6 Bright Teal Blue
+   #0096C7 Blue Green · #00B4D8 Turquoise Surf (cor de destaque/logo)
+   #48CAE4 Sky Aqua · #90E0EF · #ADE8F4 Frosted Blue · #CAF0F8 Light Cyan
+
+   --color-accent (Turquoise Surf) é claro/vibrante, então o texto sobre
+   ele usa --color-accent-contrast = Deep Twilight (texto escuro), não
+   branco — branco sobre o turquesa não tem contraste suficiente para
+   leitura confortável. Cores semânticas (sucesso/aviso/perigo) foram
+   mantidas fora da paleta de marca de propósito: preservam o
+   reconhecimento universal verde/amarelo/vermelho.
    ============================================================ */
 :root {
-  --color-bg: #f7f8fa;
+  --color-bg: #caf0f8;
   --color-surface: #ffffff;
-  --color-border: #e2e5ea;
-  --color-text: #1a1d23;
-  --color-text-muted: #6b7280;
-  --color-accent: #6d28d9;
-  --color-accent-contrast: #ffffff;
+  --color-border: #ade8f4;
+  --color-text: #03045e;
+  --color-text-muted: #023e8a;
+  --color-accent: #00b4d8;
+  --color-accent-contrast: #03045e;
   --color-success: #15803d;
   --color-success-bg: #dcfce7;
   --color-warning: #b45309;
   --color-warning-bg: #fef3c7;
   --color-danger: #b91c1c;
   --color-danger-bg: #fee2e2;
-  --color-neutral-bg: #eef0f3;
+  --color-neutral-bg: #90e0ef;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-sm: 0 1px 2px rgba(3, 4, 94, 0.08);
+  --shadow-md: 0 4px 12px rgba(3, 4, 94, 0.12);
   --sidebar-width: 220px;
   --topbar-height: 60px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #14161a;
-    --color-surface: #1d2026;
-    --color-border: #2c3038;
-    --color-text: #f2f3f5;
-    --color-text-muted: #9aa0ab;
-    --color-accent: #a78bfa;
-    --color-accent-contrast: #14161a;
+    --color-bg: #03045e;
+    --color-surface: #101c6b;
+    --color-border: #023e8a;
+    --color-text: #caf0f8;
+    --color-text-muted: #48cae4;
+    --color-accent: #00b4d8;
+    --color-accent-contrast: #03045e;
     --color-success: #4ade80;
     --color-success-bg: #14311f;
     --color-warning: #fbbf24;
     --color-warning-bg: #3a2c0c;
     --color-danger: #f87171;
     --color-danger-bg: #3a1414;
-    --color-neutral-bg: #262a31;
+    --color-neutral-bg: #023e8a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
@@ -106,6 +118,18 @@ textarea {
 .topbar__brand {
   font-weight: 700;
   font-size: 1.1rem;
+}
+
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.brand-logo__icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 .topbar__user {
@@ -427,7 +451,9 @@ textarea {
 }
 .badge--neutral {
   background: var(--color-neutral-bg);
-  color: var(--color-text-muted);
+  /* --color-text (não muted) para garantir contraste sobre o
+     neutral-bg claro/vibrante da nova paleta. */
+  color: var(--color-text);
 }
 
 .avatar {
@@ -1119,6 +1145,9 @@ textarea {
 }
 .toast--info {
   background: var(--color-accent);
+  /* --color-accent é claro (turquesa) — texto escuro em vez do branco
+     herdado de .toast, senão fica ilegível. */
+  color: var(--color-accent-contrast);
 }
 
 /* ============================================================

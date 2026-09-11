@@ -45,7 +45,7 @@ export class HealthController {
       name: 'Plataforma Corporativa de Gamificação e Competição',
       description: 'API REST oficial do sistema de gamificação, pontuação e ranking corporativo.',
       version: '1.0.0',
-      author: 'Torre Gamification Team',
+      author: 'Dados Competição Team',
       docsUrl: `${env.API_URL}/api/docs`,
       features: [
         'Autenticação e RBAC Corporativo',

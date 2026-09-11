@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { Department, Gender, GENDER_LABELS } from '../types/api';
 import { useAuth } from '../context/AuthContext';
+import { Logo } from '../components/ui/Logo';
 
 const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 
@@ -61,7 +62,9 @@ export function RegisterPage() {
     return (
       <div className="auth-page">
         <div className="auth-card">
-          <h1 className="auth-card__title">🏔️ Torre</h1>
+          <h1 className="auth-card__title">
+            <Logo iconSize={28} />
+          </h1>
           <div className="alert alert--success">{result.message}</div>
           <p>
             Sua senha inicial é: <strong>{result.defaultPassword}</strong>
@@ -78,7 +81,9 @@ export function RegisterPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-card__title">🏔️ Torre</h1>
+        <h1 className="auth-card__title">
+          <Logo iconSize={28} />
+        </h1>
         <p className="auth-card__subtitle">Criar conta com seu e-mail corporativo</p>
 
         {error && <div className="alert alert--error">{error}</div>}

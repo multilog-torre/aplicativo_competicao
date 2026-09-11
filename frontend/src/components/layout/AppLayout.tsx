@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../ui/Badge';
+import { Logo } from '../ui/Logo';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
@@ -29,7 +30,9 @@ export function AppLayout() {
         >
           ☰
         </button>
-        <span className="topbar__brand">🏔️ Torre</span>
+        <span className="topbar__brand">
+          <Logo iconSize={22} />
+        </span>
         <div className="topbar__user">
           <span className="topbar__user-name">{user?.name}</span>
           <Link to="/perfil" aria-label="Meu perfil">

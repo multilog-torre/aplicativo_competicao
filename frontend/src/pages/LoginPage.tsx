@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
+import { Logo } from '../components/ui/Logo';
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -28,7 +29,9 @@ export function LoginPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-card__title">🏔️ Torre</h1>
+        <h1 className="auth-card__title">
+          <Logo iconSize={28} />
+        </h1>
         <p className="auth-card__subtitle">Plataforma corporativa de competição e gamificação</p>
 
         {error && <div className="alert alert--error">{error}</div>}
