@@ -1,36 +1,34 @@
 /* ============================================================
-   DADOS COMPETIÇÃO — Design tokens (claro por padrão, respeita dark mode)
+   DADOS COMPETIÇÃO — Design tokens
 
-   Paleta da marca (do mais escuro ao mais claro):
-   #03045E Deep Twilight · #023E8A French Blue · #0077B6 Bright Teal Blue
-   #0096C7 Blue Green · #00B4D8 Turquoise Surf (cor de destaque/logo)
-   #48CAE4 Sky Aqua · #90E0EF · #ADE8F4 Frosted Blue · #CAF0F8 Light Cyan
+   Tema fixo por padrão CLARO (não segue mais a preferência do sistema/
+   navegador) — a pessoa troca manualmente pelo botão ☀️/🌙 na topbar
+   (ThemeContext.tsx), que grava a escolha em localStorage e aplica
+   data-theme="light"/"dark" em <html>. Por isso o tema escuro aqui é
+   `:root[data-theme="dark"]`, não `@media (prefers-color-scheme)`.
 
-   Layout de referência (painel de controle): fundo claro/neutro com os
-   cards em branco puro — "caixas" bem demarcadas por borda/sombra — e o
-   menu (topbar + sidebar) em Deep Twilight fixo, com texto branco. Por
-   isso o menu usa cores fixas (não tokens de tema): ele não muda entre
-   claro/escuro, só o conteúdo muda.
+   O menu (topbar + sidebar) é Deep Twilight fixo em QUALQUER tema — só
+   o conteúdo (fundo branco ⇄ cinza-escuro) muda com o toggle. Por isso
+   --color-nav-bg não é redefinido no bloco [data-theme="dark"].
 
-   --color-accent (Turquoise Surf) é claro/vibrante, então o texto sobre
-   ele usa --color-accent-contrast = Deep Twilight (texto escuro), não
-   branco — branco sobre o turquesa não tem contraste suficiente para
-   leitura confortável. --color-primary-* é o par usado pelos botões de
-   ação primária: Deep Twilight (com texto branco) no tema claro, para
-   casar com o menu; no escuro, cai de volta no turquesa (só ficaria
-   escuro-sobre-escuro sem contraste). Cores semânticas (sucesso/aviso/
-   perigo) foram mantidas fora da paleta de marca de propósito: preservam
-   o reconhecimento universal verde/amarelo/vermelho.
+   --color-accent (turquesa) é claro/vibrante, então o texto sobre ele
+   usa --color-accent-contrast (Deep Twilight, escuro) — branco não tem
+   contraste suficiente. --color-primary-* é o par dos botões de ação
+   primária: Deep Twilight com texto branco no claro (casa com o menu);
+   no escuro cai pro turquesa (escuro-sobre-escuro não teria contraste).
+   Cores semânticas (sucesso/aviso/perigo) ficam fora da paleta de
+   marca de propósito — preservam o reconhecimento universal
+   verde/amarelo/vermelho.
    ============================================================ */
 :root {
-  --color-bg: #f3f6fa;
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-border: #e1e6ec;
-  --color-text: #03045e;
-  --color-text-muted: #5b6472;
-  --color-accent: #00b4d8;
-  --color-accent-contrast: #03045e;
-  --color-primary-bg: #03045e;
+  --color-border: #e4e7ed;
+  --color-text: #16116b;
+  --color-text-muted: #6b7280;
+  --color-accent: #22d3ee;
+  --color-accent-contrast: #16116b;
+  --color-primary-bg: #16116b;
   --color-primary-contrast: #ffffff;
   --color-success: #15803d;
   --color-success-bg: #dcfce7;
@@ -38,38 +36,39 @@
   --color-warning-bg: #fef3c7;
   --color-danger: #b91c1c;
   --color-danger-bg: #fee2e2;
-  --color-neutral-bg: #eef1f4;
-  --color-nav-bg: #03045e;
+  --color-neutral-bg: #e9ecf2;
+  --color-nav-bg: #16116b;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgba(3, 4, 94, 0.08);
-  --shadow-md: 0 4px 12px rgba(3, 4, 94, 0.12);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --sidebar-width: 220px;
   --topbar-height: 60px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #03045e;
-    --color-surface: #101c6b;
-    --color-border: #023e8a;
-    --color-text: #caf0f8;
-    --color-text-muted: #48cae4;
-    --color-accent: #00b4d8;
-    --color-accent-contrast: #03045e;
-    --color-primary-bg: #00b4d8;
-    --color-primary-contrast: #03045e;
-    --color-success: #4ade80;
-    --color-success-bg: #14311f;
-    --color-warning: #fbbf24;
-    --color-warning-bg: #3a2c0c;
-    --color-danger: #f87171;
-    --color-danger-bg: #3a1414;
-    --color-neutral-bg: #023e8a;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-  }
+:root[data-theme='dark'] {
+  /* "Toda a parte que é branca" (fundo + cards) vira um tom neutro
+     preto/cinza-escuro — não navy, para não competir com o menu, que
+     já é Deep Twilight fixo nos dois temas. */
+  --color-bg: #1e1e22;
+  --color-surface: #26262b;
+  --color-border: #3a3a41;
+  --color-text: #f2f3f5;
+  --color-text-muted: #a0a3ac;
+  --color-accent: #22d3ee;
+  --color-accent-contrast: #16116b;
+  --color-primary-bg: #22d3ee;
+  --color-primary-contrast: #16116b;
+  --color-success: #4ade80;
+  --color-success-bg: #14311f;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #3a2c0c;
+  --color-danger: #f87171;
+  --color-danger-bg: #3a1414;
+  --color-neutral-bg: #34343b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -114,7 +113,7 @@ textarea {
   padding: 0 16px;
   /* Fixo em Deep Twilight — o menu não segue o tema claro/escuro do conteúdo. */
   background: var(--color-nav-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -164,12 +163,35 @@ textarea {
 .topbar__user-name {
   display: none;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 150ms ease-in-out;
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .topbar .btn--ghost {
   color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.topbar .btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
 }
 
 .app-body {
@@ -187,7 +209,7 @@ textarea {
   width: 240px;
   /* Fixo em Deep Twilight, igual à topbar. */
   background: var(--color-nav-bg);
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: 16px 8px;
   display: flex;
   flex-direction: column;
@@ -214,34 +236,39 @@ textarea {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  color: #ffffff;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
   font-size: 0.95rem;
+  transition: background-color 150ms ease-in-out;
 }
 
 .sidebar__link:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 /* Especificidade igual a ".sidebar__link:hover" (duas classes = mesmo peso
    que uma classe + uma pseudo-classe) para a pílula ativa nunca "apagar"
    ao passar o mouse por cima dela — sem isso, :hover ganhava só o fundo
-   e deixava texto escuro sobre fundo quase escuro, ilegível. */
+   e deixava texto quase invisível sobre fundo quase escuro. */
 .sidebar__link.sidebar__link--active,
 .sidebar__link.sidebar__link--active:hover {
-  /* Pílula clara sobre o menu escuro — mesmo padrão do item ativo na
-     imagem de referência (painel de controle). */
-  background: #ffffff;
+  /* Pílula quase branca sobre o menu escuro — mesmo padrão do item
+     ativo na imagem de referência (painel de controle). */
+  background: #f2f3fe;
   color: var(--color-nav-bg);
+  font-weight: 600;
 }
 
 .sidebar__section-label {
   margin: 14px 12px 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .content {
@@ -1188,26 +1215,43 @@ textarea {
 /* ============================================================
    Autenticação
    ============================================================ */
+/* Login/Cadastro são a ÚNICA exceção à regra de fundo branco — mantêm o
+   esquema azul-royal/ciano próprio, com cores fixas (não os tokens de
+   --color-bg/--color-surface/etc.), sempre iguais independente do tema
+   claro/escuro escolhido para o resto do app (o toggle de tema só existe
+   dentro da área logada). */
 .auth-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: var(--color-bg);
+  background: #16116b;
 }
 
 .auth-card {
   width: 100%;
   max-width: 380px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: #23207f;
+  /* Cor "padrão" (não sobrescrita por regras mais específicas abaixo) pra
+     qualquer texto solto dentro do card — ex.: parágrafos de field__hint
+     ou da tela de sucesso do cadastro — não herdar o --color-text do
+     tema claro (escuro) e ficar ilegível sobre este fundo escuro. */
+  color: #ffffff;
+  border: none;
   border-radius: var(--radius-lg);
   padding: 28px;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* O texto do .brand-logo é branco aqui (sobrescrevendo --color-text, que
+   no tema claro do resto do app é escuro) — o ícone já é turquesa/ciano
+   nos dois casos. Mesmo padrão já usado em .topbar__brand .brand-logo. */
+.auth-card__title .brand-logo {
+  color: #ffffff;
 }
 
 .auth-card__title {
@@ -1220,13 +1264,31 @@ textarea {
   margin: 0 0 8px;
   text-align: center;
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: #a6b0f0;
+}
+
+.auth-card .field__label {
+  color: #a6b0f0;
+}
+
+.auth-card .field input,
+.auth-card .field select,
+.auth-card .field textarea {
+  background: #e9ecfb;
+  color: #1a1a2e;
+  border: none;
+}
+
+.auth-card .btn--primary {
+  background: #17afcb;
+  color: #16116b;
+  font-weight: 700;
 }
 
 .auth-card__link {
   text-align: center;
   font-size: 0.85rem;
-  color: var(--color-accent);
+  color: #67e8f9;
   text-decoration: none;
 }
 

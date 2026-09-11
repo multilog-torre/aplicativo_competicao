@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute, AdminRoute, MasterRoute } from './routes/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
@@ -22,40 +23,42 @@ import { AdminUsersPage } from './pages/AdminUsersPage';
 
 export function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/cadastro" element={<RegisterPage />} />
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/cadastro" element={<RegisterPage />} />
 
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/regras" element={<RulesPage />} />
-                <Route path="/painel" element={<OverviewPage />} />
-                <Route path="/atividades" element={<ActivitiesPage />} />
-                <Route path="/ranking" element={<RankingPage />} />
-                <Route path="/mural" element={<MuralPage />} />
-                <Route path="/perfil" element={<ProfilePage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/regras" element={<RulesPage />} />
+                  <Route path="/painel" element={<OverviewPage />} />
+                  <Route path="/atividades" element={<ActivitiesPage />} />
+                  <Route path="/ranking" element={<RankingPage />} />
+                  <Route path="/mural" element={<MuralPage />} />
+                  <Route path="/perfil" element={<ProfilePage />} />
 
-                <Route element={<AdminRoute />}>
-                  <Route path="/admin/aprovacoes" element={<AdminApprovalsPage />} />
-                  <Route path="/admin/modalidades" element={<AdminModalitiesPage />} />
-                  <Route path="/admin/niveis" element={<AdminLevelsPage />} />
-                  <Route path="/admin/pontos" element={<AdminPointsPage />} />
-                  <Route path="/admin/ciclos" element={<AdminCyclesPage />} />
-                  <Route path="/admin/departamentos" element={<AdminDepartmentsPage />} />
-                </Route>
+                  <Route element={<AdminRoute />}>
+                    <Route path="/admin/aprovacoes" element={<AdminApprovalsPage />} />
+                    <Route path="/admin/modalidades" element={<AdminModalitiesPage />} />
+                    <Route path="/admin/niveis" element={<AdminLevelsPage />} />
+                    <Route path="/admin/pontos" element={<AdminPointsPage />} />
+                    <Route path="/admin/ciclos" element={<AdminCyclesPage />} />
+                    <Route path="/admin/departamentos" element={<AdminDepartmentsPage />} />
+                  </Route>
 
-                <Route element={<MasterRoute />}>
-                  <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+                  <Route element={<MasterRoute />}>
+                    <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+                  </Route>
                 </Route>
               </Route>
-            </Route>
-          </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

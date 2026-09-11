@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Avatar } from '../ui/Badge';
 import { Logo } from '../ui/Logo';
 
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
 
 export function AppLayout() {
   const { user, logout, isAdmin, isAdminMaster } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -35,6 +37,15 @@ export function AppLayout() {
         </span>
         <div className="topbar__user">
           <span className="topbar__user-name">{user?.name}</span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
+            title={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
+          >
+            {theme === 'light' ? '☀️' : '🌙'}
+          </button>
           <Link to="/perfil" aria-label="Meu perfil">
             <Avatar name={user?.name ?? '?'} avatarType={user?.avatarType} avatarUrl={user?.avatarUrl} userId={user?.id} size={32} />
           </Link>
