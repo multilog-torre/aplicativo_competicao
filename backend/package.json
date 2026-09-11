@@ -43,7 +43,8 @@
     "test:registration": "tsx src/test-registration.ts",
     "test:cycles": "tsx src/test-cycles.ts",
     "test:departments": "tsx src/test-departments.ts",
-    "test:events": "tsx src/test-events.ts"
+    "test:events": "tsx src/test-events.ts",
+    "test:event-groups": "tsx src/test-event-groups.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

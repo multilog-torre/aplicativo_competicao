@@ -9,9 +9,9 @@ function isAdminRequest(req: Request): boolean {
 
 export class PostController {
   public static async create(req: Request, res: Response): Promise<Response> {
-    const { content } = req.body as CreatePostDTO;
+    const { content, eventId } = req.body as CreatePostDTO;
     const userId = req.user!.id;
-    const post = await PostService.create(userId, content, req.file);
+    const post = await PostService.create(userId, content, isAdminRequest(req), req.file, eventId);
     return sendSuccess(res, post, 201);
   }
 
@@ -60,22 +60,23 @@ export class PostController {
   public static async like(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
     const userId = req.user!.id;
-    const like = await PostService.like(id, userId);
+    const like = await PostService.like(id, userId, isAdminRequest(req));
     return sendSuccess(res, like, 201);
   }
 
   public static async unlike(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
     const userId = req.user!.id;
-    const result = await PostService.unlike(id, userId);
+    const result = await PostService.unlike(id, userId, isAdminRequest(req));
     return sendSuccess(res, result, 200);
   }
 
   public static async listLikes(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
+    const userId = req.user!.id;
     const page = parseInt((req.query.page as string) ?? '1', 10) || 1;
     const limit = Math.min(parseInt((req.query.limit as string) ?? '20', 10) || 20, 100);
-    const result = await PostService.listLikes(id, page, limit);
+    const result = await PostService.listLikes(id, userId, isAdminRequest(req), page, limit);
     return sendSuccess(res, result.likes, 200, result.pagination);
   }
 }

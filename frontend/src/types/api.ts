@@ -167,6 +167,7 @@ export interface Post {
   id: string;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
   content: string;
+  eventId: string | null;
   hasImage: boolean;
   imageDownloadUrl: string | null;
   status: string;

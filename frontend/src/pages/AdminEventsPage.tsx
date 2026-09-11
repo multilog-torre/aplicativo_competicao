@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client';
 import { CommunityEvent, EventCategory, EventParticipantEntry } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
+import { EventParticipantsModal } from '../components/ui/EventParticipantsModal';
 import { Avatar } from '../components/ui/Badge';
 import { useToast } from '../context/ToastContext';
 
@@ -42,6 +43,8 @@ export function AdminEventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState<CommunityEvent | null>(null);
   const [rejecting, setRejecting] = useState<CommunityEvent | null>(null);
+  const [editing, setEditing] = useState<CommunityEvent | null>(null);
+  const [viewingParticipantsOf, setViewingParticipantsOf] = useState<CommunityEvent | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<CommunityEvent | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -111,7 +114,11 @@ export function AdminEventsPage() {
                   <td data-label="Categoria">{CATEGORY_LABELS[e.category]}</td>
                   <td data-label="Data">{formatDate(e.eventDate)}</td>
                   <td data-label="Criado por">{e.createdBy.name}</td>
-                  <td data-label="Inscritos">{e.participantsCount}</td>
+                  <td data-label="Inscritos">
+                    <button type="button" className="btn btn--small btn--secondary" onClick={() => setViewingParticipantsOf(e)}>
+                      👥 {e.participantsCount}
+                    </button>
+                  </td>
                   <td data-label="Bônus">{e.bonusPoints ?? '—'}</td>
                   <td data-label="Status">
                     <span className={`badge badge--${STATUS_TONE[e.status]}`}>{STATUS_LABELS[e.status]}</span>
@@ -126,6 +133,11 @@ export function AdminEventsPage() {
                           Rejeitar
                         </button>
                       </>
+                    )}
+                    {(e.status === 'PENDING' || (e.status === 'APPROVED' && !e.isPast)) && (
+                      <button type="button" className="btn btn--small btn--secondary" onClick={() => setEditing(e)}>
+                        Editar
+                      </button>
                     )}
                     {e.status === 'APPROVED' && !e.isPast && (
                       <button type="button" className="btn btn--small btn--danger" disabled={busyId === e.id} onClick={() => setCancelingId(e.id)}>
@@ -166,6 +178,26 @@ export function AdminEventsPage() {
             showToast('Evento rejeitado.', 'info');
             load();
           }}
+        />
+      )}
+
+      {editing && (
+        <AdminEditEventModal
+          event={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            showToast('Evento atualizado com sucesso!', 'success');
+            load();
+          }}
+        />
+      )}
+
+      {viewingParticipantsOf && (
+        <EventParticipantsModal
+          eventId={viewingParticipantsOf.id}
+          eventTitle={viewingParticipantsOf.title}
+          onClose={() => setViewingParticipantsOf(null)}
         />
       )}
 
@@ -374,6 +406,106 @@ function ConfirmAttendanceModal({ event, onClose, onConfirmed }: { event: Commun
           </div>
         </div>
       )}
+    </Modal>
+  );
+}
+
+/** <input type="datetime-local"> espera "YYYY-MM-DDTHH:mm" NO FUSO LOCAL —
+ * nunca usar toISOString() aqui, que converteria pra UTC antes de cortar. */
+function toDateTimeInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Edição pelo admin — pode ajustar qualquer campo, incluindo o bônus quando o evento já está aprovado. */
+function AdminEditEventModal({ event, onClose, onSaved }: { event: CommunityEvent; onClose: () => void; onSaved: () => void }) {
+  const { showToast } = useToast();
+  const [title, setTitle] = useState(event.title);
+  const [description, setDescription] = useState(event.description);
+  const [category, setCategory] = useState<EventCategory>(event.category);
+  const [eventDate, setEventDate] = useState(toDateTimeInputValue(event.eventDate));
+  const [location, setLocation] = useState(event.location ?? '');
+  const [bonusPoints, setBonusPoints] = useState(String(event.bonusPoints ?? ''));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.patch(`/events/${event.id}`, {
+        title,
+        description,
+        category,
+        eventDate: new Date(eventDate).toISOString(),
+        location: location || undefined,
+        ...(event.status === 'APPROVED' && bonusPoints ? { bonusPoints: Number(bonusPoints) } : {}),
+      });
+      onSaved();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Editar — ${event.title}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="form">
+        {error && <div className="alert alert--error">{error}</div>}
+
+        <label className="field">
+          <span className="field__label">Título</span>
+          <input type="text" required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+
+        <div className="form__row">
+          <label className="field">
+            <span className="field__label">Categoria</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value as EventCategory)}>
+              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="field__label">Data e horário</span>
+            <input type="datetime-local" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          </label>
+        </div>
+
+        <label className="field">
+          <span className="field__label">Local (opcional)</span>
+          <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span className="field__label">Descrição</span>
+          <textarea rows={3} required minLength={5} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+
+        {event.status === 'APPROVED' && (
+          <label className="field">
+            <span className="field__label">Pontos de bônus</span>
+            <input type="number" min="1" value={bonusPoints} onChange={(e) => setBonusPoints(e.target.value)} />
+          </label>
+        )}
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={submitting}>
+            {submitting ? 'Salvando…' : 'Salvar alterações'}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

@@ -9,6 +9,7 @@ import {
   CreateEventSchema,
   ListEventsQuerySchema,
   RejectEventSchema,
+  UpdateEventSchema,
 } from './event.dto';
 
 const router = Router();
@@ -18,16 +19,20 @@ const router = Router();
 router.get('/', attachUserIfPresent, validateRequest({ query: ListEventsQuerySchema }), asyncHandler(EventController.list));
 router.get('/:id', attachUserIfPresent, asyncHandler(EventController.getById));
 
-// 2. Criação — QUALQUER usuário autenticado pode propor um evento.
+// 2. Criação e edição — QUALQUER usuário autenticado pode propor um evento;
+// editar é permitido ao próprio criador OU a um admin (checado no service).
 router.post('/', ensureAuthenticated, validateRequest({ body: CreateEventSchema }), asyncHandler(EventController.create));
+router.patch('/:id', ensureAuthenticated, validateRequest({ body: UpdateEventSchema }), asyncHandler(EventController.update));
 router.delete('/:id', ensureAuthenticated, asyncHandler(EventController.delete));
 
 // 3. Participação — autenticado (precisa vir antes de rotas admin genéricas).
 router.post('/:id/join', ensureAuthenticated, asyncHandler(EventController.join));
 router.post('/:id/leave', ensureAuthenticated, asyncHandler(EventController.leave));
+// Lista de participantes — qualquer autenticado pode ver quem está inscrito
+// (a pedido do usuário, não é mais restrito a admin).
+router.get('/:id/participants', ensureAuthenticated, asyncHandler(EventController.listParticipants));
 
 // 4. Moderação e confirmação de presença — restrito a ADMIN/ADMIN_MASTER.
-router.get('/:id/participants', ensureAuthenticated, requireRoles(['ADMIN', 'ADMIN_MASTER']), asyncHandler(EventController.listParticipants));
 router.post(
   '/:id/approve',
   ensureAuthenticated,

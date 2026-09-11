@@ -395,6 +395,7 @@ model Event {
   createdBy    User               @relation("EventsCreated", fields: [createdById], references: [id])
   approvedBy   User?              @relation("EventsApproved", fields: [approvedById], references: [id])
   participants EventParticipant[]
+  posts        Post[]
 
   @@index([status])
   @@index([eventDate])
@@ -467,13 +468,20 @@ model Post {
   content   String
   imageUrl  String?  @map("image_url")
   status    String   @default("PUBLISHED") // PUBLISHED, HIDDEN, MODERATED
+  // Null = publicação do Mural geral (visível a todo autenticado). Preenchido
+  // = publicação do "grupo" de um evento — só visível/postável por quem
+  // participa daquele evento (ou admin). A pedido do usuário: um grupo de
+  // discussão por evento, reaproveitando a mesma estrutura do Mural.
+  eventId   String?  @map("event_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event    Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   comments Comment[]
   likes    PostLike[]
 
+  @@index([eventId])
   @@map("posts")
 }
 

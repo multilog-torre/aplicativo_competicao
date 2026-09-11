@@ -3,6 +3,7 @@ import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { UploadedFile } from '../../shared/types/upload';
 import { assertAllowedFile } from '../../shared/utils/fileValidation';
+import { assertEventGroupAccess } from '../events/event-access.util';
 import { getStorageProvider } from '../storage/storage.factory';
 import { ListPostsQueryDTO, ModeratePostDTO } from './post.dto';
 
@@ -20,6 +21,7 @@ type PostRow = {
   content: string;
   imageUrl: string | null;
   status: string;
+  eventId: string | null;
   createdAt: Date;
   updatedAt: Date;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
@@ -32,7 +34,13 @@ export class PostService {
    * A foto reaproveita o mesmo StorageProvider das evidências (Fase 7) —
    * privado por padrão, servido apenas pelo endpoint de download autorizado.
    */
-  public static async create(userId: string, content: string, file?: UploadedFile) {
+  public static async create(userId: string, content: string, isAdmin: boolean, file?: UploadedFile, eventId?: string) {
+    if (eventId) {
+      const event = await prisma.event.findUnique({ where: { id: eventId } });
+      if (!event) throw new NotFoundError(`Evento com ID '${eventId}' não foi encontrado.`);
+      await assertEventGroupAccess(eventId, userId, isAdmin);
+    }
+
     const postId = uuidv4();
     let imageUrl: string | null = null;
 
@@ -49,7 +57,7 @@ export class PostService {
     }
 
     const post = await prisma.post.create({
-      data: { id: postId, userId, content, imageUrl, status: 'PUBLISHED' },
+      data: { id: postId, userId, content, imageUrl, status: 'PUBLISHED', eventId: eventId ?? null },
       include: {
         user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } },
         _count: { select: { comments: true, likes: true } },
@@ -64,13 +72,19 @@ export class PostService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
+    if (query.eventId) {
+      await assertEventGroupAccess(query.eventId, requestingUserId, isAdmin);
+    }
+
     // Admin pode consultar a fila de moderação (HIDDEN/MODERATED) via ?status=.
     // Participante sempre vê publicações PUBLISHED de todos + as próprias, seja
-    // qual for o status (para saber se algo seu foi moderado).
-    const where =
+    // qual for o status (para saber se algo seu foi moderado). O Mural geral
+    // (sem eventId) nunca mistura com os grupos de evento, e vice-versa.
+    const where: Record<string, unknown> =
       isAdmin && query.status
         ? { status: query.status }
         : { OR: [{ status: 'PUBLISHED' }, { userId: requestingUserId }] };
+    where.eventId = query.eventId ?? null;
 
     const [total, posts] = await Promise.all([
       prisma.post.count({ where }),
@@ -106,6 +120,7 @@ export class PostService {
       },
     });
     if (!post) throw new NotFoundError(`Publicação com ID '${id}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
     if (post.status !== 'PUBLISHED' && !isAdmin && post.userId !== requestingUserId) {
       throw new ForbiddenError('Esta publicação não está mais disponível.');
@@ -119,6 +134,7 @@ export class PostService {
   public static async delete(id: string, requestingUserId: string, isAdmin: boolean, reason?: string) {
     const post = await prisma.post.findUnique({ where: { id } });
     if (!post) throw new NotFoundError(`Publicação com ID '${id}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
     const isOwner = post.userId === requestingUserId;
     if (!isOwner && !isAdmin) {
@@ -169,6 +185,7 @@ export class PostService {
   public static async getImageForDownload(postId: string, requestingUserId: string, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post || !post.imageUrl) throw new NotFoundError('Esta publicação não possui uma foto.');
+    await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
     if (post.status !== 'PUBLISHED' && !isAdmin && post.userId !== requestingUserId) {
       throw new ForbiddenError('Esta publicação não está mais disponível.');
@@ -181,9 +198,10 @@ export class PostService {
 
   // ─── Curtidas ────────────────────────────────────────────────────────────────
 
-  public static async like(postId: string, userId: string) {
+  public static async like(postId: string, userId: string, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, userId, isAdmin);
 
     const existing = await prisma.postLike.findUnique({ where: { postId_userId: { postId, userId } } });
     if (existing) throw new AppError('Você já curtiu esta publicação.', 409, 'ALREADY_LIKED');
@@ -191,7 +209,11 @@ export class PostService {
     return prisma.postLike.create({ data: { postId, userId } });
   }
 
-  public static async unlike(postId: string, userId: string) {
+  public static async unlike(postId: string, userId: string, isAdmin: boolean) {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, userId, isAdmin);
+
     const existing = await prisma.postLike.findUnique({ where: { postId_userId: { postId, userId } } });
     if (!existing) throw new NotFoundError('Você ainda não curtiu esta publicação.');
 
@@ -199,9 +221,10 @@ export class PostService {
     return { message: 'Curtida removida com sucesso.' };
   }
 
-  public static async listLikes(postId: string, page: number, limit: number) {
+  public static async listLikes(postId: string, requestingUserId: string, isAdmin: boolean, page: number, limit: number) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
     const skip = (page - 1) * limit;
     const [total, likes] = await Promise.all([
@@ -234,6 +257,7 @@ export class PostService {
       id: post.id,
       user: post.user,
       content: post.content,
+      eventId: post.eventId,
       hasImage: !!post.imageUrl,
       imageDownloadUrl: post.imageUrl ? `/api/v1/posts/${post.id}/image` : null,
       status: post.status,

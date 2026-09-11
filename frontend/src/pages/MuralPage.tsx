@@ -1,45 +1,140 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import { useAuthedImage } from '../api/useAuthedImage';
-import { Comment, Post } from '../types/api';
+import { Comment, CommunityEvent, Post } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Avatar } from '../components/ui/Badge';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
+/**
+ * Mural — feed geral da empresa, mais uma aba por evento em que o usuário
+ * está participando (a pedido do usuário: "como se fosse um grupo para o
+ * pessoal poder se comunicar"). Cada grupo só aparece pra quem participa
+ * daquele evento, e a pessoa pode sair quando quiser (perde a aba).
+ */
 export function MuralPage() {
+  const [myEvents, setMyEvents] = useState<CommunityEvent[]>([]);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null); // null = Mural geral
+
+  function loadMyEvents() {
+    api
+      .get<CommunityEvent[]>('/events?participating=true')
+      .then(({ data }) => setMyEvents(data))
+      .catch(() => setMyEvents([]));
+  }
+
+  useEffect(loadMyEvents, []);
+
+  const activeEvent = myEvents.find((e) => e.id === activeEventId) ?? null;
+
+  return (
+    <div className="page">
+      <h1 className="page__title">Mural</h1>
+
+      <div className="tabs" role="tablist" aria-label="Abas do mural">
+        <button type="button" className={`tabs__item ${activeEventId === null ? 'tabs__item--active' : ''}`} onClick={() => setActiveEventId(null)}>
+          📣 Mural geral
+        </button>
+        {myEvents.map((e) => (
+          <button
+            key={e.id}
+            type="button"
+            className={`tabs__item ${activeEventId === e.id ? 'tabs__item--active' : ''}`}
+            onClick={() => setActiveEventId(e.id)}
+          >
+            🎉 {e.title}
+          </button>
+        ))}
+      </div>
+
+      <MuralFeed
+        key={activeEventId ?? 'general'}
+        eventId={activeEventId}
+        eventTitle={activeEvent?.title}
+        onLeftGroup={() => {
+          setActiveEventId(null);
+          loadMyEvents();
+        }}
+      />
+    </div>
+  );
+}
+
+function MuralFeed({
+  eventId,
+  eventTitle,
+  onLeftGroup,
+}: {
+  eventId: string | null;
+  eventTitle?: string;
+  onLeftGroup: () => void;
+}) {
   const { showToast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   function load() {
     setLoading(true);
     setError(null);
+    const query = eventId ? `?limit=30&eventId=${eventId}` : '?limit=30';
     api
-      .get<Post[]>('/posts?limit=30')
+      .get<Post[]>(`/posts${query}`)
       .then(({ data }) => setPosts(data))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o mural.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [eventId]);
+
+  async function handleLeaveGroup() {
+    if (!eventId) return;
+    setLeaving(true);
+    try {
+      await api.post(`/events/${eventId}/leave`);
+      showToast('Você saiu do grupo.', 'info');
+      onLeftGroup();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível sair do grupo.', 'error');
+    } finally {
+      setLeaving(false);
+      setConfirmLeaveOpen(false);
+    }
+  }
 
   return (
-    <div className="page">
+    <div>
       <div className="page__header">
-        <h1 className="page__title">Mural</h1>
-        <button type="button" className="btn btn--primary" onClick={() => setComposerOpen(true)}>
-          + Nova publicação
-        </button>
+        <p style={{ margin: 0 }}>
+          {eventId
+            ? 'Grupo só visível pra quem participa deste evento. Você pode sair quando quiser.'
+            : 'Compartilhe algo com toda a equipe.'}
+        </p>
+        <div className="table__actions">
+          {eventId && (
+            <button type="button" className="btn btn--secondary btn--small" onClick={() => setConfirmLeaveOpen(true)}>
+              🚪 Sair do grupo
+            </button>
+          )}
+          <button type="button" className="btn btn--primary" onClick={() => setComposerOpen(true)}>
+            + Nova publicação
+          </button>
+        </div>
       </div>
 
       {loading && <LoadingState label="Carregando o mural…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
       {!loading && !error && posts.length === 0 && (
-        <EmptyState icon="📣" title="Nenhuma publicação ainda" description="Seja o primeiro a compartilhar algo com a equipe!" />
+        <EmptyState
+          icon={eventId ? '🎉' : '📣'}
+          title="Nenhuma publicação ainda"
+          description={eventId ? 'Seja o primeiro a comentar no grupo do evento!' : 'Seja o primeiro a compartilhar algo com a equipe!'}
+        />
       )}
 
       {!loading && !error && posts.length > 0 && (
@@ -52,12 +147,25 @@ export function MuralPage() {
 
       {composerOpen && (
         <ComposerModal
+          eventId={eventId}
           onClose={() => setComposerOpen(false)}
           onCreated={() => {
             setComposerOpen(false);
             showToast('Publicação criada com sucesso!', 'success');
             load();
           }}
+        />
+      )}
+
+      {confirmLeaveOpen && (
+        <ConfirmModal
+          title="Sair do grupo"
+          message={`Você vai deixar de ver e participar do grupo "${eventTitle ?? 'deste evento'}". Você pode entrar de novo participando do evento outra vez.`}
+          confirmLabel="Sair do grupo"
+          danger
+          loading={leaving}
+          onConfirm={handleLeaveGroup}
+          onCancel={() => setConfirmLeaveOpen(false)}
         />
       )}
     </div>
@@ -217,7 +325,7 @@ function CommentsSection({ postId }: { postId: string }) {
   );
 }
 
-function ComposerModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function ComposerModal({ eventId, onClose, onCreated }: { eventId: string | null; onClose: () => void; onCreated: () => void }) {
   const { showToast } = useToast();
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -232,6 +340,7 @@ function ComposerModal({ onClose, onCreated }: { onClose: () => void; onCreated:
     try {
       const formData = new FormData();
       formData.append('content', content.trim());
+      if (eventId) formData.append('eventId', eventId);
       if (file) formData.append('file', file);
       await api.post('/posts', formData, true);
       onCreated();
@@ -245,7 +354,7 @@ function ComposerModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   }
 
   return (
-    <Modal title="Nova publicação" onClose={onClose}>
+    <Modal title={eventId ? 'Nova publicação no grupo' : 'Nova publicação'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="form">
         {error && <div className="alert alert--error">{error}</div>}
         <label className="field">

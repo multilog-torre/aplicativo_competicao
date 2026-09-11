@@ -164,11 +164,12 @@ async function runEventTests() {
     if (duplicateJoinRes.status !== 409) throw new Error('Inscrição duplicada não foi bloqueada!');
     console.log('   ✅ Bloqueio de inscrição duplicada validado com sucesso.\n');
 
-    // 9. Participante comum não pode ver a lista de participantes (admin-only)
-    console.log('9️⃣ Testando bloqueio de acesso à lista de participantes por não-admin (deve retornar 403)...');
-    const forbiddenParticipantsRes = await fetch(`${baseUrl}/events/${eventId}/participants`, { headers: { Authorization: `Bearer ${carlosToken}` } });
-    if (forbiddenParticipantsRes.status !== 403) throw new Error('Participante comum conseguiu ver a lista de inscritos!');
-    console.log('   ✅ Bloqueio de acesso à lista de participantes validado com sucesso.\n');
+    // 9. Qualquer autenticado pode ver a lista de participantes — a pedido do
+    // usuário, deixou de ser exclusivo do admin (era 403 antes desta feature).
+    console.log('9️⃣ Testando visibilidade da lista de participantes por um usuário comum...');
+    const commonUserParticipantsRes = await fetch(`${baseUrl}/events/${eventId}/participants`, { headers: { Authorization: `Bearer ${carlosToken}` } });
+    if (commonUserParticipantsRes.status !== 200) throw new Error('Usuário comum não conseguiu ver a lista de inscritos!');
+    console.log('   ✅ Visibilidade da lista de participantes validada com sucesso.\n');
 
     // 10. Confirmar presença antes da data do evento é bloqueado
     console.log('🔟 Testando bloqueio de confirmação de presença antes do evento acontecer (deve retornar 422)...');
@@ -337,6 +338,97 @@ async function runEventTests() {
     const deleteApprovedRes = await fetch(`${baseUrl}/events/${leaveEventId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${renanToken}` } });
     if (deleteApprovedRes.status !== 422) throw new Error('Exclusão de evento já aprovado não foi bloqueada!');
     console.log('   ✅ Bloqueio de exclusão de evento não-pendente validado com sucesso.\n');
+
+    // 18. Lista de participantes agora é visível a QUALQUER autenticado, não só admin
+    console.log('1️⃣7️⃣ Testando visibilidade da lista de participantes por um participante comum...');
+    const createEditRes = await fetch(`${baseUrl}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${renanToken}` },
+      body: JSON.stringify({
+        title: `Evento pra testar edição ${Date.now()}`,
+        description: 'Descrição original.',
+        category: 'ACADEMIA',
+        eventDate: inTwoDays,
+        location: 'Local original',
+      }),
+    });
+    const createEditBody = (await createEditRes.json()) as { data: { id: string } };
+    const editEventId = createEditBody.data.id;
+    await fetch(`${baseUrl}/events/${editEventId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ bonusPoints: 15 }),
+    });
+    await fetch(`${baseUrl}/events/${editEventId}/join`, { method: 'POST', headers: { Authorization: `Bearer ${carlosToken}` } });
+
+    const participantViewRes = await fetch(`${baseUrl}/events/${editEventId}/participants`, { headers: { Authorization: `Bearer ${carlosToken}` } });
+    if (participantViewRes.status !== 200) throw new Error('Participante comum não conseguiu ver a lista de inscritos (deveria ser permitido agora)!');
+    console.log('   ✅ Participante comum consegue ver quem está inscrito.\n');
+
+    // 19. Criador edita o próprio evento (título/descrição/local) — sem tocar em bônus
+    console.log('1️⃣8️⃣ Testando edição do evento pelo próprio criador...');
+    const editByCreatorRes = await fetch(`${baseUrl}/events/${editEventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${renanToken}` },
+      body: JSON.stringify({ description: 'Descrição atualizada pelo criador.', location: 'Novo local' }),
+    });
+    const editByCreatorBody = (await editByCreatorRes.json()) as { data: { description: string; location: string } };
+    if (editByCreatorRes.status !== 200 || editByCreatorBody.data.description !== 'Descrição atualizada pelo criador.') {
+      throw new Error('Edição do evento pelo criador não funcionou!');
+    }
+    console.log('   ✅ Edição pelo criador validada com sucesso.\n');
+
+    // 19.1 Quem não é criador nem admin não pode editar (403)
+    const editByStrangerRes = await fetch(`${baseUrl}/events/${editEventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${carlosToken}` },
+      body: JSON.stringify({ title: 'Tentativa indevida' }),
+    });
+    if (editByStrangerRes.status !== 403) throw new Error('Não-criador conseguiu editar o evento de outra pessoa!');
+    console.log('   ✅ Bloqueio de edição por quem não é criador/admin validado com sucesso.\n');
+
+    // 19.2 Criador NÃO pode definir a própria pontuação de bônus (Regra de Ouro)
+    const creatorSetBonusRes = await fetch(`${baseUrl}/events/${editEventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${renanToken}` },
+      body: JSON.stringify({ bonusPoints: 999 }),
+    });
+    if (creatorSetBonusRes.status !== 403) throw new Error('Criador conseguiu definir a própria pontuação de bônus!');
+    console.log('   ✅ Bloqueio de auto-definição de bônus pelo criador validado com sucesso.\n');
+
+    // 20. Admin edita o bônus do evento já aprovado
+    console.log('1️⃣9️⃣ Testando edição do bônus pelo admin...');
+    const adminEditBonusRes = await fetch(`${baseUrl}/events/${editEventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ bonusPoints: 40 }),
+    });
+    const adminEditBonusBody = (await adminEditBonusRes.json()) as { data: { bonusPoints: number } };
+    if (adminEditBonusRes.status !== 200 || adminEditBonusBody.data.bonusPoints !== 40) {
+      throw new Error('Edição do bônus pelo admin não funcionou!');
+    }
+    console.log('   ✅ Edição do bônus pelo admin validada com sucesso.\n');
+
+    // 21. Edição é bloqueada num evento já COMPLETED
+    console.log('2️⃣0️⃣ Testando bloqueio de edição de um evento já concluído (deve retornar 422)...');
+    const editCompletedRes = await fetch(`${baseUrl}/events/${eventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ title: 'Não deveria ser possível' }),
+    });
+    if (editCompletedRes.status !== 422) throw new Error('Edição de evento já concluído não foi bloqueada!');
+    console.log('   ✅ Bloqueio de edição pós-conclusão validado com sucesso.\n');
+
+    // 22. Sair do grupo funciona mesmo depois do evento concluído, e não reverte o bônus já creditado
+    console.log('2️⃣1️⃣ Testando saída do grupo após o evento concluído (sem reverter o bônus)...');
+    const pointsBeforeLeaveCompleted = (await prisma.user.findUniqueOrThrow({ where: { id: carlosId } })).totalPoints;
+    const leaveCompletedRes = await fetch(`${baseUrl}/events/${eventId}/leave`, { method: 'POST', headers: { Authorization: `Bearer ${carlosToken}` } });
+    if (leaveCompletedRes.status !== 200) throw new Error('Sair de um evento já concluído deveria ser permitido!');
+    const pointsAfterLeaveCompleted = (await prisma.user.findUniqueOrThrow({ where: { id: carlosId } })).totalPoints;
+    if (pointsAfterLeaveCompleted !== pointsBeforeLeaveCompleted) {
+      throw new Error('Sair do grupo depois do evento reverteu pontos já creditados — o ledger deveria ser imutável!');
+    }
+    console.log('   ✅ Saída do grupo pós-evento validada, sem reverter o bônus já creditado.\n');
 
     console.log('====================================================');
     console.log('🎉 TODOS OS TESTES DE EVENTOS PASSARAM COM SUCESSO!');

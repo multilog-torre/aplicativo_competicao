@@ -16,6 +16,7 @@ export type NotificationType =
   | 'CYCLE_ENDED'
   | 'EVENT_APPROVED'
   | 'EVENT_REJECTED'
+  | 'EVENT_UPDATED'
   | 'EVENT_BONUS_CREDITED'
   | 'INFO';
 

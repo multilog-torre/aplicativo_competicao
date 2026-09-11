@@ -12,14 +12,15 @@ export class CommentController {
     const { id: postId } = req.params;
     const { content } = req.body as CreateCommentDTO;
     const userId = req.user!.id;
-    const comment = await CommentService.create(postId, userId, content);
+    const comment = await CommentService.create(postId, userId, content, isAdminRequest(req));
     return sendSuccess(res, comment, 201);
   }
 
   public static async list(req: Request, res: Response): Promise<Response> {
     const { id: postId } = req.params;
     const query = req.query as unknown as ListCommentsQueryDTO;
-    const result = await CommentService.list(postId, query.page ?? 1, query.limit ?? 20);
+    const userId = req.user!.id;
+    const result = await CommentService.list(postId, userId, isAdminRequest(req), query.page ?? 1, query.limit ?? 20);
     return sendSuccess(res, result.comments, 200, result.pagination);
   }
 

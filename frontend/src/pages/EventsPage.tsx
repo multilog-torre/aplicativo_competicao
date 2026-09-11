@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client';
 import { CommunityEvent, EventCategory } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
+import { EventParticipantsModal } from '../components/ui/EventParticipantsModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -42,6 +43,8 @@ export function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<CommunityEvent | null>(null);
+  const [viewingParticipantsOf, setViewingParticipantsOf] = useState<CommunityEvent | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -140,9 +143,14 @@ export function EventsPage() {
                     <div className="table__actions">
                       <span className={`badge badge--${STATUS_TONE[e.status]}`}>{STATUS_LABELS[e.status]}</span>
                       {e.status === 'PENDING' && (
-                        <button type="button" className="btn btn--small btn--danger" disabled={busyId === e.id} onClick={() => setDeletingId(e.id)}>
-                          Excluir
-                        </button>
+                        <>
+                          <button type="button" className="btn btn--small btn--secondary" onClick={() => setEditing(e)}>
+                            Editar
+                          </button>
+                          <button type="button" className="btn btn--small btn--danger" disabled={busyId === e.id} onClick={() => setDeletingId(e.id)}>
+                            Excluir
+                          </button>
+                        </>
                       )}
                     </div>
                   </li>
@@ -158,7 +166,16 @@ export function EventsPage() {
             ) : (
               <div className="event-grid">
                 {openEvents.map((e) => (
-                  <EventCard key={e.id} event={e} busy={busyId === e.id} onJoin={() => handleJoin(e.id)} onLeave={() => handleLeave(e.id)} />
+                  <EventCard
+                    key={e.id}
+                    event={e}
+                    busy={busyId === e.id}
+                    canEdit={e.createdBy.id === user?.id}
+                    onJoin={() => handleJoin(e.id)}
+                    onLeave={() => handleLeave(e.id)}
+                    onEdit={() => setEditing(e)}
+                    onViewParticipants={() => setViewingParticipantsOf(e)}
+                  />
                 ))}
               </div>
             )}
@@ -183,6 +200,9 @@ export function EventsPage() {
                       {e.status === 'COMPLETED' && e.myParticipationStatus === 'NO_SHOW' && (
                         <span className="badge badge--neutral">Ausente</span>
                       )}
+                      <button type="button" className="btn btn--small btn--secondary" onClick={() => setViewingParticipantsOf(e)}>
+                        👥 {e.participantsCount}
+                      </button>
                       <span className={`badge badge--${STATUS_TONE[e.status]}`}>{STATUS_LABELS[e.status]}</span>
                     </div>
                   </li>
@@ -204,6 +224,26 @@ export function EventsPage() {
         />
       )}
 
+      {editing && (
+        <EditEventModal
+          event={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            showToast('Evento atualizado com sucesso!', 'success');
+            load();
+          }}
+        />
+      )}
+
+      {viewingParticipantsOf && (
+        <EventParticipantsModal
+          eventId={viewingParticipantsOf.id}
+          eventTitle={viewingParticipantsOf.title}
+          onClose={() => setViewingParticipantsOf(null)}
+        />
+      )}
+
       {deletingId && (
         <ConfirmModal
           title="Excluir evento"
@@ -222,19 +262,27 @@ export function EventsPage() {
 function EventCard({
   event,
   busy,
+  canEdit,
   onJoin,
   onLeave,
+  onEdit,
+  onViewParticipants,
 }: {
   event: CommunityEvent;
   busy: boolean;
+  canEdit: boolean;
   onJoin: () => void;
   onLeave: () => void;
+  onEdit: () => void;
+  onViewParticipants: () => void;
 }) {
   return (
     <div className="event-card">
       <div className="event-card__header">
         <span className="badge badge--neutral">{CATEGORY_LABELS[event.category]}</span>
-        <span className="event-card__participants">👥 {event.participantsCount}</span>
+        <button type="button" className="event-card__participants event-card__participants--link" onClick={onViewParticipants}>
+          👥 {event.participantsCount}
+        </button>
       </div>
       <h3 className="event-card__title">{event.title}</h3>
       <p className="event-card__meta">
@@ -251,6 +299,11 @@ function EventCard({
       ) : (
         <button type="button" className="btn btn--primary btn--block" disabled={busy} onClick={onJoin}>
           {busy ? 'Aguarde…' : 'Participar'}
+        </button>
+      )}
+      {canEdit && (
+        <button type="button" className="btn btn--ghost btn--small btn--block" onClick={onEdit}>
+          ✏️ Editar evento
         </button>
       )}
     </div>
@@ -336,6 +389,108 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </button>
           <button type="submit" className="btn btn--primary" disabled={submitting}>
             {submitting ? 'Enviando…' : 'Propor evento'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** <input type="datetime-local"> espera "YYYY-MM-DDTHH:mm" NO FUSO LOCAL —
+ * nunca usar toISOString() aqui, que converteria pra UTC antes de cortar. */
+function toDateTimeInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Edição pelo próprio criador (sem campo de bônus — Regra de Ouro) ou por
+ * um admin, que também pode ajustar o bônus. */
+function EditEventModal({ event, onClose, onSaved }: { event: CommunityEvent; onClose: () => void; onSaved: () => void }) {
+  const { isAdmin } = useAuth();
+  const { showToast } = useToast();
+  const [title, setTitle] = useState(event.title);
+  const [description, setDescription] = useState(event.description);
+  const [category, setCategory] = useState<EventCategory>(event.category);
+  const [eventDate, setEventDate] = useState(toDateTimeInputValue(event.eventDate));
+  const [location, setLocation] = useState(event.location ?? '');
+  const [bonusPoints, setBonusPoints] = useState(String(event.bonusPoints ?? ''));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.patch(`/events/${event.id}`, {
+        title,
+        description,
+        category,
+        eventDate: new Date(eventDate).toISOString(),
+        location: location || undefined,
+        ...(isAdmin && event.status === 'APPROVED' && bonusPoints ? { bonusPoints: Number(bonusPoints) } : {}),
+      });
+      onSaved();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Editar — ${event.title}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="form">
+        {error && <div className="alert alert--error">{error}</div>}
+
+        <label className="field">
+          <span className="field__label">Título</span>
+          <input type="text" required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+
+        <div className="form__row">
+          <label className="field">
+            <span className="field__label">Categoria</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value as EventCategory)}>
+              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="field__label">Data e horário</span>
+            <input type="datetime-local" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          </label>
+        </div>
+
+        <label className="field">
+          <span className="field__label">Local (opcional)</span>
+          <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span className="field__label">Descrição</span>
+          <textarea rows={3} required minLength={5} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+
+        {isAdmin && event.status === 'APPROVED' && (
+          <label className="field">
+            <span className="field__label">Pontos de bônus</span>
+            <input type="number" min="1" value={bonusPoints} onChange={(e) => setBonusPoints(e.target.value)} />
+          </label>
+        )}
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={submitting}>
+            {submitting ? 'Salvando…' : 'Salvar alterações'}
           </button>
         </div>
       </form>

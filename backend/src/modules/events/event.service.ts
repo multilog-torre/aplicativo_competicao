@@ -9,6 +9,7 @@ import {
   CreateEventDTO,
   ListEventsQueryDTO,
   RejectEventDTO,
+  UpdateEventDTO,
 } from './event.dto';
 
 const EVENT_INCLUDE = {
@@ -52,7 +53,15 @@ export class EventService {
   public static async list(query: ListEventsQueryDTO, requestingUserId: string | null, isAdmin: boolean) {
     const where: Record<string, unknown> = {};
 
-    if (!isAdmin) {
+    if (query.participating === 'true' && requestingUserId) {
+      // Atalho pra "eventos em que estou inscrito" — usado pelas abas de
+      // grupo do Mural (só aparecem os eventos cujo participante eu sou).
+      const myEventIds = await prisma.eventParticipant.findMany({
+        where: { userId: requestingUserId },
+        select: { eventId: true },
+      });
+      where.id = { in: myEventIds.map((p) => p.eventId) };
+    } else if (!isAdmin) {
       if (query.mine === 'true' && requestingUserId) {
         where.createdById = requestingUserId;
       } else {
@@ -108,6 +117,66 @@ export class EventService {
     });
 
     return toPublicShape(event, null);
+  }
+
+  /**
+   * Edição pelo criador OU por um admin (a pedido do usuário). Só enquanto o
+   * evento ainda não aconteceu e não está COMPLETED/CANCELLED — depois
+   * disso os dados já são histórico (pódio de presença, ledger) e não
+   * podem mais mudar. bonusPoints só pode ser definido/alterado por um
+   * admin (Regra de Ouro: quem propôs o evento nunca escolhe a própria
+   * pontuação, nem depois de aprovado) e só quando já está APROVADO.
+   */
+  public static async update(id: string, dto: UpdateEventDTO, userId: string, isAdmin: boolean) {
+    const event = await prisma.event.findUnique({ where: { id }, include: { participants: true } });
+    if (!event) throw new NotFoundError(`Evento com ID '${id}' não foi encontrado.`);
+
+    if (!isAdmin && event.createdById !== userId) {
+      throw new ForbiddenError('Você só pode editar eventos que você mesmo criou.');
+    }
+    if (event.status === 'COMPLETED' || event.status === 'CANCELLED' || event.status === 'REJECTED') {
+      throw new AppError('Não é possível editar um evento concluído, cancelado ou rejeitado.', 422, 'EVENT_NOT_EDITABLE');
+    }
+    if (event.eventDate <= new Date()) {
+      throw new AppError('Não é possível editar um evento que já aconteceu.', 422, 'EVENT_ALREADY_HAPPENED');
+    }
+    if (dto.bonusPoints !== undefined) {
+      if (!isAdmin) {
+        throw new ForbiddenError('Só um administrador pode definir a pontuação de bônus do evento.');
+      }
+      if (event.status !== 'APPROVED') {
+        throw new AppError('Só é possível definir a pontuação de um evento já aprovado — use "Aprovar" primeiro.', 422, 'EVENT_NOT_APPROVED');
+      }
+    }
+
+    const dateChanged = dto.eventDate !== undefined && dto.eventDate.getTime() !== event.eventDate.getTime();
+
+    const updated = await prisma.event.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.eventDate !== undefined ? { eventDate: dto.eventDate } : {}),
+        ...(dto.location !== undefined ? { location: dto.location } : {}),
+        ...(dto.bonusPoints !== undefined ? { bonusPoints: dto.bonusPoints } : {}),
+      },
+      include: EVENT_INCLUDE,
+    });
+
+    if (dateChanged) {
+      for (const participant of event.participants) {
+        await NotificationService.create({
+          userId: participant.userId,
+          title: 'A data do evento mudou',
+          message: `O evento "${updated.title}" foi remarcado para ${updated.eventDate.toLocaleDateString('pt-BR')}.`,
+          type: 'EVENT_UPDATED',
+          referenceId: id,
+        });
+      }
+    }
+
+    return toPublicShape(updated, null);
   }
 
   /** Só o próprio criador, e só enquanto o evento ainda está PENDING (sem ninguém inscrito ainda). */
@@ -214,7 +283,15 @@ export class EventService {
     return prisma.eventParticipant.create({ data: { eventId: id, userId, status: 'REGISTERED' } });
   }
 
-  /** Só antes do evento acontecer — depois disso, a presença já é controlada pelo admin. */
+  /**
+   * Sair do evento/grupo — a qualquer momento, mesmo depois do evento já ter
+   * acontecido (a pedido do usuário: "o grupo fica livre pra pessoa poder
+   * sair depois quando quiser"). Isso nunca desfaz um bônus já creditado —
+   * o ledger é imutável (Regra de Ouro) — só remove a inscrição e, com ela,
+   * o acesso ao grupo do evento no Mural. Se a pessoa saiu ANTES do admin
+   * confirmar presença, ela simplesmente não aparece mais pra ser marcada
+   * (equivalente a não comparecer).
+   */
   public static async leave(id: string, userId: string) {
     const event = await prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundError(`Evento com ID '${id}' não foi encontrado.`);
@@ -223,15 +300,17 @@ export class EventService {
     if (!participant) {
       throw new NotFoundError('Você não está inscrito neste evento.');
     }
-    if (event.eventDate <= new Date()) {
-      throw new AppError('Este evento já aconteceu — não é mais possível cancelar a inscrição.', 422, 'EVENT_ALREADY_HAPPENED');
-    }
 
     await prisma.eventParticipant.delete({ where: { eventId_userId: { eventId: id, userId } } });
-    return { message: 'Inscrição cancelada com sucesso.' };
+    return { message: 'Você saiu do evento.' };
   }
 
-  /** Só admin, e só participantes cadastrados — usado na tela de confirmação de presença. */
+  /**
+   * Lista os participantes de um evento — visível a qualquer usuário
+   * autenticado (a pedido do usuário: "quero que fique visível quem está
+   * participando", não só pro admin). Usada tanto pela visão geral quanto
+   * pela tela de confirmação de presença do admin.
+   */
   public static async listParticipants(id: string) {
     const event = await prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundError(`Evento com ID '${id}' não foi encontrado.`);

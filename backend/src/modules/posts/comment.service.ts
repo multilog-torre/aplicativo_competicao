@@ -1,10 +1,12 @@
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { assertEventGroupAccess } from '../events/event-access.util';
 
 export class CommentService {
-  public static async create(postId: string, userId: string, content: string) {
+  public static async create(postId: string, userId: string, content: string, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, userId, isAdmin);
 
     if (post.status !== 'PUBLISHED') {
       throw new AppError('Não é possível comentar em uma publicação que não está mais disponível.', 422, 'POST_NOT_COMMENTABLE');
@@ -16,9 +18,10 @@ export class CommentService {
     });
   }
 
-  public static async list(postId: string, page: number, limit: number) {
+  public static async list(postId: string, userId: string, isAdmin: boolean, page: number, limit: number) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
+    await assertEventGroupAccess(post.eventId, userId, isAdmin);
 
     const skip = (page - 1) * limit;
     const [total, comments] = await Promise.all([

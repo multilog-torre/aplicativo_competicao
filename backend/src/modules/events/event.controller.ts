@@ -7,6 +7,7 @@ import {
   CreateEventDTO,
   ListEventsQueryDTO,
   RejectEventDTO,
+  UpdateEventDTO,
 } from './event.dto';
 
 function isAdminRequest(req: Request): boolean {
@@ -36,6 +37,13 @@ export class EventController {
     const { id } = req.params;
     const result = await EventService.delete(id, req.user!.id, isAdminRequest(req));
     return sendSuccess(res, result, 200);
+  }
+
+  public static async update(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const data = req.body as UpdateEventDTO;
+    const event = await EventService.update(id, data, req.user!.id, isAdminRequest(req));
+    return sendSuccess(res, event, 200);
   }
 
   public static async approve(req: Request, res: Response): Promise<Response> {
