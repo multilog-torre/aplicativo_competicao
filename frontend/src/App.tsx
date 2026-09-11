@@ -12,6 +12,8 @@ import { RankingPage } from './pages/RankingPage';
 import { MuralPage } from './pages/MuralPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { OverviewPage } from './pages/OverviewPage';
+import { EventsPage } from './pages/EventsPage';
+import { AdminEventsPage } from './pages/AdminEventsPage';
 import { RulesPage } from './pages/RulesPage';
 import { AdminApprovalsPage } from './pages/AdminApprovalsPage';
 import { AdminModalitiesPage } from './pages/AdminModalitiesPage';
@@ -39,6 +41,7 @@ export function App() {
                   <Route path="/atividades" element={<ActivitiesPage />} />
                   <Route path="/ranking" element={<RankingPage />} />
                   <Route path="/mural" element={<MuralPage />} />
+                  <Route path="/eventos" element={<EventsPage />} />
                   <Route path="/perfil" element={<ProfilePage />} />
 
                   <Route element={<AdminRoute />}>
@@ -48,6 +51,7 @@ export function App() {
                     <Route path="/admin/pontos" element={<AdminPointsPage />} />
                     <Route path="/admin/ciclos" element={<AdminCyclesPage />} />
                     <Route path="/admin/departamentos" element={<AdminDepartmentsPage />} />
+                    <Route path="/admin/eventos" element={<AdminEventsPage />} />
                   </Route>
 
                   <Route element={<MasterRoute />}>

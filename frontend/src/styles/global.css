@@ -1460,3 +1460,58 @@ textarea {
 .activity-calendar__cell--photo:focus-visible .activity-calendar__photo--placeholder {
   box-shadow: 0 0 0 3px var(--color-accent);
 }
+
+/* ============================================================
+   Eventos comunitários
+   ============================================================ */
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.event-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.event-card__participants {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.event-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.event-card__meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.event-card__description {
+  margin: 0;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.event-card__bonus {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+}

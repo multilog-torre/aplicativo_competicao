@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/atividades', label: 'Atividades', icon: '🏃' },
   { to: '/ranking', label: 'Ranking', icon: '🏆' },
   { to: '/mural', label: 'Mural', icon: '📣' },
+  { to: '/eventos', label: 'Eventos', icon: '🎉' },
   { to: '/perfil', label: 'Meu Perfil', icon: '👤' },
 ];
 
@@ -112,6 +113,13 @@ export function AppLayout() {
                 onClick={() => setMenuOpen(false)}
               >
                 <span aria-hidden="true">🏁</span> Ciclos de Premiação
+              </NavLink>
+              <NavLink
+                to="/admin/eventos"
+                className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span aria-hidden="true">🎉</span> Eventos
               </NavLink>
               {isAdminMaster && (
                 <NavLink

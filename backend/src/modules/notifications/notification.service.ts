@@ -14,6 +14,9 @@ export type NotificationType =
   | 'REWARD_UPDATE'
   | 'NEW_USER_PENDING'
   | 'CYCLE_ENDED'
+  | 'EVENT_APPROVED'
+  | 'EVENT_REJECTED'
+  | 'EVENT_BONUS_CREDITED'
   | 'INFO';
 
 export class NotificationService {

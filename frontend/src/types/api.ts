@@ -265,6 +265,38 @@ export interface AwardCycle {
   winners: CycleWinner[];
 }
 
+export type EventCategory = 'CORRIDA' | 'CAMINHADA' | 'CICLISMO' | 'ACADEMIA' | 'ESPORTE_COLETIVO' | 'OUTRO';
+export type EventStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+export type EventParticipantStatus = 'REGISTERED' | 'ATTENDED' | 'NO_SHOW';
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  eventDate: string;
+  location: string | null;
+  bonusPoints: number | null;
+  status: EventStatus;
+  rejectionReason: string | null;
+  createdBy: { id: string; name: string; avatarType: string; avatarUrl: string | null };
+  approvedBy: { id: string; name: string } | null;
+  approvedAt: string | null;
+  completedAt: string | null;
+  participantsCount: number;
+  isPast: boolean;
+  canJoin: boolean;
+  myParticipationStatus: EventParticipantStatus | null;
+  createdAt: string;
+}
+
+export interface EventParticipantEntry {
+  id: string;
+  status: EventParticipantStatus;
+  registeredAt: string;
+  user: { id: string; name: string; avatarType: string; avatarUrl: string | null; department: { name: string } | null };
+}
+
 export interface Pagination {
   total: number;
   page: number;

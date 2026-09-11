@@ -41,6 +41,10 @@ model User {
   userAchievements    UserAchievement[]
   challenges          ChallengeParticipant[]
   cycleWins           CycleWinner[]
+  eventsCreated       Event[]                @relation("EventsCreated")
+  eventsApproved      Event[]                @relation("EventsApproved")
+  eventParticipations EventParticipant[]     @relation("EventParticipations")
+  eventAttendanceConfirmed EventParticipant[] @relation("EventParticipantsConfirmed")
   userRewards         UserReward[]
   posts               Post[]
   comments            Comment[]
@@ -199,7 +203,7 @@ model PointsTransaction {
   challengeId     String?  @map("challenge_id")
   achievementId   String?  @map("achievement_id")
   rewardId        String?  @map("reward_id")
-  transactionType String   @map("transaction_type") // ACTIVITY, BONUS, PENALTY, ADJUSTMENT, CHALLENGE, ACHIEVEMENT, REWARD, REVERSAL, CYCLE_RESET
+  transactionType String   @map("transaction_type") // ACTIVITY, BONUS, PENALTY, ADJUSTMENT, CHALLENGE, ACHIEVEMENT, REWARD, REVERSAL, CYCLE_RESET, EVENT_BONUS
   points          Int
   description     String
   referenceType   String?  @map("reference_type")
@@ -362,6 +366,59 @@ model CycleWinner {
 
   @@unique([cycleId, position])
   @@map("cycle_winners")
+}
+
+// Evento comunitário (corrida, academia, etc.) — QUALQUER usuário pode
+// propor um, mas ele só fica visível/participável depois que um admin
+// aprova e define a pontuação de bônus (nunca o próprio criador — mesma
+// Regra de Ouro usada em atividades: o usuário nunca decide sua própria
+// pontuação). Depois que a data do evento passa, o admin confirma quem
+// realmente compareceu e só então os pontos são creditados (ledger,
+// nunca UPDATE direto), travando o evento em COMPLETED.
+model Event {
+  id              String    @id @default(uuid())
+  title           String
+  description     String
+  category        String // CORRIDA, CAMINHADA, CICLISMO, ACADEMIA, ESPORTE_COLETIVO, OUTRO
+  eventDate       DateTime  @map("event_date")
+  location        String?
+  bonusPoints     Int?      @map("bonus_points") // definido pelo admin só na aprovação
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED, COMPLETED
+  rejectionReason String?   @map("rejection_reason")
+  createdById     String    @map("created_by_id")
+  approvedById    String?   @map("approved_by_id")
+  approvedAt      DateTime? @map("approved_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  createdBy    User               @relation("EventsCreated", fields: [createdById], references: [id])
+  approvedBy   User?              @relation("EventsApproved", fields: [approvedById], references: [id])
+  participants EventParticipant[]
+
+  @@index([status])
+  @@index([eventDate])
+  @@map("events")
+}
+
+// Inscrição de um usuário num evento. status=REGISTERED até a data do
+// evento passar; o admin então marca ATTENDED (recebe o bônus) ou
+// NO_SHOW (não recebe) por pessoa.
+model EventParticipant {
+  id            String    @id @default(uuid())
+  eventId       String    @map("event_id")
+  userId        String    @map("user_id")
+  status        String    @default("REGISTERED") // REGISTERED, ATTENDED, NO_SHOW
+  registeredAt  DateTime  @default(now()) @map("registered_at")
+  confirmedAt   DateTime? @map("confirmed_at")
+  confirmedById String?   @map("confirmed_by_id")
+
+  event       Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User   @relation("EventParticipations", fields: [userId], references: [id], onDelete: Cascade)
+  confirmedBy User?  @relation("EventParticipantsConfirmed", fields: [confirmedById], references: [id])
+
+  @@unique([eventId, userId])
+  @@map("event_participants")
 }
 
 // -------------------------------------------------------------

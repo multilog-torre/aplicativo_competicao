@@ -9,6 +9,7 @@ import { auditLogRoutes } from '../modules/admin/audit-log.routes';
 import { authRoutes } from '../modules/auth/auth.routes';
 import { challengeRoutes } from '../modules/challenges/challenge.routes';
 import { cycleRoutes } from '../modules/cycles/cycle.routes';
+import { eventRoutes } from '../modules/events/event.routes';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes';
 import { departmentRoutes } from '../modules/departments/department.routes';
 import { gameRuleRoutes } from '../modules/game-rules/game-rule.routes';
@@ -62,6 +63,7 @@ router.use('/challenges', challengeRoutes);
 
 // Rotas de Ciclos de Premiação — competição periódica com pódio e reset geral
 router.use('/cycles', cycleRoutes);
+router.use('/events', eventRoutes);
 
 // Rotas de Premiações (Fase 14)
 router.use('/rewards', rewardRoutes);

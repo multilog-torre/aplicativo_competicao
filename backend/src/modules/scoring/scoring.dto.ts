@@ -47,7 +47,7 @@ export type ReversalDTO = z.infer<typeof ReversalSchema>;
 export const ListTransactionsQuerySchema = z.object({
   userId: z.string().uuid().optional(),
   transactionType: z
-    .enum(['ACTIVITY', 'BONUS', 'PENALTY', 'ADJUSTMENT', 'CHALLENGE', 'ACHIEVEMENT', 'REWARD', 'REVERSAL', 'CYCLE_RESET'])
+    .enum(['ACTIVITY', 'BONUS', 'PENALTY', 'ADJUSTMENT', 'CHALLENGE', 'ACHIEVEMENT', 'REWARD', 'REVERSAL', 'CYCLE_RESET', 'EVENT_BONUS'])
     .optional(),
   page: z
     .string()

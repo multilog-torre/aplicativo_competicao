@@ -42,7 +42,8 @@
     "test:admin-users": "tsx src/test-admin-users.ts",
     "test:registration": "tsx src/test-registration.ts",
     "test:cycles": "tsx src/test-cycles.ts",
-    "test:departments": "tsx src/test-departments.ts"
+    "test:departments": "tsx src/test-departments.ts",
+    "test:events": "tsx src/test-events.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

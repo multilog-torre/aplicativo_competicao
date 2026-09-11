@@ -9,6 +9,7 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   BONUS: 'Bônus',
   PENALTY: 'Penalidade',
   ADJUSTMENT: 'Ajuste',
+  EVENT_BONUS: 'Bônus de evento',
 };
 
 export function AdminPointsPage() {
