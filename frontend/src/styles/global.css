@@ -1274,14 +1274,23 @@ textarea {
 .auth-card .field input,
 .auth-card .field select,
 .auth-card .field textarea {
-  background: #e9ecfb;
-  color: #1a1a2e;
+  background: #002552;
+  /* Fundo escuro agora (era claro) — texto branco no lugar do escuro
+     original, senão fica ilegível sobre #002552. */
+  color: #ffffff;
   border: none;
 }
 
+.auth-card .field input::placeholder,
+.auth-card .field textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .auth-card .btn--primary {
-  background: #17afcb;
-  color: #001e42;
+  background: #001d40;
+  /* Fundo escuro agora (era ciano claro) — texto branco no lugar do
+     escuro original, senão fica ilegível sobre #001d40. */
+  color: #ffffff;
   font-weight: 700;
 }
 
