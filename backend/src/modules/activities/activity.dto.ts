@@ -29,6 +29,9 @@ export const ListActivitiesQuerySchema = z.object({
   userId: z.string().uuid().optional(), // apenas ADMIN/ADMIN_MASTER podem usar
   activityTypeId: z.string().uuid().optional(),
   status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']).optional(),
+  // Usados pela seção de calendário (Meu Perfil / Atividades) para buscar só o mês exibido.
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional(),
   page: z
     .string()
     .optional()

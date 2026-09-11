@@ -5,6 +5,7 @@ import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { StatusBadge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
+import { useAuthedImage } from '../api/useAuthedImage';
 
 export function ActivitiesPage() {
   const { showToast } = useToast();
@@ -33,6 +34,8 @@ export function ActivitiesPage() {
           + Nova atividade
         </button>
       </div>
+
+      <ActivityCalendarSection />
 
       {loading && <LoadingState label="Carregando suas atividades…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
@@ -203,6 +206,192 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </div>
         </form>
       )}
+    </Modal>
+  );
+}
+
+const WEEKDAY_LABELS = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'];
+const MONTH_LABELS = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+/**
+ * Calendário mensal com a fotinho da evidência enviada em cada dia
+ * registrado (a pedido do usuário — inspirado num calendário de treinos
+ * estilo Strava). Dia sem evidência mostra só o número; dia com evidência
+ * mostra a foto no lugar do número, clicável para ver o registro completo.
+ */
+function ActivityCalendarSection() {
+  const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [byDay, setByDay] = useState<Map<number, UserActivity>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<UserActivity | null>(null);
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+
+  function load() {
+    setLoading(true);
+    setError(null);
+    const from = new Date(year, month, 1);
+    const to = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    api
+      .get<UserActivity[]>(`/activities?dateFrom=${from.toISOString()}&dateTo=${to.toISOString()}&limit=100`)
+      .then(({ data }) => {
+        const map = new Map<number, UserActivity>();
+        [...data]
+          .sort((a, b) => new Date(a.activityDate).getTime() - new Date(b.activityDate).getTime())
+          .forEach((act) => {
+            if (!act.evidences || act.evidences.length === 0) return;
+            const day = new Date(act.activityDate).getDate();
+            if (!map.has(day)) map.set(day, act);
+          });
+        setByDay(map);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o calendário.'))
+      .finally(() => setLoading(false));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [year, month]);
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  function goToMonth(offset: number) {
+    setCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+  }
+
+  return (
+    <section className="card">
+      <div className="activity-calendar__header">
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => goToMonth(-1)} aria-label="Mês anterior">
+          ‹
+        </button>
+        <h2 className="card__title" style={{ margin: 0 }}>
+          📅 {MONTH_LABELS[month]} {year}
+        </h2>
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => goToMonth(1)} aria-label="Próximo mês">
+          ›
+        </button>
+      </div>
+
+      {loading && <LoadingState label="Carregando calendário…" />}
+      {error && !loading && <ErrorState message={error} onRetry={load} />}
+
+      {!loading && !error && (
+        <>
+          <div className="activity-calendar__weekdays">
+            {WEEKDAY_LABELS.map((w) => (
+              <span key={w}>{w}</span>
+            ))}
+          </div>
+          <div className="activity-calendar__grid">
+            {cells.map((day, i) =>
+              day === null ? (
+                <div key={`empty-${i}`} />
+              ) : (
+                <ActivityCalendarDay key={day} day={day} activity={byDay.get(day)} onSelect={setSelected} />
+              ),
+            )}
+          </div>
+          {byDay.size === 0 && (
+            <p className="steps-list__description" style={{ marginTop: 12, marginBottom: 0 }}>
+              Nenhuma foto de registro neste mês ainda. Envie uma evidência ao registrar uma atividade para ela aparecer aqui.
+            </p>
+          )}
+        </>
+      )}
+
+      {selected && <ActivityDetailModal activity={selected} onClose={() => setSelected(null)} />}
+    </section>
+  );
+}
+
+function ActivityCalendarDay({
+  day,
+  activity,
+  onSelect,
+}: {
+  day: number;
+  activity: UserActivity | undefined;
+  onSelect: (activity: UserActivity) => void;
+}) {
+  const evidence = activity?.evidences?.[0];
+  const isImage = !!evidence && evidence.fileType.startsWith('image/');
+  // evidence.downloadUrl já vem com o prefixo "/api/v1" embutido (activity.service.ts),
+  // enquanto API_URL/useAuthedImage já incluem esse mesmo prefixo — removê-lo aqui
+  // evita duplicar "/api/v1/api/v1/..." na requisição (mesmo padrão de AdminApprovalsPage).
+  const relativePath = evidence?.downloadUrl.replace(/^\/api\/v1/, '');
+  const { url } = useAuthedImage(isImage ? relativePath : null);
+
+  if (!activity || !evidence) {
+    return (
+      <div className="activity-calendar__cell">
+        <span className="activity-calendar__day-number">{day}</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="activity-calendar__cell activity-calendar__cell--photo"
+      onClick={() => onSelect(activity)}
+      title={activity.activityType?.name ?? 'Ver registro'}
+    >
+      {isImage && url ? (
+        <img src={url} alt="" className="activity-calendar__photo" />
+      ) : (
+        <span className="activity-calendar__photo activity-calendar__photo--placeholder" aria-hidden="true">
+          {isImage ? '' : '📄'}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ActivityDetailModal({ activity, onClose }: { activity: UserActivity; onClose: () => void }) {
+  const evidence = activity.evidences?.[0];
+  const isImage = !!evidence && evidence.fileType.startsWith('image/');
+  const relativePath = evidence?.downloadUrl.replace(/^\/api\/v1/, '');
+  const { url } = useAuthedImage(relativePath);
+
+  return (
+    <Modal title={activity.activityType?.name ?? 'Registro'} onClose={onClose}>
+      <p className="steps-list__description" style={{ marginTop: 0 }}>
+        {new Date(activity.activityDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+      </p>
+
+      {isImage && url && (
+        <img src={url} alt="" style={{ width: '100%', borderRadius: 'var(--radius-md)', marginBottom: 12, display: 'block' }} />
+      )}
+      {evidence && !isImage && url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn--secondary btn--small"
+          style={{ marginBottom: 12, display: 'inline-block' }}
+        >
+          📄 Abrir arquivo enviado
+        </a>
+      )}
+
+      <p style={{ marginBottom: 6 }}>
+        <strong>
+          {activity.quantity}
+          {activity.unit ? ` ${activity.unit}` : ''}
+        </strong>{' '}
+        · +{activity.calculatedPoints} pts · <StatusBadge status={activity.status} />
+      </p>
+      {activity.description && <p style={{ marginTop: 0 }}>{activity.description}</p>}
     </Modal>
   );
 }

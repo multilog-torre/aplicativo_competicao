@@ -78,6 +78,12 @@ export class ActivityService {
     if (userId) where.userId = userId;
     if (query.activityTypeId) where.activityTypeId = query.activityTypeId;
     if (query.status) where.status = query.status;
+    if (query.dateFrom || query.dateTo) {
+      where.activityDate = {
+        ...(query.dateFrom ? { gte: query.dateFrom } : {}),
+        ...(query.dateTo ? { lte: query.dateTo } : {}),
+      };
+    }
 
     const [total, activities] = await Promise.all([
       prisma.userActivity.count({ where }),
@@ -90,12 +96,25 @@ export class ActivityService {
           activityType: { select: { id: true, name: true, icon: true, unit: true } },
           user: { select: { id: true, name: true } },
           validator: { select: { id: true, name: true } },
+          // Só id/fileType — nunca storagePath/storageUrl brutos (mesma regra da Fase 7).
+          // O calendário de registros (Meu Perfil) usa isso para mostrar a fotinho do dia.
+          evidences: { select: { id: true, fileType: true }, orderBy: { createdAt: 'asc' }, take: 1 },
         },
       }),
     ]);
 
     return {
-      activities,
+      activities: activities.map((a) => {
+        const { evidences, ...rest } = a;
+        return {
+          ...rest,
+          evidences: evidences.map((e) => ({
+            id: e.id,
+            fileType: e.fileType,
+            downloadUrl: `/api/v1/activities/${a.id}/evidence/${e.id}/download`,
+          })),
+        };
+      }),
       pagination: {
         total,
         page,

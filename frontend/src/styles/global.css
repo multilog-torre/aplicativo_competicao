@@ -1268,3 +1268,78 @@ textarea {
 .level-chip__points {
   color: var(--color-text-muted);
 }
+
+/* ============================================================
+   Calendário de registros (Minhas Atividades)
+   ============================================================ */
+.activity-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.activity-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.activity-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.activity-calendar__cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 4px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+.activity-calendar__day-number {
+  color: var(--color-text-muted);
+}
+
+.activity-calendar__cell--photo {
+  cursor: pointer;
+}
+
+.activity-calendar__photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  transition: box-shadow 0.15s ease;
+}
+
+.activity-calendar__photo--placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--color-neutral-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.activity-calendar__cell--photo:hover .activity-calendar__photo,
+.activity-calendar__cell--photo:focus-visible .activity-calendar__photo,
+.activity-calendar__cell--photo:hover .activity-calendar__photo--placeholder,
+.activity-calendar__cell--photo:focus-visible .activity-calendar__photo--placeholder {
+  box-shadow: 0 0 0 3px var(--color-accent);
+}

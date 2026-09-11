@@ -97,6 +97,8 @@ export interface UserActivity {
   activityDate: string;
   createdAt: string;
   rejectionReason?: string | null;
+  description?: string | null;
+  evidences?: Array<{ id: string; fileType: string; downloadUrl: string }>;
 }
 
 export interface EvidenceItem {
