@@ -71,6 +71,13 @@ export function AppLayout() {
                 <span aria-hidden="true">🏋️</span> Modalidades
               </NavLink>
               <NavLink
+                to="/admin/departamentos"
+                className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span aria-hidden="true">🏢</span> Departamentos
+              </NavLink>
+              <NavLink
                 to="/admin/niveis"
                 className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
                 onClick={() => setMenuOpen(false)}

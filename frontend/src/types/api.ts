@@ -18,6 +18,7 @@ export interface Department {
   name: string;
   description: string | null;
   status: string;
+  usersCount?: number;
 }
 
 export interface AvatarPreset {
