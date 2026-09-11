@@ -42,6 +42,8 @@ export interface LeaderboardEntryLite {
   id: string;
   name: string;
   points: number;
+  avatarType: string;
+  avatarUrl: string | null;
 }
 
 export class RankingService {
@@ -57,10 +59,13 @@ export class RankingService {
     const sums = await client.pointsTransaction.groupBy({ by: ['userId'], _sum: { points: true } });
     const sumByUser = new Map(sums.map((s) => [s.userId, s._sum.points ?? 0]));
 
-    const users = await client.user.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true } });
+    const users = await client.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, avatarType: true, avatarUrl: true },
+    });
 
     return users
-      .map((u) => ({ id: u.id, name: u.name, points: sumByUser.get(u.id) ?? 0 }))
+      .map((u) => ({ id: u.id, name: u.name, points: sumByUser.get(u.id) ?? 0, avatarType: u.avatarType, avatarUrl: u.avatarUrl }))
       .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name, 'pt-BR'));
   }
 

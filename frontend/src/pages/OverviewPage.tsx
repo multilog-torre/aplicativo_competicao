@@ -127,7 +127,7 @@ export function OverviewPage() {
             {topRanking.map((e) => (
               <li key={e.id} className={`ranking-row ${e.id === user?.id ? 'ranking-row--me' : ''}`}>
                 <span className="ranking-row__position">{MEDALS[e.position] ?? `${e.position}º`}</span>
-                <Avatar name={e.name} />
+                <Avatar name={e.name} avatarType={e.avatarType} avatarUrl={e.avatarUrl} userId={e.id} />
                 <div className="ranking-row__info">
                   <span className="ranking-row__name">{e.name}</span>
                 </div>

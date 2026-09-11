@@ -214,9 +214,9 @@ export interface AdminDashboardData {
     rewardsCatalogCount: number;
     totalRedemptions: number;
   };
-  // Baseado em RankingService.getGeneralLeaderboard() — só traz id/name/points,
-  // sem avatar/departamento (esses só existem no /ranking completo, Fase 10).
-  topRanking: Array<{ position: number; id: string; name: string; points: number }>;
+  // Baseado em RankingService.getGeneralLeaderboard() — traz id/name/points/avatar
+  // (sem departamento, que só existe no /ranking completo, Fase 10).
+  topRanking: Array<{ position: number; id: string; name: string; points: number; avatarType: string; avatarUrl: string | null }>;
   charts: {
     activitiesOverTime: Array<{ date: string; approvedCount: number }>;
     pointsDistributedOverTime: Array<{ date: string; points: number }>;
