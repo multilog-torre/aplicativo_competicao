@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client';
 import { AdminDashboardData, ActivityType, AwardCycle, Department, RankingEntry } from '../types/api';
 import { LoadingState, ErrorState } from '../components/ui/States';
 import { ChartCard, GranularityTabs, LineChart, MultiLineChart, BarChart, PointsHistoryGranularity, Series } from '../components/ui/Charts';
+import { FilterDrawer } from '../components/ui/FilterDrawer';
 import { Avatar } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 
@@ -127,7 +128,10 @@ function buildFilterQuery(f: DraftFilters): string {
   return qs ? `?${qs}` : '';
 }
 
-function FilterBar({
+/** Só os campos + ações do painel de filtros — o container flutuante (abrir/
+ * fechar, fundo escurecido) é responsabilidade do FilterDrawer, que envolve
+ * este componente. */
+function FilterFields({
   draft,
   onChange,
   onApply,
@@ -147,9 +151,8 @@ function FilterBar({
   users: RankingEntry[];
 }) {
   return (
-    <section className="card">
-      <h2 className="card__title">Filtros</h2>
-      <div className="form__row">
+    <>
+      <div className="filter-drawer-panel__fields">
         <label className="field">
           <span className="field__label">Data inicial</span>
           <input
@@ -221,7 +224,7 @@ function FilterBar({
           Aplicar filtros
         </button>
       </div>
-    </section>
+    </>
   );
 }
 
@@ -283,7 +286,24 @@ export function OverviewPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Painel Geral</h1>
+      <div className="page__header">
+        <h1 className="page__title">Painel Geral</h1>
+        <FilterDrawer hasActiveFilters={hasAnyFilter(appliedFilters)}>
+          <FilterFields
+            draft={draftFilters}
+            onChange={setDraftFilters}
+            onApply={() => setAppliedFilters(draftFilters)}
+            onClear={() => {
+              setDraftFilters(EMPTY_FILTERS);
+              setAppliedFilters(EMPTY_FILTERS);
+            }}
+            cycles={cycles}
+            departments={departments}
+            activityTypes={activityTypes}
+            users={users}
+          />
+        </FilterDrawer>
+      </div>
 
       <div className="banner banner--motivational">
         {indicators.activeUsers} colaboradores ativos • {indicators.points.netCirculating.toLocaleString('pt-BR')} pts em circulação
@@ -313,20 +333,6 @@ export function OverviewPage() {
       </div>
 
       <CurrentCycleCard />
-
-      <FilterBar
-        draft={draftFilters}
-        onChange={setDraftFilters}
-        onApply={() => setAppliedFilters(draftFilters)}
-        onClear={() => {
-          setDraftFilters(EMPTY_FILTERS);
-          setAppliedFilters(EMPTY_FILTERS);
-        }}
-        cycles={cycles}
-        departments={departments}
-        activityTypes={activityTypes}
-        users={users}
-      />
 
       {activeUserName && (
         <div className="banner banner--filter-active">

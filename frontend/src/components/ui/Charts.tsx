@@ -102,39 +102,41 @@ function pickTickIndexes(count: number, maxTicks: number): number[] {
   return Array.from(indexes).sort((a, b) => a - b);
 }
 
-/** Botão que abre o mesmo gráfico ampliado (tela cheia) num modal — mesmo
- * conteúdo, renderizado com `size="large"`. Fica no cabeçalho do card. */
+/**
+ * Card padrão de gráfico: título sempre centralizado no topo, controles
+ * extra (ex.: abas Dia/Mês/Ano) no canto superior esquerdo, e o botão de
+ * zoom flutuando no canto inferior direito da área do gráfico — o gráfico
+ * em si ocupa o centro, usando toda a largura/altura disponível do card.
+ * O zoom abre o mesmo conteúdo ampliado (`size="large"`) num modal.
+ */
 export function ChartCard({
   title,
   actions,
   children,
 }: {
   title: string;
-  /** Controles extra no cabeçalho do card (ex.: as abas Dia/Mês/Ano) — ficam
-   * à esquerda do botão de zoom. */
+  /** Controles extra no canto superior esquerdo do card (ex.: as abas Dia/Mês/Ano). */
   actions?: ReactNode;
   children: (size: ChartSize) => ReactNode;
 }) {
   const [zoomed, setZoomed] = useState(false);
 
   return (
-    <>
-      <div className="chart-card__header">
-        <h2 className="card__title">{title}</h2>
-        <div className="chart-card__header-actions">
-          {actions}
-          <button type="button" className="chart-zoom-btn" onClick={() => setZoomed(true)} title="Ampliar gráfico" aria-label="Ampliar gráfico">
-            🔍
-          </button>
-        </div>
+    <div className="chart-card card">
+      <h2 className="chart-card__title">{title}</h2>
+      {actions && <div className="chart-card__actions-row">{actions}</div>}
+      <div className="chart-card__body">
+        {children('default')}
+        <button type="button" className="chart-zoom-btn chart-zoom-btn--floating" onClick={() => setZoomed(true)} title="Ampliar gráfico" aria-label="Ampliar gráfico">
+          🔍
+        </button>
       </div>
-      {children('default')}
       {zoomed && (
         <Modal title={title} onClose={() => setZoomed(false)} className="modal--wide">
           <div className="chart-zoom-modal-body">{children('large')}</div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 

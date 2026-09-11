@@ -4,6 +4,7 @@ import { AwardCycle, DashboardData } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { StatusBadge } from '../components/ui/Badge';
 import { ChartCard, GranularityTabs, LineChart, BarChart, PointsHistoryGranularity } from '../components/ui/Charts';
+import { FilterDrawer } from '../components/ui/FilterDrawer';
 
 interface DraftFilters {
   dateFrom: string;
@@ -46,7 +47,10 @@ function PersonalPointsHistoryChart({ pointsHistory }: { pointsHistory: Dashboar
   );
 }
 
-function FilterBar({
+/** Só os campos + ações do painel de filtros — o container flutuante (abrir/
+ * fechar, fundo escurecido) é responsabilidade do FilterDrawer, que envolve
+ * este componente. */
+function FilterFields({
   draft,
   onChange,
   onApply,
@@ -60,9 +64,8 @@ function FilterBar({
   cycles: AwardCycle[];
 }) {
   return (
-    <section className="card">
-      <h2 className="card__title">Filtros</h2>
-      <div className="form__row">
+    <>
+      <div className="filter-drawer-panel__fields">
         <label className="field">
           <span className="field__label">Data inicial</span>
           <input type="date" value={draft.dateFrom} disabled={!!draft.cycleId} onChange={(e) => onChange({ ...draft, dateFrom: e.target.value })} />
@@ -91,7 +94,7 @@ function FilterBar({
           Aplicar filtros
         </button>
       </div>
-    </section>
+    </>
   );
 }
 
@@ -133,7 +136,21 @@ export function DashboardPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Meu Dashboard</h1>
+      <div className="page__header">
+        <h1 className="page__title">Meu Dashboard</h1>
+        <FilterDrawer hasActiveFilters={hasAnyFilter(appliedFilters)}>
+          <FilterFields
+            draft={draftFilters}
+            onChange={setDraftFilters}
+            onApply={() => setAppliedFilters(draftFilters)}
+            onClear={() => {
+              setDraftFilters(EMPTY_FILTERS);
+              setAppliedFilters(EMPTY_FILTERS);
+            }}
+            cycles={cycles}
+          />
+        </FilterDrawer>
+      </div>
 
       <div className="banner banner--motivational">{motivationalMessage}</div>
 
@@ -163,17 +180,6 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
-
-      <FilterBar
-        draft={draftFilters}
-        onChange={setDraftFilters}
-        onApply={() => setAppliedFilters(draftFilters)}
-        onClear={() => {
-          setDraftFilters(EMPTY_FILTERS);
-          setAppliedFilters(EMPTY_FILTERS);
-        }}
-        cycles={cycles}
-      />
 
       <div className="grid-2">
         <PersonalPointsHistoryChart pointsHistory={charts.pointsHistory} />

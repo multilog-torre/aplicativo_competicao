@@ -623,26 +623,32 @@ textarea {
   text-align: center;
 }
 
-/* Cabeçalho do card de gráfico: título + controles (abas de granularidade,
-   filtros) + botão de zoom, tudo na mesma linha. */
-.chart-card__header {
+/* Card de gráfico — layout fixo: título sempre centralizado no topo,
+   controles extra (abas de granularidade) no canto superior esquerdo, e o
+   gráfico ocupando o centro/toda a largura, com o botão de zoom flutuando
+   no canto inferior direito da própria área do gráfico (não empurra
+   layout, como os controles de zoom de um mapa). */
+/* .chart-card em si não precisa de regras próprias — herda fundo/borda/
+   padding/sombra de .card (ver Charts.tsx: className="chart-card card").
+   Título e controles ficam em LINHAS SEPARADAS (não lado a lado) — um
+   título longo (ex.: "Pontos distribuídos — evolução histórica") ao lado
+   de 3 abas Dia/Mês/Ano num card estreito não cabem na mesma linha sem
+   quebrar/espremer um dos dois; empilhados, os dois continuam "no topo"
+   do card sem disputar espaço horizontal. */
+.chart-card__title {
+  text-align: center;
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.chart-card__actions-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
   margin-bottom: 14px;
 }
 
-.chart-card__header .card__title {
-  margin-bottom: 0;
-}
-
-.chart-card__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.chart-card__body {
+  position: relative;
 }
 
 .chart-zoom-btn {
@@ -657,20 +663,41 @@ textarea {
   cursor: pointer;
   font-size: 0.95rem;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-zoom-btn:hover {
   background: var(--color-neutral-bg);
 }
 
-/* Modal de zoom — bem mais largo que o modal padrão (formulários, 480px),
-   pra dar espaço real ao gráfico ampliado. */
+/* Flutua sobre o canto inferior direito do próprio gráfico (não da linha
+   do cabeçalho) — fica por cima de .chart-scroll sem rolar junto com ele,
+   porque .chart-card__body é o `position: relative` de referência, não o
+   container com scroll. */
+.chart-zoom-btn--floating {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+}
+
+/* Modal de zoom — bem mais largo e mais alto que o modal padrão
+   (formulários, 480px), pra dar espaço real ao gráfico ampliado. */
 .modal.modal--wide {
   max-width: 960px;
+  width: 96vw;
 }
 
 .chart-zoom-modal-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
   padding-top: 4px;
+}
+
+.chart-zoom-modal-body .chart-card__body {
+  width: 100%;
 }
 
 .multi-line-legend {
@@ -1366,6 +1393,122 @@ textarea {
   gap: 10px;
   padding: 14px 20px;
   border-top: 1px solid var(--color-border);
+}
+
+/* ============================================================
+   Painel de filtros flutuante (estilo Power BI) — FilterDrawer.tsx
+   ============================================================ */
+.filter-drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.filter-drawer-toggle:hover {
+  background: var(--color-neutral-bg);
+}
+
+/* Destaque quando algum filtro está aplicado — visível mesmo com o painel
+   fechado, pra pessoa lembrar que os dados na tela estão filtrados. */
+.filter-drawer-toggle--active {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+.filter-drawer-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-warning);
+  display: inline-block;
+}
+
+.filter-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 110;
+  display: flex;
+  justify-content: flex-end;
+  animation: filterDrawerFadeIn 150ms ease-out;
+}
+
+.filter-drawer-panel {
+  width: 380px;
+  max-width: 92vw;
+  height: 100%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  animation: filterDrawerSlideIn 200ms ease-out;
+}
+
+@keyframes filterDrawerFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes filterDrawerSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.filter-drawer-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.filter-drawer-panel__header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.filter-drawer-panel__close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.filter-drawer-panel__body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Dentro do painel (estreito, 380px) os campos ficam em coluna única —
+   diferente do .form__row (2 colunas) usado em formulários mais largos. */
+.filter-drawer-panel__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* ============================================================
