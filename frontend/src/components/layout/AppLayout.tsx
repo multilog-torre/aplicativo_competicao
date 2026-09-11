@@ -5,6 +5,7 @@ import { Avatar } from '../ui/Badge';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
+  { to: '/regras', label: 'Como Funciona', icon: '❓' },
   { to: '/painel', label: 'Painel Geral', icon: '📈' },
   { to: '/atividades', label: 'Atividades', icon: '🏃' },
   { to: '/ranking', label: 'Ranking', icon: '🏆' },

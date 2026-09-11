@@ -11,6 +11,7 @@ import { RankingPage } from './pages/RankingPage';
 import { MuralPage } from './pages/MuralPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { OverviewPage } from './pages/OverviewPage';
+import { RulesPage } from './pages/RulesPage';
 import { AdminApprovalsPage } from './pages/AdminApprovalsPage';
 import { AdminModalitiesPage } from './pages/AdminModalitiesPage';
 import { AdminLevelsPage } from './pages/AdminLevelsPage';
@@ -31,6 +32,7 @@ export function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
+                <Route path="/regras" element={<RulesPage />} />
                 <Route path="/painel" element={<OverviewPage />} />
                 <Route path="/atividades" element={<ActivitiesPage />} />
                 <Route path="/ranking" element={<RankingPage />} />
