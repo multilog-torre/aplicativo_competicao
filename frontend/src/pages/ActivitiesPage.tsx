@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuthedImage } from '../api/useAuthedImage';
+import { todayLocalISODate } from '../utils/date';
 
 export function ActivitiesPage() {
   const { showToast } = useToast();
@@ -101,7 +102,7 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [activityTypeId, setActivityTypeId] = useState('');
   const [quantity, setQuantity] = useState('1');
-  const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [activityDate, setActivityDate] = useState(todayLocalISODate);
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -133,7 +134,11 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
     try {
       const { data: activity } = await api.post<{ id: string }>('/activities', {
         activityTypeId,
-        activityDate: new Date(activityDate).toISOString(),
+        // "T00:00:00" (sem "Z") força o navegador a interpretar isso como
+        // meia-noite NO FUSO LOCAL — se só passássemos activityDate puro
+        // ("YYYY-MM-DD"), o JS trata como meia-noite UTC, e ao exibir de
+        // volta no fuso do Brasil (UTC-3) isso "volta" pro dia anterior.
+        activityDate: new Date(`${activityDate}T00:00:00`).toISOString(),
         quantity: Number(quantity),
         description: description || undefined,
       });
@@ -180,7 +185,7 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </label>
             <label className="field">
               <span className="field__label">Data</span>
-              <input type="date" required value={activityDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setActivityDate(e.target.value)} />
+              <input type="date" required value={activityDate} max={todayLocalISODate()} onChange={(e) => setActivityDate(e.target.value)} />
             </label>
           </div>
 

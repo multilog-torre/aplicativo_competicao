@@ -7,6 +7,7 @@ import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { todayLocalISODate } from '../utils/date';
 
 const ROLE_LABELS: Record<string, string> = {
   PARTICIPANTE: 'Participante',
@@ -286,7 +287,7 @@ function CreateUserModal({
         <div className="form__row">
           <label className="field">
             <span className="field__label">Data de nascimento (opcional)</span>
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={todayLocalISODate()} />
           </label>
           <label className="field">
             <span className="field__label">Sexo (opcional)</span>
@@ -401,7 +402,7 @@ function EditUserModal({
         <div className="form__row">
           <label className="field">
             <span className="field__label">Data de nascimento</span>
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={todayLocalISODate()} />
           </label>
           <label className="field">
             <span className="field__label">Sexo</span>

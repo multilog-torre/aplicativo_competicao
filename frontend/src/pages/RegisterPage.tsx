@@ -5,6 +5,7 @@ import { Department, Gender, GENDER_LABELS } from '../types/api';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/ui/Logo';
 import multilogWordmark from '../assets/multilog-wordmark.png';
+import { todayLocalISODate } from '../utils/date';
 
 const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 
@@ -134,7 +135,7 @@ export function RegisterPage() {
         <div className="form__row">
           <label className="field">
             <span className="field__label">Data de nascimento (opcional)</span>
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={todayLocalISODate()} />
           </label>
           <label className="field">
             <span className="field__label">Sexo (opcional)</span>

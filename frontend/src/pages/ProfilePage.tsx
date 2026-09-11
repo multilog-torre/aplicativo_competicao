@@ -7,6 +7,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ui/States';
 import { Avatar, StatusBadge } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { todayLocalISODate } from '../utils/date';
 
 export function ProfilePage() {
   const { refreshUser } = useAuth();
@@ -396,7 +397,7 @@ function ProfileInfoForm({ profile, onSaved }: { profile: ProfileData; onSaved: 
       <div className="form__row">
         <label className="field">
           <span className="field__label">Data de nascimento</span>
-          <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
+          <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} max={todayLocalISODate()} />
         </label>
         <label className="field">
           <span className="field__label">Sexo</span>
