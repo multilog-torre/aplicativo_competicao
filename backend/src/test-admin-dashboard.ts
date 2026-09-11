@@ -14,7 +14,7 @@
  * 10. indicators.rewardsCatalogCount / totalRedemptions refletem o catálogo e resgates
  * 11. topRanking tem no máximo 5 posições, ordenado corretamente
  * 12. charts.activitiesOverTime tem 30 dias e reflete aprovação recente
- * 13. charts.pointsDistributedOverTime tem 30 dias e é sempre >= 0 (só positivos)
+ * 13. charts.pointsHistory (day/month/year) tem os tamanhos esperados e é sempre >= 0 (só positivos)
  * 14. charts.usersByDepartment soma o total de usuários ativos
  * 15. charts.redemptionsByStatus reflete o resgate criado
  */
@@ -78,7 +78,11 @@ type DashboardBody = {
     topRanking?: Array<{ position: number; points: number }>;
     charts?: {
       activitiesOverTime?: Array<{ date: string; approvedCount: number }>;
-      pointsDistributedOverTime?: Array<{ date: string; points: number }>;
+      pointsHistory?: {
+        day?: Array<{ date: string; label: string; points: number }>;
+        month?: Array<{ date: string; label: string; points: number }>;
+        year?: Array<{ date: string; label: string; points: number }>;
+      };
       usersByDepartment?: Array<{ count: number }>;
       redemptionsByStatus?: Array<{ status: string; count: number }>;
     };
@@ -225,9 +229,17 @@ async function main() {
   const todayApprovedCount = activitiesOverTime[activitiesOverTime.length - 1]?.approvedCount ?? 0;
   assert(`Dia de hoje reflete as aprovações recentes (${todayApprovedCount} >= 2)`, todayApprovedCount >= 2);
 
-  const pointsDistributedOverTime = dashboard?.charts?.pointsDistributedOverTime ?? [];
-  assert('pointsDistributedOverTime tem 30 dias', pointsDistributedOverTime.length === 30);
-  assert('Todos os valores são >= 0 (só transações positivas)', pointsDistributedOverTime.every((d) => d.points >= 0));
+  const pointsHistory = dashboard?.charts?.pointsHistory;
+  const pointsHistoryDay = pointsHistory?.day ?? [];
+  const pointsHistoryMonth = pointsHistory?.month ?? [];
+  const pointsHistoryYear = pointsHistory?.year ?? [];
+  assert('pointsHistory.day tem 30 dias', pointsHistoryDay.length === 30);
+  assert('pointsHistory.month tem 12 meses', pointsHistoryMonth.length === 12);
+  assert('pointsHistory.year tem 3 anos', pointsHistoryYear.length === 3);
+  assert(
+    'Todos os valores são >= 0 (só transações positivas)',
+    [...pointsHistoryDay, ...pointsHistoryMonth, ...pointsHistoryYear].every((d) => d.points >= 0),
+  );
 
   // ── PASSO 14: Usuários por departamento ────────────────────────────────────────
   console.log('\n9️⃣ Testando usuários por departamento...');

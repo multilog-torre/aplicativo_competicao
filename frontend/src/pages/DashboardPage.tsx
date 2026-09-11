@@ -67,7 +67,16 @@ export function DashboardPage() {
       <div className="grid-2">
         <section className="card">
           <h2 className="card__title">Evolução de pontos (30 dias)</h2>
-          <LineChart data={charts.pointsEvolution.map((p) => ({ label: p.date, value: p.cumulativePoints }))} />
+          <LineChart
+            data={charts.pointsEvolution.map((p) => ({
+              // "date" vem como "AAAA-MM-DD" (ver dashboard.service.ts) — recorta o
+              // texto direto em vez de usar `new Date(string)`, que interpretaria
+              // como UTC e mostraria o dia errado dependendo do fuso do navegador.
+              label: `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}`,
+              value: p.cumulativePoints,
+              tooltipLabel: `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}/${p.date.slice(0, 4)}`,
+            }))}
+          />
         </section>
         <section className="card">
           <h2 className="card__title">Atividades por modalidade</h2>

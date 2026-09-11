@@ -222,7 +222,11 @@ export interface AdminDashboardData {
   topRanking: Array<{ position: number; id: string; name: string; points: number; avatarType: string; avatarUrl: string | null }>;
   charts: {
     activitiesOverTime: Array<{ date: string; approvedCount: number }>;
-    pointsDistributedOverTime: Array<{ date: string; points: number }>;
+    pointsHistory: {
+      day: Array<{ date: string; label: string; points: number }>;
+      month: Array<{ date: string; label: string; points: number }>;
+      year: Array<{ date: string; label: string; points: number }>;
+    };
     activitiesByModality: Array<{ activityTypeId: string; name: string; icon: string; approvedCount: number }>;
     usersByDepartment: Array<{ departmentId: string; departmentName: string; count: number }>;
     redemptionsByStatus: Array<{ status: string; count: number }>;

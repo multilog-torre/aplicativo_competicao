@@ -8,6 +8,40 @@ import { useAuth } from '../context/AuthContext';
 
 const MEDALS: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
+type PointsHistoryGranularity = 'day' | 'month' | 'year';
+
+const GRANULARITY_OPTIONS: Array<{ key: PointsHistoryGranularity; label: string }> = [
+  { key: 'day', label: 'Dia' },
+  { key: 'month', label: 'Mês' },
+  { key: 'year', label: 'Ano' },
+];
+
+/** Evolução histórica dos pontos distribuídos a todos os usuários, com a
+ * pessoa podendo trocar a granularidade (dia/mês/ano) direto no gráfico. */
+function PointsHistoryChart({ pointsHistory }: { pointsHistory: AdminDashboardData['charts']['pointsHistory'] }) {
+  const [granularity, setGranularity] = useState<PointsHistoryGranularity>('day');
+  const series = pointsHistory[granularity];
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Pontos distribuídos — evolução histórica</h2>
+      <div className="tabs">
+        {GRANULARITY_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            className={`tabs__item ${granularity === opt.key ? 'tabs__item--active' : ''}`}
+            onClick={() => setGranularity(opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <LineChart data={series.map((p) => ({ label: p.label, value: p.points, tooltipLabel: p.label }))} />
+    </section>
+  );
+}
+
 function CurrentCycleCard() {
   const [cycle, setCycle] = useState<AwardCycle | null | undefined>(undefined);
 
@@ -108,13 +142,13 @@ export function OverviewPage() {
       <CurrentCycleCard />
 
       <div className="grid-2">
-        <section className="card">
-          <h2 className="card__title">Pontos distribuídos (30 dias)</h2>
-          <LineChart data={charts.pointsDistributedOverTime.map((p) => ({ label: p.date, value: p.points }))} />
-        </section>
+        <PointsHistoryChart pointsHistory={charts.pointsHistory} />
         <section className="card">
           <h2 className="card__title">Atividades aprovadas (30 dias)</h2>
-          <LineChart data={charts.activitiesOverTime.map((p) => ({ label: p.date, value: p.approvedCount }))} color="var(--color-success)" />
+          <LineChart
+            data={charts.activitiesOverTime.map((p) => ({ label: p.date.slice(5), value: p.approvedCount, tooltipLabel: p.date }))}
+            color="var(--color-success)"
+          />
         </section>
       </div>
 

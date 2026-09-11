@@ -3,9 +3,35 @@ import { RankingService } from '../ranking/ranking.service';
 
 const TREND_DAYS = 30;
 const TOP_RANKING_SIZE = 5;
+const MONTH_LABELS_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+// Sem horário de verão no Brasil desde 2019 — um offset fixo é suficiente e
+// evita depender do fuso horário configurado no servidor (em produção,
+// tipicamente UTC), que faria os "dias" do gráfico não bater com o dia
+// corrido de quem está olhando o painel do Brasil.
+const BRAZIL_OFFSET_MS = -3 * 60 * 60 * 1000;
 
 function toDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+/** Instante cujo valor UTC representa a hora "de Brasília" — usar sempre com
+ * os getters/setters *UTC* (getUTCDate, setUTCMonth, etc.) daqui em diante,
+ * nunca os locais (que dependeriam do fuso do servidor). */
+function toBrazilShifted(date: Date): Date {
+  return new Date(date.getTime() + BRAZIL_OFFSET_MS);
+}
+
+function brazilDayKey(date: Date): string {
+  return toBrazilShifted(date).toISOString().slice(0, 10);
+}
+
+function brazilMonthKey(date: Date): string {
+  return toBrazilShifted(date).toISOString().slice(0, 7);
+}
+
+function brazilYearKey(date: Date): string {
+  return toBrazilShifted(date).toISOString().slice(0, 4);
 }
 
 export class AdminDashboardService {
@@ -29,7 +55,7 @@ export class AdminDashboardService {
       redemptionsByStatus,
       leaderboard,
       activitiesOverTime,
-      pointsDistributedOverTime,
+      pointsHistory,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { status: 'ACTIVE' } }),
@@ -44,7 +70,7 @@ export class AdminDashboardService {
       this.getRedemptionsByStatus(),
       RankingService.getGeneralLeaderboard(),
       this.getActivitiesOverTime(),
-      this.getPointsDistributedOverTime(),
+      this.getPointsHistory(),
     ]);
 
     const topModality = activitiesByModality[0] ?? null;
@@ -64,7 +90,7 @@ export class AdminDashboardService {
       topRanking: leaderboard.slice(0, TOP_RANKING_SIZE).map((entry, index) => ({ position: index + 1, ...entry })),
       charts: {
         activitiesOverTime,
-        pointsDistributedOverTime,
+        pointsHistory,
         activitiesByModality,
         usersByDepartment,
         redemptionsByStatus,
@@ -172,31 +198,69 @@ export class AdminDashboardService {
     return series;
   }
 
-  /** Pontos concedidos (positivos) por dia, últimos 30 dias — não cumulativo (tendência diária). */
-  private static async getPointsDistributedOverTime() {
+  /**
+   * Pontos concedidos (positivos) a QUALQUER usuário, agrupados por dia,
+   * mês e ano — não cumulativo (é o total daquele período específico, não
+   * um saldo acumulado). Calcula os três de uma vez, sem round-trip extra
+   * ao banco, pra a pessoa poder trocar a granularidade direto no gráfico
+   * (planejamento a pedido do usuário).
+   *
+   * A bucketização usa o fuso de Brasília fixo (BRAZIL_OFFSET_MS), não o
+   * fuso do servidor — em produção o servidor tipicamente roda em UTC, o
+   * que faria os "dias" do gráfico não baterem com o dia corrido de quem
+   * está no Brasil olhando o painel.
+   */
+  private static async getPointsHistory() {
     const now = new Date();
-    const windowStart = new Date(now);
-    windowStart.setDate(windowStart.getDate() - (TREND_DAYS - 1));
-    windowStart.setHours(0, 0, 0, 0);
+    const earliestStart = new Date(now.getFullYear() - 3, 0, 1); // cobre os 3 anos exibidos, com folga
 
     const transactions = await prisma.pointsTransaction.findMany({
-      where: { points: { gt: 0 }, createdAt: { gte: windowStart } },
+      where: { points: { gt: 0 }, createdAt: { gte: earliestStart } },
       select: { points: true, createdAt: true },
     });
 
     const pointsByDay = new Map<string, number>();
+    const pointsByMonth = new Map<string, number>();
+    const pointsByYear = new Map<string, number>();
     for (const tx of transactions) {
-      const key = toDateKey(tx.createdAt);
-      pointsByDay.set(key, (pointsByDay.get(key) ?? 0) + tx.points);
+      const dayKey = brazilDayKey(tx.createdAt);
+      const monthKey = brazilMonthKey(tx.createdAt);
+      const yearKey = brazilYearKey(tx.createdAt);
+      pointsByDay.set(dayKey, (pointsByDay.get(dayKey) ?? 0) + tx.points);
+      pointsByMonth.set(monthKey, (pointsByMonth.get(monthKey) ?? 0) + tx.points);
+      pointsByYear.set(yearKey, (pointsByYear.get(yearKey) ?? 0) + tx.points);
     }
 
-    const series: Array<{ date: string; points: number }> = [];
-    for (let i = 0; i < TREND_DAYS; i++) {
-      const day = new Date(windowStart);
-      day.setDate(windowStart.getDate() + i);
-      const key = toDateKey(day);
-      series.push({ date: key, points: pointsByDay.get(key) ?? 0 });
+    // Âncora "de hoje" já deslocada — dali em diante só getUTC*/setUTC*,
+    // nunca os métodos locais (que dependeriam do fuso do servidor).
+    const nowShifted = toBrazilShifted(now);
+
+    const day: Array<{ date: string; label: string; points: number }> = [];
+    for (let i = TREND_DAYS - 1; i >= 0; i--) {
+      const d = new Date(nowShifted);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const label = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      day.push({ date: key, label, points: pointsByDay.get(key) ?? 0 });
     }
-    return series;
+
+    const month: Array<{ date: string; label: string; points: number }> = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(nowShifted);
+      d.setUTCMonth(d.getUTCMonth() - i, 1); // dia 1 evita estouro (ex.: 31/mar - 1 mês)
+      const key = d.toISOString().slice(0, 7);
+      const label = `${MONTH_LABELS_SHORT[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}`;
+      month.push({ date: key, label, points: pointsByMonth.get(key) ?? 0 });
+    }
+
+    const year: Array<{ date: string; label: string; points: number }> = [];
+    for (let i = 2; i >= 0; i--) {
+      const d = new Date(nowShifted);
+      d.setUTCFullYear(d.getUTCFullYear() - i);
+      const key = String(d.getUTCFullYear());
+      year.push({ date: key, label: key, points: pointsByYear.get(key) ?? 0 });
+    }
+
+    return { day, month, year };
   }
 }
