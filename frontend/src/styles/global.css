@@ -1232,7 +1232,7 @@ textarea {
 .auth-card {
   width: 100%;
   max-width: 380px;
-  background: #23207f;
+  background: #002552;
   /* Cor "padrão" (não sobrescrita por regras mais específicas abaixo) pra
      qualquer texto solto dentro do card — ex.: parágrafos de field__hint
      ou da tela de sucesso do cadastro — não herdar o --color-text do
@@ -1274,9 +1274,9 @@ textarea {
 .auth-card .field input,
 .auth-card .field select,
 .auth-card .field textarea {
-  background: #002552;
-  /* Fundo escuro agora (era claro) — texto branco no lugar do escuro
-     original, senão fica ilegível sobre #002552. */
+  /* Tom mais claro que o fundo do card (#002552), pra continuar
+     aparecendo como um campo distinto dentro da caixa. */
+  background: #0b3d70;
   color: #ffffff;
   border: none;
 }
