@@ -6,28 +6,40 @@
    #0096C7 Blue Green · #00B4D8 Turquoise Surf (cor de destaque/logo)
    #48CAE4 Sky Aqua · #90E0EF · #ADE8F4 Frosted Blue · #CAF0F8 Light Cyan
 
+   Layout de referência (painel de controle): fundo claro/neutro com os
+   cards em branco puro — "caixas" bem demarcadas por borda/sombra — e o
+   menu (topbar + sidebar) em Deep Twilight fixo, com texto branco. Por
+   isso o menu usa cores fixas (não tokens de tema): ele não muda entre
+   claro/escuro, só o conteúdo muda.
+
    --color-accent (Turquoise Surf) é claro/vibrante, então o texto sobre
    ele usa --color-accent-contrast = Deep Twilight (texto escuro), não
    branco — branco sobre o turquesa não tem contraste suficiente para
-   leitura confortável. Cores semânticas (sucesso/aviso/perigo) foram
-   mantidas fora da paleta de marca de propósito: preservam o
-   reconhecimento universal verde/amarelo/vermelho.
+   leitura confortável. --color-primary-* é o par usado pelos botões de
+   ação primária: Deep Twilight (com texto branco) no tema claro, para
+   casar com o menu; no escuro, cai de volta no turquesa (só ficaria
+   escuro-sobre-escuro sem contraste). Cores semânticas (sucesso/aviso/
+   perigo) foram mantidas fora da paleta de marca de propósito: preservam
+   o reconhecimento universal verde/amarelo/vermelho.
    ============================================================ */
 :root {
-  --color-bg: #caf0f8;
+  --color-bg: #f3f6fa;
   --color-surface: #ffffff;
-  --color-border: #ade8f4;
+  --color-border: #e1e6ec;
   --color-text: #03045e;
-  --color-text-muted: #023e8a;
+  --color-text-muted: #5b6472;
   --color-accent: #00b4d8;
   --color-accent-contrast: #03045e;
+  --color-primary-bg: #03045e;
+  --color-primary-contrast: #ffffff;
   --color-success: #15803d;
   --color-success-bg: #dcfce7;
   --color-warning: #b45309;
   --color-warning-bg: #fef3c7;
   --color-danger: #b91c1c;
   --color-danger-bg: #fee2e2;
-  --color-neutral-bg: #90e0ef;
+  --color-neutral-bg: #eef1f4;
+  --color-nav-bg: #03045e;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -46,6 +58,8 @@
     --color-text-muted: #48cae4;
     --color-accent: #00b4d8;
     --color-accent-contrast: #03045e;
+    --color-primary-bg: #00b4d8;
+    --color-primary-contrast: #03045e;
     --color-success: #4ade80;
     --color-success-bg: #14311f;
     --color-warning: #fbbf24;
@@ -98,8 +112,9 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  /* Fixo em Deep Twilight — o menu não segue o tema claro/escuro do conteúdo. */
+  background: var(--color-nav-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -111,13 +126,20 @@ textarea {
   border: none;
   font-size: 1.4rem;
   cursor: pointer;
-  color: var(--color-text);
+  color: #ffffff;
   padding: 4px 8px;
 }
 
 .topbar__brand {
   font-weight: 700;
   font-size: 1.1rem;
+}
+
+/* .brand-logo é reaproveitado no card de login/cadastro (fundo claro) e
+   aqui na topbar (fundo Deep Twilight) — por isso o texto é sobrescrito
+   para branco só dentro da topbar; o ícone já é turquesa nos dois casos. */
+.topbar__brand .brand-logo {
+  color: #ffffff;
 }
 
 .brand-logo {
@@ -142,7 +164,12 @@ textarea {
 .topbar__user-name {
   display: none;
   font-size: 0.9rem;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.topbar .btn--ghost {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .app-body {
@@ -158,8 +185,9 @@ textarea {
   left: 0;
   bottom: 0;
   width: 240px;
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
+  /* Fixo em Deep Twilight, igual à topbar. */
+  background: var(--color-nav-bg);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
   padding: 16px 8px;
   display: flex;
   flex-direction: column;
@@ -187,18 +215,25 @@ textarea {
   gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  color: var(--color-text);
+  color: #ffffff;
   text-decoration: none;
   font-size: 0.95rem;
 }
 
 .sidebar__link:hover {
-  background: var(--color-neutral-bg);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.sidebar__link--active {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
+/* Especificidade igual a ".sidebar__link:hover" (duas classes = mesmo peso
+   que uma classe + uma pseudo-classe) para a pílula ativa nunca "apagar"
+   ao passar o mouse por cima dela — sem isso, :hover ganhava só o fundo
+   e deixava texto escuro sobre fundo quase escuro, ilegível. */
+.sidebar__link.sidebar__link--active,
+.sidebar__link.sidebar__link--active:hover {
+  /* Pílula clara sobre o menu escuro — mesmo padrão do item ativo na
+     imagem de referência (painel de controle). */
+  background: #ffffff;
+  color: var(--color-nav-bg);
 }
 
 .sidebar__section-label {
@@ -206,7 +241,7 @@ textarea {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .content {
@@ -948,8 +983,8 @@ textarea {
 }
 
 .btn--primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-contrast);
 }
 
 .btn--secondary {
