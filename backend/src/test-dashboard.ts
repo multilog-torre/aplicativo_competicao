@@ -9,13 +9,16 @@
  * 5. level.progress.current/target fazem sentido (current < target quando há próximo nível)
  * 6. recentActivities respeita o limite solicitado (activityLimit)
  * 7. recentActivities reflete atividade recém-criada
- * 8. charts.pointsEvolution tem 30 pontos e o último dia reflete o total atual
+ * 8. charts.pointsHistory.day tem 30 pontos e o último dia reflete o total atual
  * 9. charts.activitiesByModality soma corretamente após aprovação
  * 10. charts.performanceByPeriod tem 8 semanas e a semana atual reflete pontos recentes
  * 11. charts.rankingEvolution é explicitamente null (limitação documentada, não omitida)
  * 12. motivationalMessage é uma string não vazia e reflete o 1º lugar corretamente
  * 13. motivationalMessage cita o gap de pontos correto para quem não é 1º lugar
  * 14. Dashboard é sempre o do próprio usuário (não aceita userId de outro)
+ * 15. charts.pointsHistory.month/year também refletem o total atual no último ponto
+ * 16. Filtro por dateFrom/dateTo restringe pointsHistory.day ao período exato
+ * 17. Filtro por cycleId usa o período exato do ciclo (e 404 se não existir)
  */
 
 import http from 'http';
@@ -62,7 +65,11 @@ type DashboardBody = {
     };
     recentActivities?: Array<{ id: string; createdAt: string }>;
     charts?: {
-      pointsEvolution?: Array<{ date: string; cumulativePoints: number }>;
+      pointsHistory?: {
+        day?: Array<{ date: string; label: string; points: number }>;
+        month?: Array<{ date: string; label: string; points: number }>;
+        year?: Array<{ date: string; label: string; points: number }>;
+      };
       activitiesByModality?: Array<{ activityTypeName: string; count: number; totalPoints: number }>;
       rankingEvolution?: null;
       performanceByPeriod?: Array<{ weekStart: string; points: number }>;
@@ -154,11 +161,14 @@ async function main() {
 
   // ── PASSO 8: Evolução de pontos ───────────────────────────────────────────────
   console.log('\n6️⃣ Testando gráfico de evolução de pontos...');
-  const pointsEvolution = dashboard?.charts?.pointsEvolution ?? [];
-  assert('pointsEvolution tem 30 dias', pointsEvolution.length === 30);
+  const pointsHistory = dashboard?.charts?.pointsHistory;
+  const pointsHistoryDay = pointsHistory?.day ?? [];
+  const pointsHistoryMonth = pointsHistory?.month ?? [];
+  const pointsHistoryYear = pointsHistory?.year ?? [];
+  assert('pointsHistory.day tem 30 dias', pointsHistoryDay.length === 30);
   assert(
-    `Último dia da série reflete o total atual (${meTotal})`,
-    pointsEvolution[pointsEvolution.length - 1]?.cumulativePoints === meTotal,
+    `Último dia da série "day" reflete o total atual (${meTotal})`,
+    pointsHistoryDay[pointsHistoryDay.length - 1]?.points === meTotal,
   );
 
   // ── PASSO 9: Atividades por modalidade ────────────────────────────────────────
@@ -202,6 +212,64 @@ async function main() {
     'Dashboard retorna os dados de quem está autenticado, ignorando qualquer userId na query',
     otherDashboard?.points?.total !== dashboard?.points?.total || otherToken === participantToken,
   );
+
+  // ── PASSO 15: Granularidades mês/ano também refletem o total atual ────────────
+  console.log('\n1️⃣2️⃣ Testando granularidades mês/ano do gráfico de evolução...');
+  assert('pointsHistory.month tem pelo menos 1 ponto', pointsHistoryMonth.length >= 1);
+  assert('pointsHistory.year tem pelo menos 1 ponto', pointsHistoryYear.length >= 1);
+  assert(
+    `Último ponto da série "month" também reflete o total atual (${meTotal})`,
+    pointsHistoryMonth[pointsHistoryMonth.length - 1]?.points === meTotal,
+  );
+  assert(
+    `Último ponto da série "year" também reflete o total atual (${meTotal})`,
+    pointsHistoryYear[pointsHistoryYear.length - 1]?.points === meTotal,
+  );
+
+  // ── PASSO 16: Filtro por dateFrom/dateTo ───────────────────────────────────────
+  console.log('\n1️⃣3️⃣ Testando filtro por data (dateFrom/dateTo)...');
+  const filterNow = new Date();
+  const fiveDaysAgo = new Date(filterNow.getTime() - 4 * 86400000);
+  const byDateRes = await reqJson(
+    'GET',
+    `/dashboard?dateFrom=${fiveDaysAgo.toISOString()}&dateTo=${filterNow.toISOString()}`,
+    undefined,
+    participantToken,
+  );
+  assert('Dashboard com filtro de data retorna 200', byDateRes.status === 200);
+  const byDateDashboard = (byDateRes.data as DashboardBody)?.data;
+  assert(
+    'Filtro de 5 dias gera pointsHistory.day com 5 pontos',
+    (byDateDashboard?.charts?.pointsHistory?.day ?? []).length === 5,
+  );
+
+  // ── PASSO 17: Filtro por cycleId ────────────────────────────────────────────────
+  console.log('\n1️⃣4️⃣ Testando filtro por cycleId...');
+  const cycleStart = new Date(filterNow.getTime() - 2 * 86400000);
+  const cycleEnd = new Date(filterNow.getTime() + 5 * 86400000);
+  const cycleRes = await reqJson(
+    'POST',
+    '/cycles',
+    { name: 'Ciclo de Teste do Dashboard Pessoal', startDate: cycleStart.toISOString(), endDate: cycleEnd.toISOString(), prizes: [] },
+    masterToken,
+  );
+  type CycleBody = { data?: { id?: string } };
+  const cycleId = (cycleRes.data as CycleBody)?.data?.id ?? '';
+  const byCycleRes = await reqJson('GET', `/dashboard?cycleId=${cycleId}`, undefined, participantToken);
+  assert('Dashboard com filtro cycleId retorna 200', byCycleRes.status === 200);
+  const byCycleDashboard = (byCycleRes.data as DashboardBody)?.data;
+  const expectedCycleDays = Math.floor((cycleEnd.getTime() - cycleStart.getTime()) / 86400000) + 1;
+  assert(
+    `Filtro por ciclo cobre exatamente o período do ciclo (${expectedCycleDays} dias)`,
+    (byCycleDashboard?.charts?.pointsHistory?.day ?? []).length === expectedCycleDays,
+  );
+
+  const invalidCycleRes = await reqJson('GET', '/dashboard?cycleId=00000000-0000-0000-0000-000000000000', undefined, participantToken);
+  assert('Filtro com cycleId inexistente retorna 404', invalidCycleRes.status === 404);
+
+  // Cancela o ciclo criado só pra este teste — evita colidir (sobreposição de
+  // datas) com ciclos criados por outras suítes numa execução sequencial.
+  await reqJson('POST', `/cycles/${cycleId}/cancel`, undefined, masterToken);
 
   server.close();
 

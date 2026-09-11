@@ -17,6 +17,13 @@
  * 13. charts.pointsHistory (day/month/year) tem os tamanhos esperados e é sempre >= 0 (só positivos)
  * 14. charts.usersByDepartment soma o total de usuários ativos
  * 15. charts.redemptionsByStatus reflete o resgate criado
+ * 16. charts.topActivities tem no máximo 5 modalidades, ordenado
+ * 17. charts.topUsersEvolution (day/month/year) tem no máximo 5 usuários,
+ *     cada série com o mesmo tamanho do pointsHistory correspondente
+ * 18. Filtro por userId restringe pointsHistory/topUsersEvolution a 1 usuário
+ * 19. Filtro por dateFrom/dateTo muda o tamanho das séries de acordo
+ * 20. Filtro por cycleId usa o período exato do ciclo (e 404 se não existir)
+ * 21. Filtros não afetam os indicadores do topo (cards "ao vivo")
  */
 
 import http from 'http';
@@ -67,7 +74,7 @@ type DashboardBody = {
     indicators?: {
       totalUsers?: number;
       activeUsers?: number;
-      activities?: { total?: number; pending?: number; approved?: number };
+      activities?: { total?: number; pending?: number; approved?: number; approvedToday?: number };
       pendingRedemptions?: number;
       points?: { totalDistributed?: number; netCirculating?: number };
       topModality?: { name?: string; approvedCount?: number } | null;
@@ -85,6 +92,12 @@ type DashboardBody = {
       };
       usersByDepartment?: Array<{ count: number }>;
       redemptionsByStatus?: Array<{ status: string; count: number }>;
+      topActivities?: Array<{ activityTypeId: string; name: string; approvedCount: number }>;
+      topUsersEvolution?: {
+        day?: Array<{ userId: string; name: string; series?: Array<{ date: string; label: string; points: number }> }>;
+        month?: Array<{ userId: string; name: string; series?: Array<{ date: string; label: string; points: number }> }>;
+        year?: Array<{ userId: string; name: string; series?: Array<{ date: string; label: string; points: number }> }>;
+      };
     };
   };
 };
@@ -191,6 +204,7 @@ async function main() {
   const realApproved = await prisma.userActivity.count({ where: { status: 'APPROVED' } });
   assert(`indicators.activities.pending bate com o banco (${realPending})`, dashboard?.indicators?.activities?.pending === realPending);
   assert(`indicators.activities.approved bate com o banco (${realApproved})`, dashboard?.indicators?.activities?.approved === realApproved);
+  assert('indicators.activities.approvedToday reflete as 2 aprovações de hoje (>= 2)', (dashboard?.indicators?.activities?.approvedToday ?? 0) >= 2);
 
   // ── PASSO 6: Resgates pendentes ────────────────────────────────────────────────
   const realPendingRedemptions = await prisma.userReward.count({ where: { status: 'REQUESTED' } });
@@ -256,6 +270,101 @@ async function main() {
   const redemptionsByStatus = dashboard?.charts?.redemptionsByStatus ?? [];
   const requestedEntry = redemptionsByStatus.find((r) => r.status === 'REQUESTED');
   assert('redemptionsByStatus reflete o resgate REQUESTED criado', (requestedEntry?.count ?? 0) >= 1);
+
+  // ── PASSO 16: Top 5 atividades mais realizadas ────────────────────────────────
+  console.log('\n1️⃣1️⃣ Testando charts.topActivities (top 5 atividades)...');
+  const topActivities = dashboard?.charts?.topActivities ?? [];
+  assert('topActivities tem no máximo 5 modalidades', topActivities.length <= 5);
+  const topActivitiesSorted = topActivities.every((a, i) => i === 0 || topActivities[i - 1].approvedCount >= a.approvedCount);
+  assert('topActivities está ordenado por quantidade (desc)', topActivitiesSorted);
+  assert('topActivities aponta Corrida em 1º (mesma modalidade do topModality)', topActivities[0]?.name?.includes('Corrida') ?? false);
+
+  // ── PASSO 17: Evolução dos usuários (top 5, multi-linha) ──────────────────────
+  console.log('\n1️⃣2️⃣ Testando charts.topUsersEvolution (evolução dos usuários)...');
+  const topUsersEvolution = dashboard?.charts?.topUsersEvolution;
+  const tueDay = topUsersEvolution?.day ?? [];
+  const tueMonth = topUsersEvolution?.month ?? [];
+  const tueYear = topUsersEvolution?.year ?? [];
+  assert('topUsersEvolution.day tem no máximo 5 usuários', tueDay.length <= 5 && tueDay.length > 0);
+  assert('topUsersEvolution.month tem no máximo 5 usuários', tueMonth.length <= 5 && tueMonth.length > 0);
+  assert('topUsersEvolution.year tem no máximo 5 usuários', tueYear.length <= 5 && tueYear.length > 0);
+  assert('Série "day" de cada usuário tem 30 pontos (mesmo tamanho do pointsHistory.day)', tueDay.every((u) => (u.series?.length ?? 0) === 30));
+  assert('Série "month" de cada usuário tem 12 pontos', tueMonth.every((u) => (u.series?.length ?? 0) === 12));
+  assert('Série "year" de cada usuário tem 3 pontos', tueYear.every((u) => (u.series?.length ?? 0) === 3));
+  const lastDayPointsByUser = new Map(tueDay.map((u) => [u.userId, u.series?.[u.series.length - 1]?.points ?? -1]));
+  const realUserTotals = await prisma.user.findMany({ where: { id: { in: tueDay.map((u) => u.userId) } }, select: { id: true, totalPoints: true } });
+  const evolutionMatchesRealTotal = realUserTotals.every((u) => lastDayPointsByUser.get(u.id) === u.totalPoints);
+  assert('Último ponto da série "day" bate com o total atual de pontos do usuário', evolutionMatchesRealTotal);
+
+  // ── PASSO 18: Filtro por userId ────────────────────────────────────────────────
+  console.log('\n1️⃣3️⃣ Testando filtro por userId...');
+  const participantId = (participantLogin.data as { data?: { user?: { id?: string } } })?.data?.user?.id ?? '';
+  const byUserRes = await reqJson('GET', `/admin/dashboard?userId=${participantId}`, undefined, masterToken);
+  assert('Painel com filtro userId retorna 200', byUserRes.status === 200);
+  const byUserDashboard = (byUserRes.data as DashboardBody)?.data;
+  const byUserTue = byUserDashboard?.charts?.topUsersEvolution?.day ?? [];
+  assert('Filtro por userId restringe topUsersEvolution.day a 1 usuário', byUserTue.length === 1 && byUserTue[0]?.userId === participantId);
+  const byUserPointsTotal = (byUserDashboard?.charts?.pointsHistory?.day ?? []).reduce((sum, d) => sum + d.points, 0);
+  const realParticipantPositiveSum =
+    (await prisma.pointsTransaction.aggregate({ where: { userId: participantId, points: { gt: 0 } }, _sum: { points: true } }))._sum.points ?? 0;
+  assert(
+    `Filtro por userId restringe pointsHistory.day à soma de pontos do participante (${realParticipantPositiveSum})`,
+    byUserPointsTotal === realParticipantPositiveSum,
+  );
+
+  // ── PASSO 19: Filtro por dateFrom/dateTo ───────────────────────────────────────
+  console.log('\n1️⃣4️⃣ Testando filtro por data (dateFrom/dateTo)...');
+  const fiveDaysAgo = new Date(now.getTime() - 4 * 86400000);
+  const byDateRes = await reqJson(
+    'GET',
+    `/admin/dashboard?dateFrom=${fiveDaysAgo.toISOString()}&dateTo=${now.toISOString()}`,
+    undefined,
+    masterToken,
+  );
+  assert('Painel com filtro de data retorna 200', byDateRes.status === 200);
+  const byDateDashboard = (byDateRes.data as DashboardBody)?.data;
+  assert('Filtro de 5 dias gera pointsHistory.day com 5 pontos', (byDateDashboard?.charts?.pointsHistory?.day ?? []).length === 5);
+  assert('Filtro de 5 dias gera pointsHistory.month com 1 ponto (mesmo mês)', (byDateDashboard?.charts?.pointsHistory?.month ?? []).length >= 1);
+
+  // ── PASSO 20: Filtro por cycleId ────────────────────────────────────────────────
+  console.log('\n1️⃣5️⃣ Testando filtro por cycleId...');
+  const cycleStart = new Date(now.getTime() - 2 * 86400000);
+  const cycleEnd = new Date(now.getTime() + 5 * 86400000);
+  const cycleRes = await reqJson('POST', '/cycles', { name: 'Ciclo de Teste do Painel', startDate: cycleStart.toISOString(), endDate: cycleEnd.toISOString(), prizes: [] }, masterToken);
+  type CycleBody = { data?: { id?: string } };
+  const cycleId = (cycleRes.data as CycleBody)?.data?.id ?? '';
+  const byCycleRes = await reqJson('GET', `/admin/dashboard?cycleId=${cycleId}`, undefined, masterToken);
+  assert('Painel com filtro cycleId retorna 200', byCycleRes.status === 200);
+  const byCycleDashboard = (byCycleRes.data as DashboardBody)?.data;
+  const expectedCycleDays = Math.floor((cycleEnd.getTime() - cycleStart.getTime()) / 86400000) + 1;
+  assert(
+    `Filtro por ciclo cobre exatamente o período do ciclo (${expectedCycleDays} dias)`,
+    (byCycleDashboard?.charts?.pointsHistory?.day ?? []).length === expectedCycleDays,
+  );
+
+  const invalidCycleRes = await reqJson('GET', '/admin/dashboard?cycleId=00000000-0000-0000-0000-000000000000', undefined, masterToken);
+  assert('Filtro com cycleId inexistente retorna 404', invalidCycleRes.status === 404);
+
+  // Cancela o ciclo criado só pra este teste — do contrário ele fica ACTIVE
+  // no banco e passa a colidir (sobreposição de datas) com os ciclos que
+  // outras suítes (ex.: test:cycles) criam depois, numa mesma execução
+  // sequencial sem reset de banco entre arquivos.
+  await reqJson('POST', `/cycles/${cycleId}/cancel`, undefined, masterToken);
+
+  // ── PASSO 21: Filtros não afetam os indicadores do topo ────────────────────────
+  console.log('\n1️⃣6️⃣ Testando que filtros não afetam os indicadores (cards "ao vivo")...');
+  assert(
+    'indicators.totalUsers é igual com e sem filtro (cards não são filtrados)',
+    byUserDashboard?.indicators?.totalUsers === dashboard?.indicators?.totalUsers,
+  );
+  assert(
+    'indicators.points.netCirculating é igual com e sem filtro',
+    byUserDashboard?.indicators?.points?.netCirculating === dashboard?.indicators?.points?.netCirculating,
+  );
+  assert(
+    'indicators.activities.approvedToday é igual com e sem filtro',
+    byUserDashboard?.indicators?.activities?.approvedToday === dashboard?.indicators?.activities?.approvedToday,
+  );
 
   server.close();
 

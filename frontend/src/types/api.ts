@@ -153,8 +153,9 @@ export interface DashboardData {
     progress: { current: number; target: number | null };
   };
   recentActivities: UserActivity[];
+  filtersApplied: { dateFrom: string | null; dateTo: string | null };
   charts: {
-    pointsEvolution: Array<{ date: string; cumulativePoints: number }>;
+    pointsHistory: PointsHistorySeries;
     activitiesByModality: Array<{ activityTypeName: string; icon: string; count: number; totalPoints: number }>;
     rankingEvolution: null;
     rankingEvolutionNote?: string;
@@ -205,11 +206,32 @@ export interface RoleCatalogItem {
   description: string | null;
 }
 
+export interface PointsHistorySeries {
+  day: Array<{ date: string; label: string; points: number }>;
+  month: Array<{ date: string; label: string; points: number }>;
+  year: Array<{ date: string; label: string; points: number }>;
+}
+
+export interface UserEvolutionSeries {
+  userId: string;
+  name: string;
+  series: Array<{ date: string; label: string; points: number }>;
+}
+
+export interface AdminDashboardFiltersDTO {
+  dateFrom?: string;
+  dateTo?: string;
+  cycleId?: string;
+  userId?: string;
+  departmentId?: string;
+  activityTypeId?: string;
+}
+
 export interface AdminDashboardData {
   indicators: {
     totalUsers: number;
     activeUsers: number;
-    activities: { total: number; pending: number; approved: number; rejected: number; cancelled: number };
+    activities: { total: number; pending: number; approved: number; rejected: number; cancelled: number; approvedToday: number };
     pendingRedemptions: number;
     points: { totalDistributed: number; netCirculating: number };
     topModality: { activityTypeId: string; name: string; icon: string; approvedCount: number } | null;
@@ -220,14 +242,13 @@ export interface AdminDashboardData {
   // Baseado em RankingService.getGeneralLeaderboard() — traz id/name/points/avatar
   // (sem departamento, que só existe no /ranking completo, Fase 10).
   topRanking: Array<{ position: number; id: string; name: string; points: number; avatarType: string; avatarUrl: string | null }>;
+  filtersApplied: { dateFrom: string | null; dateTo: string | null; userId: string | null; departmentId: string | null; activityTypeId: string | null };
   charts: {
     activitiesOverTime: Array<{ date: string; approvedCount: number }>;
-    pointsHistory: {
-      day: Array<{ date: string; label: string; points: number }>;
-      month: Array<{ date: string; label: string; points: number }>;
-      year: Array<{ date: string; label: string; points: number }>;
-    };
+    pointsHistory: PointsHistorySeries;
     activitiesByModality: Array<{ activityTypeId: string; name: string; icon: string; approvedCount: number }>;
+    topActivities: Array<{ activityTypeId: string; name: string; icon: string; approvedCount: number }>;
+    topUsersEvolution: { day: UserEvolutionSeries[]; month: UserEvolutionSeries[]; year: UserEvolutionSeries[] };
     usersByDepartment: Array<{ departmentId: string; departmentName: string; count: number }>;
     redemptionsByStatus: Array<{ status: string; count: number }>;
   };

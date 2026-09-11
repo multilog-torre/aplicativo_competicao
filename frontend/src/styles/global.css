@@ -361,6 +361,18 @@ textarea {
   color: var(--color-warning);
 }
 
+/* Aviso de que o painel está filtrado por um usuário específico (clique no
+   nome no ranking ou na legenda de um gráfico) — cor de destaque (accent),
+   diferente do aviso motivacional, com um botão pra remover o filtro. */
+.banner--filter-active {
+  background: var(--color-neutral-bg);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 /* ============================================================
    Stat cards (Dashboard)
    ============================================================ */
@@ -553,9 +565,16 @@ textarea {
   stroke-dasharray: 3 3;
 }
 
+/* Números do eixo um pouco maiores que o padrão anterior (9px), a pedido
+   do usuário — ainda discretos (cor muted), mas legíveis sem precisar
+   ampliar o gráfico. */
 .chart-axis-label {
   fill: var(--color-text-muted);
-  font-size: 9px;
+  font-size: 11px;
+}
+
+.chart-axis-label--large {
+  font-size: 14px;
 }
 
 .chart-tooltip-box {
@@ -566,13 +585,130 @@ textarea {
 
 .chart-tooltip-title {
   fill: var(--color-text-muted);
-  font-size: 9px;
+  font-size: 11px;
+}
+
+.chart-tooltip-title--large {
+  font-size: 14px;
 }
 
 .chart-tooltip-value {
   fill: var(--color-text);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
+}
+
+.chart-tooltip-value--large {
+  font-size: 19px;
+}
+
+/* Linhas do tooltip do MultiLineChart (uma por usuário/série). */
+.chart-tooltip-legend {
+  fill: var(--color-text);
+  font-size: 11px;
+}
+
+.chart-tooltip-legend--value {
+  font-weight: 600;
+}
+
+.chart-tooltip-legend--large {
+  font-size: 14px;
+}
+
+.chart-empty-message {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* Cabeçalho do card de gráfico: título + controles (abas de granularidade,
+   filtros) + botão de zoom, tudo na mesma linha. */
+.chart-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.chart-card__header .card__title {
+  margin-bottom: 0;
+}
+
+.chart-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chart-zoom-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.chart-zoom-btn:hover {
+  background: var(--color-neutral-bg);
+}
+
+/* Modal de zoom — bem mais largo que o modal padrão (formulários, 480px),
+   pra dar espaço real ao gráfico ampliado. */
+.modal.modal--wide {
+  max-width: 960px;
+}
+
+.chart-zoom-modal-body {
+  padding-top: 4px;
+}
+
+.multi-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.multi-line-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: default;
+}
+
+.multi-line-legend__item--clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.multi-line-legend__item--clickable:hover {
+  background: var(--color-neutral-bg);
+  text-decoration: underline;
+}
+
+.multi-line-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 .bar-chart {
@@ -583,13 +719,13 @@ textarea {
 
 .bar-chart__row {
   display: grid;
-  grid-template-columns: 100px 1fr 40px;
+  grid-template-columns: 100px 1fr 44px;
   align-items: center;
   gap: 10px;
 }
 
 .bar-chart__label {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -609,7 +745,8 @@ textarea {
 }
 
 .bar-chart__value {
-  font-size: 0.82rem;
+  font-size: 0.92rem;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -637,6 +774,18 @@ textarea {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-contrast);
+}
+
+/* Variante compacta usada dentro do cabeçalho de um ChartCard (Dia/Mês/Ano)
+   — não precisa da margem inferior de um bloco de abas de página inteira. */
+.tabs--compact {
+  margin-bottom: 0;
+  gap: 4px;
+}
+
+.tabs--compact .tabs__item {
+  padding: 5px 12px;
+  font-size: 0.82rem;
 }
 
 .ranking-list {
@@ -680,6 +829,24 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* O nome virou um <button> (clicável — filtra o painel por essa pessoa),
+   então reseta a aparência nativa de botão pra continuar parecendo texto,
+   só com sublinhado no hover como affordance de link. */
+.ranking-row__name--clickable {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ranking-row__name--clickable:hover {
+  text-decoration: underline;
+  color: var(--color-accent);
 }
 
 .ranking-row__department {

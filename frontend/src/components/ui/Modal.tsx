@@ -5,9 +5,13 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Classe extra pro painel do modal — ex.: "modal--wide" pra telas de
+   * zoom de gráfico, que precisam de muito mais espaço que o formulário
+   * padrão (480px). */
+  className?: string;
 }
 
-export function Modal({ title, onClose, children, footer }: ModalProps) {
+export function Modal({ title, onClose, children, footer, className }: ModalProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -22,7 +26,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${className ?? ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
           <h2>{title}</h2>
           <button type="button" className="modal__close" aria-label="Fechar" onClick={onClose}>

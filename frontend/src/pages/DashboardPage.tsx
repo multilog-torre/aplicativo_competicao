@@ -1,28 +1,128 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { DashboardData } from '../types/api';
+import { AwardCycle, DashboardData } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { StatusBadge } from '../components/ui/Badge';
-import { LineChart, BarChart } from '../components/ui/Charts';
+import { ChartCard, GranularityTabs, LineChart, BarChart, PointsHistoryGranularity } from '../components/ui/Charts';
+
+interface DraftFilters {
+  dateFrom: string;
+  dateTo: string;
+  cycleId: string;
+}
+
+const EMPTY_FILTERS: DraftFilters = { dateFrom: '', dateTo: '', cycleId: '' };
+
+function hasAnyFilter(f: DraftFilters): boolean {
+  return f.dateFrom !== '' || f.dateTo !== '' || f.cycleId !== '';
+}
+
+/** Mesma convenção usada no Painel Geral: datas interpretadas como meia-
+ * noite/fim do dia LOCAL (não UTC), pra não reintroduzir o deslocamento de
+ * fuso já corrigido antes pras datas de atividade. */
+function buildFilterQuery(f: DraftFilters): string {
+  const params = new URLSearchParams();
+  if (f.cycleId) {
+    params.set('cycleId', f.cycleId);
+  } else {
+    if (f.dateFrom) params.set('dateFrom', new Date(`${f.dateFrom}T00:00:00`).toISOString());
+    if (f.dateTo) params.set('dateTo', new Date(`${f.dateTo}T23:59:59.999`).toISOString());
+  }
+  const qs = params.toString();
+  return qs ? `&${qs}` : '';
+}
+
+/** "Evolução de pontos" pessoal, com dia/mês/ano — o gráfico é o mesmo
+ * componente do Painel Geral, só que alimentado com o histórico de um
+ * único usuário (a própria pessoa). */
+function PersonalPointsHistoryChart({ pointsHistory }: { pointsHistory: DashboardData['charts']['pointsHistory'] }) {
+  const [granularity, setGranularity] = useState<PointsHistoryGranularity>('day');
+  const series = pointsHistory[granularity];
+
+  return (
+    <ChartCard title="Evolução de pontos" actions={<GranularityTabs value={granularity} onChange={setGranularity} />}>
+      {(size) => <LineChart data={series.map((p) => ({ label: p.label, value: p.points, tooltipLabel: p.label }))} size={size} />}
+    </ChartCard>
+  );
+}
+
+function FilterBar({
+  draft,
+  onChange,
+  onApply,
+  onClear,
+  cycles,
+}: {
+  draft: DraftFilters;
+  onChange: (next: DraftFilters) => void;
+  onApply: () => void;
+  onClear: () => void;
+  cycles: AwardCycle[];
+}) {
+  return (
+    <section className="card">
+      <h2 className="card__title">Filtros</h2>
+      <div className="form__row">
+        <label className="field">
+          <span className="field__label">Data inicial</span>
+          <input type="date" value={draft.dateFrom} disabled={!!draft.cycleId} onChange={(e) => onChange({ ...draft, dateFrom: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field__label">Data final</span>
+          <input type="date" value={draft.dateTo} disabled={!!draft.cycleId} onChange={(e) => onChange({ ...draft, dateTo: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field__label">Ciclo de premiação</span>
+          <select value={draft.cycleId} onChange={(e) => onChange({ ...draft, cycleId: e.target.value, dateFrom: '', dateTo: '' })}>
+            <option value="">Todos os períodos</option>
+            {cycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="form__actions">
+        <button type="button" className="btn btn--secondary" onClick={onClear} disabled={!hasAnyFilter(draft)}>
+          Limpar filtros
+        </button>
+        <button type="button" className="btn btn--primary" onClick={onApply}>
+          Aplicar filtros
+        </button>
+      </div>
+    </section>
+  );
+}
 
 export function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cycles, setCycles] = useState<AwardCycle[]>([]);
+
+  const [draftFilters, setDraftFilters] = useState<DraftFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<DraftFilters>(EMPTY_FILTERS);
+
+  useEffect(() => {
+    api.get<AwardCycle[]>('/cycles?limit=100').then(({ data }) => setCycles(data)).catch(() => undefined);
+  }, []);
+
+  const query = useMemo(() => buildFilterQuery(appliedFilters), [appliedFilters]);
 
   function load() {
     setLoading(true);
     setError(null);
     api
-      .get<DashboardData>('/dashboard')
+      .get<DashboardData>(`/dashboard?activityLimit=5${query}`)
       .then(({ data }) => setDashboard(data))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o dashboard.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [query]);
 
-  if (loading) return <LoadingState label="Carregando seu dashboard…" />;
+  if (loading && !dashboard) return <LoadingState label="Carregando seu dashboard…" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!dashboard) return null;
 
@@ -64,28 +164,28 @@ export function DashboardPage() {
         </div>
       </div>
 
+      <FilterBar
+        draft={draftFilters}
+        onChange={setDraftFilters}
+        onApply={() => setAppliedFilters(draftFilters)}
+        onClear={() => {
+          setDraftFilters(EMPTY_FILTERS);
+          setAppliedFilters(EMPTY_FILTERS);
+        }}
+        cycles={cycles}
+      />
+
       <div className="grid-2">
-        <section className="card">
-          <h2 className="card__title">Evolução de pontos (30 dias)</h2>
-          <LineChart
-            data={charts.pointsEvolution.map((p) => ({
-              // "date" vem como "AAAA-MM-DD" (ver dashboard.service.ts) — recorta o
-              // texto direto em vez de usar `new Date(string)`, que interpretaria
-              // como UTC e mostraria o dia errado dependendo do fuso do navegador.
-              label: `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}`,
-              value: p.cumulativePoints,
-              tooltipLabel: `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}/${p.date.slice(0, 4)}`,
-            }))}
-          />
-        </section>
-        <section className="card">
-          <h2 className="card__title">Atividades por modalidade</h2>
-          {charts.activitiesByModality.length === 0 ? (
-            <EmptyState icon="🏃" title="Nenhuma atividade aprovada ainda" />
-          ) : (
-            <BarChart data={charts.activitiesByModality.map((m) => ({ label: m.activityTypeName, value: m.count }))} />
-          )}
-        </section>
+        <PersonalPointsHistoryChart pointsHistory={charts.pointsHistory} />
+        <ChartCard title="Atividades por modalidade">
+          {() =>
+            charts.activitiesByModality.length === 0 ? (
+              <EmptyState icon="🏃" title="Nenhuma atividade aprovada ainda" />
+            ) : (
+              <BarChart data={charts.activitiesByModality.map((m) => ({ label: m.activityTypeName, value: m.count }))} />
+            )
+          }
+        </ChartCard>
       </div>
 
       <section className="card">
