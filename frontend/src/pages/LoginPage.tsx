@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { Logo } from '../components/ui/Logo';
+import multilogWordmark from '../assets/multilog-wordmark.png';
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -28,6 +29,7 @@ export function LoginPage() {
 
   return (
     <div className="auth-page">
+      <img src={multilogWordmark} alt="Multilog" className="auth-page__wordmark" />
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1 className="auth-card__title">
           <Logo iconSize={28} />

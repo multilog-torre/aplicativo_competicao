@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { Department, Gender, GENDER_LABELS } from '../types/api';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/ui/Logo';
+import multilogWordmark from '../assets/multilog-wordmark.png';
 
 const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 
@@ -61,6 +62,7 @@ export function RegisterPage() {
   if (result) {
     return (
       <div className="auth-page">
+        <img src={multilogWordmark} alt="Multilog" className="auth-page__wordmark" />
         <div className="auth-card">
           <h1 className="auth-card__title">
             <Logo iconSize={28} />
@@ -80,6 +82,7 @@ export function RegisterPage() {
 
   return (
     <div className="auth-page">
+      <img src={multilogWordmark} alt="Multilog" className="auth-page__wordmark" />
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1 className="auth-card__title">
           <Logo iconSize={28} />
