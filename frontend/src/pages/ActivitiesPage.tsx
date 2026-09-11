@@ -229,10 +229,10 @@ const MONTH_LABELS = [
  */
 function ActivityCalendarSection() {
   const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [byDay, setByDay] = useState<Map<number, UserActivity>>(new Map());
+  const [byDay, setByDay] = useState<Map<number, UserActivity[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<UserActivity | null>(null);
+  const [selectedDay, setSelectedDay] = useState<UserActivity[] | null>(null);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -245,13 +245,17 @@ function ActivityCalendarSection() {
     api
       .get<UserActivity[]>(`/activities?dateFrom=${from.toISOString()}&dateTo=${to.toISOString()}&limit=100`)
       .then(({ data }) => {
-        const map = new Map<number, UserActivity>();
+        // Agrupa TODAS as atividades com evidência de cada dia — antes só a
+        // primeira era guardada e as demais do mesmo dia eram descartadas.
+        const map = new Map<number, UserActivity[]>();
         [...data]
           .sort((a, b) => new Date(a.activityDate).getTime() - new Date(b.activityDate).getTime())
           .forEach((act) => {
             if (!act.evidences || act.evidences.length === 0) return;
             const day = new Date(act.activityDate).getDate();
-            if (!map.has(day)) map.set(day, act);
+            const existing = map.get(day);
+            if (existing) existing.push(act);
+            else map.set(day, [act]);
           });
         setByDay(map);
       })
@@ -302,7 +306,7 @@ function ActivityCalendarSection() {
               day === null ? (
                 <div key={`empty-${i}`} />
               ) : (
-                <ActivityCalendarDay key={day} day={day} activity={byDay.get(day)} onSelect={setSelected} />
+                <ActivityCalendarDay key={day} day={day} activities={byDay.get(day)} onSelect={setSelectedDay} />
               ),
             )}
           </div>
@@ -314,29 +318,29 @@ function ActivityCalendarSection() {
         </>
       )}
 
-      {selected && <ActivityDetailModal activity={selected} onClose={() => setSelected(null)} />}
+      {selectedDay && <ActivityDayModal activities={selectedDay} onClose={() => setSelectedDay(null)} />}
     </section>
   );
 }
 
 function ActivityCalendarDay({
   day,
-  activity,
+  activities,
   onSelect,
 }: {
   day: number;
-  activity: UserActivity | undefined;
-  onSelect: (activity: UserActivity) => void;
+  activities: UserActivity[] | undefined;
+  onSelect: (activities: UserActivity[]) => void;
 }) {
-  const evidence = activity?.evidences?.[0];
-  const isImage = !!evidence && evidence.fileType.startsWith('image/');
+  const firstEvidence = activities?.[0]?.evidences?.[0];
+  const isImage = !!firstEvidence && firstEvidence.fileType.startsWith('image/');
   // evidence.downloadUrl já vem com o prefixo "/api/v1" embutido (activity.service.ts),
   // enquanto API_URL/useAuthedImage já incluem esse mesmo prefixo — removê-lo aqui
   // evita duplicar "/api/v1/api/v1/..." na requisição (mesmo padrão de AdminApprovalsPage).
-  const relativePath = evidence?.downloadUrl.replace(/^\/api\/v1/, '');
+  const relativePath = firstEvidence?.downloadUrl.replace(/^\/api\/v1/, '');
   const { url } = useAuthedImage(isImage ? relativePath : null);
 
-  if (!activity || !evidence) {
+  if (!activities || activities.length === 0 || !firstEvidence) {
     return (
       <div className="activity-calendar__cell">
         <span className="activity-calendar__day-number">{day}</span>
@@ -344,12 +348,14 @@ function ActivityCalendarDay({
     );
   }
 
+  const extraCount = activities.length - 1;
+
   return (
     <button
       type="button"
       className="activity-calendar__cell activity-calendar__cell--photo"
-      onClick={() => onSelect(activity)}
-      title={activity.activityType?.name ?? 'Ver registro'}
+      onClick={() => onSelect(activities)}
+      title={activities.map((a) => a.activityType?.name).filter(Boolean).join(', ')}
     >
       {isImage && url ? (
         <img src={url} alt="" className="activity-calendar__photo" />
@@ -358,20 +364,43 @@ function ActivityCalendarDay({
           {isImage ? '' : '📄'}
         </span>
       )}
+      {extraCount > 0 && <span className="activity-calendar__count-badge">+{extraCount}</span>}
     </button>
   );
 }
 
-function ActivityDetailModal({ activity, onClose }: { activity: UserActivity; onClose: () => void }) {
+/** Mostra TODAS as atividades com evidência do dia clicado — não só a primeira. */
+function ActivityDayModal({ activities, onClose }: { activities: UserActivity[]; onClose: () => void }) {
+  const dateLabel = new Date(activities[0].activityDate).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return (
+    <Modal title={`Registros de ${dateLabel}`} onClose={onClose}>
+      <div className="form">
+        {activities.map((activity, index) => (
+          <div key={activity.id}>
+            {index > 0 && <hr className="activity-day-modal__divider" />}
+            <ActivityDayEntry activity={activity} />
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+function ActivityDayEntry({ activity }: { activity: UserActivity }) {
   const evidence = activity.evidences?.[0];
   const isImage = !!evidence && evidence.fileType.startsWith('image/');
   const relativePath = evidence?.downloadUrl.replace(/^\/api\/v1/, '');
   const { url } = useAuthedImage(relativePath);
 
   return (
-    <Modal title={activity.activityType?.name ?? 'Registro'} onClose={onClose}>
-      <p className="steps-list__description" style={{ marginTop: 0 }}>
-        {new Date(activity.activityDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+    <div>
+      <p className="steps-list__title" style={{ margin: '0 0 6px' }}>
+        {activity.activityType?.name ?? 'Registro'}
       </p>
 
       {isImage && url && (
@@ -397,6 +426,6 @@ function ActivityDetailModal({ activity, onClose }: { activity: UserActivity; on
         · +{activity.calculatedPoints} pts · <StatusBadge status={activity.status} />
       </p>
       {activity.description && <p style={{ marginTop: 0 }}>{activity.description}</p>}
-    </Modal>
+    </div>
   );
 }
