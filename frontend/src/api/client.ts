@@ -92,8 +92,18 @@ export const api = {
   delete: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'DELETE', body }),
 };
 
+/**
+ * Monta a URL absoluta de um arquivo servido pelo backend, a partir de um
+ * caminho já ABSOLUTO retornado pela própria API (ex.: `icon: "/api/v1/
+ * achievements/:id/icon"`, mesmo padrão de `avatarUrl`) — nunca um caminho
+ * relativo aos métodos `api.*` (que já embutem o prefixo /api/v1 em
+ * API_URL). Por isso usa só a ORIGEM (protocolo+host+porta) do backend, não
+ * API_URL inteiro — do contrário o /api/v1 apareceria duplicado na URL
+ * final e o arquivo nunca seria encontrado (404, ícone quebrado no navegador).
+ */
 export function apiFileUrl(path: string): string {
-  return `${API_URL}${path}`;
+  const origin = API_URL.replace(/\/api\/v1\/?$/, '');
+  return `${origin}${path}`;
 }
 
 export { API_URL };

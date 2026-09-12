@@ -346,7 +346,9 @@ function AchievementFormModal({
     return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
   });
   const [pointsReward, setPointsReward] = useState(String(achievement?.pointsReward ?? 30));
-  const [icon, setIcon] = useState(achievement?.icon ?? 'trophy');
+  const [iconMode, setIconMode] = useState<'EMOJI' | 'UPLOAD'>(achievement?.iconType ?? 'EMOJI');
+  const [icon, setIcon] = useState(achievement?.iconType === 'EMOJI' ? achievement.icon : 'trophy');
+  const [iconFile, setIconFile] = useState<File | null>(null);
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE'>(achievement?.status ?? 'ACTIVE');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -367,6 +369,12 @@ function AchievementFormModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (iconMode === 'UPLOAD' && !isEditing && !iconFile) {
+      setError('Selecione uma imagem (PNG ou SVG) para o ícone, ou troque para "Emoji/identificador".');
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
@@ -377,16 +385,29 @@ function AchievementFormModal({
       ruleType,
       ruleValue: buildRuleValue(),
       pointsReward: Number(pointsReward),
-      icon: achievement?.iconType === 'UPLOAD' ? undefined : icon, // não sobrescreve um ícone-imagem já enviado
+      // O ícone-imagem é enviado à parte, pelo endpoint de upload (abaixo) —
+      // aqui só manda o emoji/identificador quando o modo é EMOJI, pra nunca
+      // sobrescrever uma imagem já enviada com o valor de texto antigo.
+      ...(iconMode === 'EMOJI' ? { icon, iconType: 'EMOJI' as const } : {}),
       status,
     };
 
     try {
+      let achievementId = achievement?.id;
       if (isEditing) {
-        await api.patch(`/achievements/${achievement!.id}`, payload);
+        await api.patch(`/achievements/${achievementId}`, payload);
       } else {
-        await api.post('/achievements', payload);
+        const { data: created } = await api.post<{ id: string }>('/achievements', payload);
+        achievementId = created.id;
       }
+
+      if (iconMode === 'UPLOAD' && iconFile && achievementId) {
+        const formData = new FormData();
+        formData.append('iconType', 'UPLOAD');
+        formData.append('file', iconFile);
+        await api.patch(`/achievements/${achievementId}/icon`, formData, true);
+      }
+
       onSaved();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Não foi possível salvar a conquista.';
@@ -448,15 +469,35 @@ function AchievementFormModal({
 
         <RuleValueFields ruleType={ruleType} ruleValue={ruleValue} onChange={setRuleValue} activityTypes={activityTypes} />
 
-        {achievement?.iconType !== 'UPLOAD' && (
-          <label className="field">
-            <span className="field__label">Ícone (emoji/identificador — ex.: 🔥 ou flame)</span>
-            <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)} />
-          </label>
-        )}
-        {achievement?.iconType === 'UPLOAD' && (
-          <p className="field__label">Esta conquista usa uma imagem enviada — troque pelo botão "Ícone" na listagem.</p>
-        )}
+        <div className="field">
+          <span className="field__label">Ícone</span>
+          {isEditing && (
+            <div className="achievement-icon-preview">
+              <AchievementIcon icon={achievement!.icon} iconType={achievement!.iconType} size={44} />
+              <span className="field__label">Ícone atual</span>
+            </div>
+          )}
+          <div className="form__row">
+            <label className="field field--checkbox">
+              <input type="radio" name="iconMode" checked={iconMode === 'EMOJI'} onChange={() => setIconMode('EMOJI')} />
+              <span>Emoji/identificador</span>
+            </label>
+            <label className="field field--checkbox">
+              <input type="radio" name="iconMode" checked={iconMode === 'UPLOAD'} onChange={() => setIconMode('UPLOAD')} />
+              <span>Upload de imagem</span>
+            </label>
+          </div>
+          {iconMode === 'EMOJI' ? (
+            <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="ex.: 🔥 ou flame" />
+          ) : (
+            <>
+              <input type="file" accept="image/png,image/svg+xml" onChange={(e) => setIconFile(e.target.files?.[0] ?? null)} />
+              {isEditing && achievement?.iconType === 'UPLOAD' && !iconFile && (
+                <p className="field__label">Deixe em branco para manter a imagem atual.</p>
+              )}
+            </>
+          )}
+        </div>
 
         <label className="field">
           <span className="field__label">Status</span>
