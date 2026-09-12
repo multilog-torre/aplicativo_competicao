@@ -1,4 +1,5 @@
 import { useAuthedImage } from '../../api/useAuthedImage';
+import { apiFileUrl } from '../../api/client';
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendente',
@@ -20,9 +21,12 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge--${tone}`}>{label}</span>;
 }
 
-// Mapeia o ícone dos avatares pré-definidos (backend) para um emoji exibível
-// sem depender de nenhuma biblioteca de ícones no frontend.
+// Mapeia identificadores de ícone (backend) para um emoji exibível sem
+// depender de nenhuma biblioteca de ícones no frontend — mesmo dicionário
+// reaproveitado pelos avatares pré-definidos, pelas modalidades e pelas
+// conquistas (Achievement.icon quando iconType='EMOJI').
 const PRESET_ICON_EMOJI: Record<string, string> = {
+  // Avatares pré-definidos (ProfileService.AVATAR_PRESETS)
   fox: '🦊',
   bird: '🐦',
   rocket: '🚀',
@@ -31,7 +35,44 @@ const PRESET_ICON_EMOJI: Record<string, string> = {
   'book-open': '📖',
   flower: '🌸',
   trophy: '🏆',
+  // Modalidades (ActivityType.icon) e conquistas geradas a partir delas
+  dumbbell: '🏋️',
+  run: '🏃',
+  'heart-pulse': '🧘',
+  // Conquistas nomeadas/transversais (Achievement.icon)
+  award: '🏅',
+  'shield-check': '🛡️',
+  flame: '🔥',
+  gem: '💎',
+  star: '⭐',
+  medal: '🥉',
+  crown: '👑',
+  compass: '🧭',
+  sparkles: '✨',
+  clock: '🕐',
+  cake: '🎂',
 };
+
+/** Emoji exibível pra um identificador de ícone — usado quando não há um
+ * mapeamento mais específico (ex.: componentes de conquista/modalidade). */
+export function emojiForIcon(icon: string): string {
+  return PRESET_ICON_EMOJI[icon] ?? '🏆';
+}
+
+/** Ícone de uma conquista — emoji/identificador (iconType='EMOJI') ou a
+ * imagem enviada pelo admin (iconType='UPLOAD'). O catálogo de conquistas é
+ * público, então a imagem é servida sem autenticação (não precisa do
+ * useAuthedImage usado pelo avatar). */
+export function AchievementIcon({ icon, iconType, size = 40 }: { icon: string; iconType: string; size?: number }) {
+  if (iconType === 'UPLOAD') {
+    return <img src={apiFileUrl(icon)} alt="" className="achievement-icon achievement-icon--photo" style={{ width: size, height: size }} />;
+  }
+  return (
+    <span className="achievement-icon" style={{ width: size, height: size, fontSize: size * 0.6, lineHeight: `${size}px` }} aria-hidden="true">
+      {emojiForIcon(icon)}
+    </span>
+  );
+}
 
 interface AvatarProps {
   name: string;

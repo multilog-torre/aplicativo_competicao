@@ -111,24 +111,37 @@ function computeMaxStreakDays(dates: Date[]): number {
 /** Mesmo padrão de User.avatarType/avatarUrl (ProfileService): quando o
  * ícone é uma imagem enviada, nunca expõe o storagePath cru pro cliente —
  * troca por uma URL do próprio backend que serve o arquivo sob demanda. */
-function toPublicShape<T extends { id: string; ruleValue: string; icon: string; iconType: string }>(achievement: T) {
+function toPublicShape<T extends { id: string; ruleValue: string; icon: string; iconType: string; _count?: { userAchievements: number } }>(
+  achievement: T,
+) {
+  const { _count, ...rest } = achievement;
   return {
-    ...achievement,
+    ...rest,
     ruleValue: tryParseJson(achievement.ruleValue),
     icon: achievement.iconType === 'UPLOAD' ? `/api/v1/achievements/${achievement.id}/icon` : achievement.icon,
+    ...(_count ? { unlockedCount: _count.userAchievements } : {}),
   };
 }
 
 export class AchievementService {
   // ─── CRUD (configurável pelo administrador) ──────────────────────────────────
 
+  /** Catálogo geral — inclui `unlockedCount` (quantos usuários já a
+   * conquistaram) em toda listagem, útil tanto pro admin quanto como prova
+   * social pública numa futura página de catálogo. */
   public static async list() {
-    const achievements = await prisma.achievement.findMany({ orderBy: { pointsReward: 'asc' } });
+    const achievements = await prisma.achievement.findMany({
+      orderBy: { pointsReward: 'asc' },
+      include: { _count: { select: { userAchievements: true } } },
+    });
     return achievements.map(toPublicShape);
   }
 
   public static async getById(id: string) {
-    const achievement = await prisma.achievement.findUnique({ where: { id } });
+    const achievement = await prisma.achievement.findUnique({
+      where: { id },
+      include: { _count: { select: { userAchievements: true } } },
+    });
     if (!achievement) throw new NotFoundError(`Conquista com ID '${id}' não foi encontrada.`);
     return toPublicShape(achievement);
   }

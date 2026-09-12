@@ -548,6 +548,44 @@ textarea {
   background: var(--color-neutral-bg);
 }
 
+.achievement-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-bg);
+}
+
+.achievement-icon--photo {
+  object-fit: cover;
+}
+
+.achievement-icon-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.achievement-audit-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-neutral-bg);
+  border-radius: var(--radius-sm);
+}
+
+.achievement-audit-history__list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* ============================================================
    Gráficos (SVG puro)
    ============================================================ */

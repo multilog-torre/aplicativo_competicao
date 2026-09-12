@@ -17,6 +17,7 @@ import { AdminEventsPage } from './pages/AdminEventsPage';
 import { RulesPage } from './pages/RulesPage';
 import { AdminApprovalsPage } from './pages/AdminApprovalsPage';
 import { AdminModalitiesPage } from './pages/AdminModalitiesPage';
+import { AdminAchievementsPage } from './pages/AdminAchievementsPage';
 import { AdminLevelsPage } from './pages/AdminLevelsPage';
 import { AdminPointsPage } from './pages/AdminPointsPage';
 import { AdminCyclesPage } from './pages/AdminCyclesPage';
@@ -52,6 +53,7 @@ export function App() {
                     <Route path="/admin/ciclos" element={<AdminCyclesPage />} />
                     <Route path="/admin/departamentos" element={<AdminDepartmentsPage />} />
                     <Route path="/admin/eventos" element={<AdminEventsPage />} />
+                    <Route path="/admin/conquistas" element={<AdminAchievementsPage />} />
                   </Route>
 
                   <Route element={<MasterRoute />}>

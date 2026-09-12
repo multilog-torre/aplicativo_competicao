@@ -121,6 +121,13 @@ export function AppLayout() {
               >
                 <span aria-hidden="true">🎉</span> Eventos
               </NavLink>
+              <NavLink
+                to="/admin/conquistas"
+                className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span aria-hidden="true">🏆</span> Conquistas
+              </NavLink>
               {isAdminMaster && (
                 <NavLink
                   to="/admin/usuarios"

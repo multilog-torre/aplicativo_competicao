@@ -36,6 +36,40 @@ export const GENDER_LABELS: Record<Gender, string> = {
   UNDISCLOSED: 'Prefiro não informar',
 };
 
+export type AchievementLevel = 'BRONZE' | 'PRATA' | 'OURO';
+export type AchievementIconType = 'EMOJI' | 'UPLOAD';
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconType: AchievementIconType;
+  category: string;
+  level: AchievementLevel;
+  pointsReward: number;
+  ruleType: string;
+  ruleValue: Record<string, unknown>;
+  activityTypeId: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+  unlockedCount?: number;
+}
+
+export interface AchievementProgress {
+  current: number;
+  target: number;
+  percent: number;
+  lowerIsBetter: boolean;
+}
+
+export interface AchievementWithProgress extends Achievement {
+  unlocked: boolean;
+  unlockedAt: string | null;
+  progress: AchievementProgress | null;
+}
+
 export interface ProfileData {
   id: string;
   name: string;
