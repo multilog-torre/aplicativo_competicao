@@ -16,6 +16,13 @@
  * 12. Admin pode consultar conquistas de qualquer usuário
  * 13. Exclusão de conquista já concedida é convertida em desativação (nunca apaga histórico)
  * 14. Conquista inexistente retorna 404
+ * 15. category/level são persistidos e activityTypeId é preenchido automaticamente
+ *     a partir do ruleValue pra ruleTypes ligados a modalidade
+ * 16. Validação de ruleValue dos 4 novos tipos de critério (422 quando incompatível)
+ * 17. Desbloqueio por CUMULATIVE_QUANTITY (quantidade acumulada de uma modalidade)
+ * 18. Desbloqueio por DISTINCT_MODALITIES (atividade aprovada em N modalidades diferentes)
+ * 19. Desbloqueio por RANKING_POSITION (posição atual no ranking geral)
+ * 20. Desbloqueio por ACCOUNT_TENURE_DAYS (dias desde a criação da conta)
  */
 
 import http from 'http';
@@ -37,6 +44,16 @@ async function reqJson(
   const data = await res.json().catch(() => ({}));
   console.log(`[HTTP] ${method.padEnd(6)} ${path} -> ${res.status}`);
   return { status: res.status, data };
+}
+
+async function uploadEvidence(activityId: string, token: string): Promise<void> {
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xe0])], { type: 'image/jpeg' }), 'comprovante.jpg');
+  await fetch(`${BASE_URL}/activities/${activityId}/evidence`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
 }
 
 let passed = 0;
@@ -75,14 +92,46 @@ async function main() {
   // ── PASSO 1: Catálogo público ─────────────────────────────────────────────────
   console.log('\n1️⃣ Testando catálogo público de conquistas...');
   const catalogRes = await reqJson('GET', '/achievements');
-  type AchievementItem = { id: string; name: string; ruleType: string; ruleValue: Record<string, unknown> };
+  type AchievementItem = {
+    id: string;
+    name: string;
+    ruleType: string;
+    ruleValue: Record<string, unknown>;
+    category?: string;
+    level?: string;
+    activityTypeId?: string | null;
+  };
   type CatalogBody = { data?: AchievementItem[] };
   assert('Catálogo é público (200 sem token)', catalogRes.status === 200);
   const catalog = (catalogRes.data as CatalogBody)?.data ?? [];
-  assert('Catálogo do seed presente (3 conquistas)', catalog.length === 3);
+  assert(`Catálogo do seed tem pelo menos 20 conquistas (obtido ${catalog.length})`, catalog.length >= 20);
   const primeiroPasso = catalog.find((a) => a.name === 'Primeiro Passo');
   const clubeDos1000 = catalog.find((a) => a.name === 'Clube dos 1.000');
   assert('ruleValue já vem desserializado (objeto)', typeof primeiroPasso?.ruleValue === 'object');
+
+  // Geração automática a partir das modalidades reais: 3 por modalidade (6
+  // modalidades no seed = 18) + as transversais + as 3 nomeadas.
+  const geradasPorModalidade = catalog.filter((a) => a.category && !['GERAL', 'CONSISTENCIA', 'RANKING_PONTUACAO', 'VARIEDADE', 'TEMPO_DE_CASA'].includes(a.category));
+  assert(
+    `Pelo menos 18 conquistas foram geradas a partir das modalidades reais (obtido ${geradasPorModalidade.length})`,
+    geradasPorModalidade.length >= 18,
+  );
+  const iniciante = catalog.find((a) => a.name === 'Iniciante em Corrida de Rua / Esteira');
+  assert('Conquista gerada por modalidade (bronze) usa CUMULATIVE_QUANTITY', iniciante?.ruleType === 'CUMULATIVE_QUANTITY');
+  assert('Conquista gerada por modalidade preenche o activityTypeId', !!iniciante?.activityTypeId);
+  const avancado = catalog.find((a) => a.name === 'Avançado em Corrida de Rua / Esteira');
+  const mestre = catalog.find((a) => a.name === 'Mestre em Corrida de Rua / Esteira');
+  assert(
+    'Metas escalam 1x/3x/8x entre bronze/prata/ouro da mesma modalidade',
+    (avancado?.ruleValue.targetQuantity as number) === 3 * (iniciante?.ruleValue.targetQuantity as number) &&
+      (mestre?.ruleValue.targetQuantity as number) === 8 * (iniciante?.ruleValue.targetQuantity as number),
+  );
+  const exploradorCompleto = catalog.find((a) => a.name === 'Explorador Completo');
+  const totalModalidadesAtivas = new Set(catalog.filter((a) => a.activityTypeId).map((a) => a.activityTypeId)).size;
+  assert(
+    'Explorador Completo exige atividade em TODAS as modalidades ativas no momento do seed',
+    exploradorCompleto?.ruleValue.count === totalModalidadesAtivas,
+  );
 
   // ── PASSO 2: Bloqueio de criação por participante ─────────────────────────────
   console.log('\n2️⃣ Testando bloqueio de criação por participante...');
@@ -141,7 +190,7 @@ async function main() {
   assert('Aprovação da 1ª atividade funciona (200)', approveRes.status === 200);
 
   const unlockedRes = await reqJson('GET', `/achievements/users/${participantId}`, undefined, participantToken);
-  type UnlockedItem = { achievement: { id: string; name: string } };
+  type UnlockedItem = { achievement: { id: string; name: string; pointsReward: number } };
   type UnlockedBody = { data?: UnlockedItem[] };
   const unlocked = (unlockedRes.data as UnlockedBody)?.data ?? [];
   assert(
@@ -154,10 +203,15 @@ async function main() {
   });
   assert('Ledger recebeu transação ACHIEVEMENT vinculada à conquista', !!achievementTx && achievementTx.points === 50);
 
+  // Com o catálogo agora tendo 30+ conquistas (incluindo "Centena", 100 pts),
+  // o saldo inicial do participante pode cruzar o limiar de mais de uma
+  // conquista na MESMA aprovação — soma dinamicamente tudo que foi
+  // desbloqueado até aqui em vez de assumir só "Primeiro Passo" (+50).
+  const totalRewardsSoFar = unlocked.reduce((sum, u) => sum + u.achievement.pointsReward, 0);
   const afterUser = await prisma.user.findUnique({ where: { id: participantId }, select: { totalPoints: true, levelId: true } });
-  const expectedTotal = (beforeUser?.totalPoints ?? 0) + (activity1?.calculatedPoints ?? 0) + 50; // atividade + conquista
+  const expectedTotal = (beforeUser?.totalPoints ?? 0) + (activity1?.calculatedPoints ?? 0) + totalRewardsSoFar;
   assert(
-    `Total inclui pontos da atividade + recompensa da conquista (esperado ${expectedTotal}, obtido ${afterUser?.totalPoints})`,
+    `Total inclui pontos da atividade + recompensas de conquista já desbloqueadas (esperado ${expectedTotal}, obtido ${afterUser?.totalPoints})`,
     afterUser?.totalPoints === expectedTotal,
   );
 
@@ -224,6 +278,164 @@ async function main() {
   console.log('\n1️⃣1️⃣ Testando conquista inexistente...');
   const notFoundRes = await reqJson('GET', '/achievements/00000000-0000-0000-0000-000000000000');
   assert('Conquista inexistente retorna 404', notFoundRes.status === 404);
+
+  const runningType = await prisma.activityType.findFirst({ where: { name: { contains: 'Corrida' } } });
+  if (!runningType) throw new Error('Modalidade de Corrida não encontrada no seed.');
+
+  // ── PASSO 15: category/level persistidos + activityTypeId auto-preenchido ────
+  console.log('\n1️⃣2️⃣ Testando category/level/activityTypeId da conquista...');
+  type FullAchievementBody = { data?: { id?: string; category?: string; level?: string; activityTypeId?: string | null } };
+  const withCategoryRes = await reqJson(
+    'POST',
+    '/achievements',
+    {
+      name: 'Corredor Teste',
+      description: 'Concluiu 1 corrida aprovada.',
+      category: 'TESTE',
+      level: 'PRATA',
+      ruleType: 'SPECIFIC_MODALITY',
+      ruleValue: { activityTypeId: runningType.id, count: 1 },
+      pointsReward: 10,
+    },
+    masterToken,
+  );
+  const withCategory = (withCategoryRes.data as FullAchievementBody)?.data;
+  assert('category informada é persistida', withCategory?.category === 'TESTE');
+  assert('level informado é persistido', withCategory?.level === 'PRATA');
+  assert(
+    'activityTypeId é preenchido automaticamente a partir do ruleValue (SPECIFIC_MODALITY)',
+    withCategory?.activityTypeId === runningType.id,
+  );
+
+  // ── PASSO 16: Validação dos 4 novos tipos de critério ─────────────────────────
+  console.log('\n1️⃣3️⃣ Testando validação de ruleValue dos novos tipos de critério...');
+  const invalidCumulative = await reqJson(
+    'POST',
+    '/achievements',
+    { name: 'Inválida CQ', description: 'teste', ruleType: 'CUMULATIVE_QUANTITY', ruleValue: { activityTypeId: runningType.id } },
+    masterToken,
+  );
+  assert('CUMULATIVE_QUANTITY sem targetQuantity é bloqueado (422)', invalidCumulative.status === 422);
+
+  const invalidDistinct = await reqJson(
+    'POST',
+    '/achievements',
+    { name: 'Inválida DM', description: 'teste', ruleType: 'DISTINCT_MODALITIES', ruleValue: { count: 0 } },
+    masterToken,
+  );
+  assert('DISTINCT_MODALITIES com count 0 é bloqueado (422)', invalidDistinct.status === 422);
+
+  const invalidRanking = await reqJson(
+    'POST',
+    '/achievements',
+    { name: 'Inválida RP', description: 'teste', ruleType: 'RANKING_POSITION', ruleValue: {} },
+    masterToken,
+  );
+  assert('RANKING_POSITION sem maxPosition é bloqueado (422)', invalidRanking.status === 422);
+
+  const invalidTenure = await reqJson(
+    'POST',
+    '/achievements',
+    { name: 'Inválida AT', description: 'teste', ruleType: 'ACCOUNT_TENURE_DAYS', ruleValue: { days: -5 } },
+    masterToken,
+  );
+  assert('ACCOUNT_TENURE_DAYS com days negativo é bloqueado (422)', invalidTenure.status === 422);
+
+  // ── PASSO 17-18: CUMULATIVE_QUANTITY + DISTINCT_MODALITIES ────────────────────
+  console.log('\n1️⃣4️⃣ Testando desbloqueio por CUMULATIVE_QUANTITY e DISTINCT_MODALITIES...');
+  const cumulativeRes = await reqJson(
+    'POST',
+    '/achievements',
+    {
+      name: 'Corredor Iniciante',
+      description: 'Acumulou 5km de corrida aprovados.',
+      ruleType: 'CUMULATIVE_QUANTITY',
+      ruleValue: { activityTypeId: runningType.id, targetQuantity: 5 },
+      pointsReward: 20,
+    },
+    masterToken,
+  );
+  const cumulativeId = (cumulativeRes.data as CreateBody)?.data?.id ?? '';
+
+  const distinctRes = await reqJson(
+    'POST',
+    '/achievements',
+    {
+      name: 'Multitarefa Teste',
+      description: 'Registrou atividade aprovada em 2 modalidades diferentes.',
+      ruleType: 'DISTINCT_MODALITIES',
+      ruleValue: { count: 2 },
+      pointsReward: 15,
+    },
+    masterToken,
+  );
+  const distinctId = (distinctRes.data as CreateBody)?.data?.id ?? '';
+
+  const runActivityRes = await reqJson(
+    'POST',
+    '/activities',
+    { activityTypeId: runningType.id, activityDate: new Date().toISOString(), quantity: 5 },
+    participantToken,
+  );
+  const runActivity = (runActivityRes.data as ActivityBody)?.data;
+  await uploadEvidence(runActivity?.id ?? '', participantToken); // "Corrida" exige comprovante antes da aprovação
+  await reqJson('POST', `/admin/activities/${runActivity?.id}/approve`, undefined, masterToken);
+
+  const cumulativeUnlocked = await prisma.userAchievement.findFirst({ where: { userId: participantId, achievementId: cumulativeId } });
+  assert('Conquista "Corredor Iniciante" (CUMULATIVE_QUANTITY, 5km) desbloqueada', !!cumulativeUnlocked);
+
+  const distinctUnlocked = await prisma.userAchievement.findFirst({ where: { userId: participantId, achievementId: distinctId } });
+  assert('Conquista "Multitarefa Teste" (DISTINCT_MODALITIES, 2 modalidades) desbloqueada', !!distinctUnlocked);
+
+  // ── PASSO 19: RANKING_POSITION ─────────────────────────────────────────────────
+  console.log('\n1️⃣5️⃣ Testando desbloqueio por RANKING_POSITION...');
+  type RankingEntryBody = { data?: Array<{ userId: string; position: number }> };
+  const rankingBeforeRes = await reqJson('GET', '/ranking?limit=100', undefined, participantToken);
+  const currentPosition = ((rankingBeforeRes.data as RankingEntryBody)?.data ?? []).find((e) => e.userId === participantId)?.position ?? 999;
+
+  const rankingAchievementRes = await reqJson(
+    'POST',
+    '/achievements',
+    {
+      name: 'Posição Teste',
+      description: `Alcançou a posição ${currentPosition} ou melhor no ranking geral.`,
+      ruleType: 'RANKING_POSITION',
+      ruleValue: { maxPosition: currentPosition },
+      pointsReward: 5,
+    },
+    masterToken,
+  );
+  const rankingAchievementId = (rankingAchievementRes.data as CreateBody)?.data?.id ?? '';
+
+  // Qualquer crédito de pontos dispara checkAndUnlock — 1 ponto simbólico é suficiente.
+  await reqJson('POST', '/scoring/manual', { userId: participantId, transactionType: 'BONUS', points: 1, description: 'Gatilho de teste.' }, masterToken);
+
+  const rankingUnlocked = await prisma.userAchievement.findFirst({ where: { userId: participantId, achievementId: rankingAchievementId } });
+  assert(`Conquista "Posição Teste" (RANKING_POSITION <= ${currentPosition}) desbloqueada`, !!rankingUnlocked);
+
+  // ── PASSO 20: ACCOUNT_TENURE_DAYS ──────────────────────────────────────────────
+  console.log('\n1️⃣6️⃣ Testando desbloqueio por ACCOUNT_TENURE_DAYS...');
+  const backdated = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000);
+  await prisma.user.update({ where: { id: participantId }, data: { createdAt: backdated } });
+
+  const tenureAchievementRes = await reqJson(
+    'POST',
+    '/achievements',
+    {
+      name: 'Veterano Teste',
+      description: 'Conta criada há pelo menos 90 dias.',
+      ruleType: 'ACCOUNT_TENURE_DAYS',
+      ruleValue: { days: 90 },
+      pointsReward: 5,
+    },
+    masterToken,
+  );
+  const tenureAchievementId = (tenureAchievementRes.data as CreateBody)?.data?.id ?? '';
+
+  await reqJson('POST', '/scoring/manual', { userId: participantId, transactionType: 'BONUS', points: 1, description: 'Gatilho de teste.' }, masterToken);
+
+  const tenureUnlocked = await prisma.userAchievement.findFirst({ where: { userId: participantId, achievementId: tenureAchievementId } });
+  assert('Conquista "Veterano Teste" (ACCOUNT_TENURE_DAYS >= 90) desbloqueada', !!tenureUnlocked);
 
   server.close();
 

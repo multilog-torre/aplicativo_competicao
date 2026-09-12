@@ -4,6 +4,7 @@ import { tryParseJson } from '../../shared/utils/json';
 import { TransactionClient } from '../../shared/types/prisma';
 import { LevelService } from '../levels/level.service';
 import { NotificationService } from '../notifications/notification.service';
+import { RankingService } from '../ranking/ranking.service';
 import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
 
 /** Valida a forma de ruleValue de acordo com o ruleType — a coluna é um JSON string livre no banco. */
@@ -36,9 +37,48 @@ function assertValidRuleValue(ruleType: string, ruleValue: Record<string, unknow
         throw new AppError('count, quando informado, deve ser um número positivo.', 422, 'INVALID_RULE_VALUE');
       }
       return;
+    case 'CUMULATIVE_QUANTITY':
+      if (typeof ruleValue.activityTypeId !== 'string' || !ruleValue.activityTypeId) {
+        throw new AppError(
+          'Para CUMULATIVE_QUANTITY, ruleValue deve ser { activityTypeId: string, targetQuantity: number positivo }.',
+          422,
+          'INVALID_RULE_VALUE',
+        );
+      }
+      if (typeof ruleValue.targetQuantity !== 'number' || ruleValue.targetQuantity <= 0) {
+        throw new AppError('targetQuantity deve ser um número positivo.', 422, 'INVALID_RULE_VALUE');
+      }
+      return;
+    case 'DISTINCT_MODALITIES':
+      if (typeof ruleValue.count !== 'number' || ruleValue.count <= 0) {
+        throw new AppError('Para DISTINCT_MODALITIES, ruleValue deve ser { count: number positivo }.', 422, 'INVALID_RULE_VALUE');
+      }
+      return;
+    case 'RANKING_POSITION':
+      if (typeof ruleValue.maxPosition !== 'number' || ruleValue.maxPosition <= 0) {
+        throw new AppError('Para RANKING_POSITION, ruleValue deve ser { maxPosition: number positivo }.', 422, 'INVALID_RULE_VALUE');
+      }
+      return;
+    case 'ACCOUNT_TENURE_DAYS':
+      if (typeof ruleValue.days !== 'number' || ruleValue.days <= 0) {
+        throw new AppError('Para ACCOUNT_TENURE_DAYS, ruleValue deve ser { days: number positivo }.', 422, 'INVALID_RULE_VALUE');
+      }
+      return;
     default:
       throw new AppError(`ruleType desconhecido: '${ruleType}'`, 422, 'INVALID_RULE_TYPE');
   }
+}
+
+/** Pra ruleTypes ligados a uma modalidade específica, o `activityTypeId` que
+ * já vive dentro do ruleValue JSON é a fonte de verdade avaliada pelo motor —
+ * esta função só espelha esse mesmo valor na coluna de FK (usada só pra
+ * filtro/agrupamento/documentação, nunca pela avaliação da regra). */
+function resolveActivityTypeIdColumn(ruleType: string, ruleValue: Record<string, unknown>, explicit?: string): string | null {
+  if (explicit) return explicit;
+  if ((ruleType === 'SPECIFIC_MODALITY' || ruleType === 'CUMULATIVE_QUANTITY') && typeof ruleValue.activityTypeId === 'string') {
+    return ruleValue.activityTypeId;
+  }
+  return null;
 }
 
 /** Maior sequência histórica de dias consecutivos (dedupe por dia de calendário). */
@@ -89,8 +129,14 @@ export class AchievementService {
       throw new AppError(`Já existe uma conquista com o nome '${dto.name}'.`, 409, 'CONFLICT');
     }
 
+    const activityTypeId = resolveActivityTypeIdColumn(dto.ruleType, dto.ruleValue, dto.activityTypeId);
+    if (activityTypeId) {
+      const activityType = await prisma.activityType.findUnique({ where: { id: activityTypeId } });
+      if (!activityType) throw new NotFoundError(`Modalidade com ID '${activityTypeId}' não foi encontrada.`);
+    }
+
     const created = await prisma.achievement.create({
-      data: { ...dto, ruleValue: JSON.stringify(dto.ruleValue) },
+      data: { ...dto, ruleValue: JSON.stringify(dto.ruleValue), activityTypeId },
     });
 
     await prisma.auditLog.create({
@@ -121,9 +167,24 @@ export class AchievementService {
       if (conflict) throw new AppError(`Já existe outra conquista com o nome '${dto.name}'.`, 409, 'CONFLICT');
     }
 
+    // Só recalcula a FK de modalidade quando algo que a afeta de fato mudou —
+    // do contrário um PATCH parcial (ex.: só o nome) preservaria o valor atual.
+    const activityTypeId =
+      dto.ruleType !== undefined || dto.ruleValue !== undefined || dto.activityTypeId !== undefined
+        ? resolveActivityTypeIdColumn(effectiveRuleType, effectiveRuleValue, dto.activityTypeId)
+        : undefined;
+    if (activityTypeId) {
+      const activityType = await prisma.activityType.findUnique({ where: { id: activityTypeId } });
+      if (!activityType) throw new NotFoundError(`Modalidade com ID '${activityTypeId}' não foi encontrada.`);
+    }
+
     const updated = await prisma.achievement.update({
       where: { id },
-      data: { ...dto, ...(dto.ruleValue ? { ruleValue: JSON.stringify(dto.ruleValue) } : {}) },
+      data: {
+        ...dto,
+        ...(dto.ruleValue ? { ruleValue: JSON.stringify(dto.ruleValue) } : {}),
+        ...(activityTypeId !== undefined ? { activityTypeId } : {}),
+      },
     });
 
     await prisma.auditLog.create({
@@ -221,11 +282,22 @@ export class AchievementService {
     });
     if (candidates.length === 0) return;
 
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { totalPoints: true } });
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { totalPoints: true, createdAt: true } });
     if (!user) return;
 
     // Dados usados por múltiplas regras — computados uma única vez por chamada.
     const approvedCount = await tx.userActivity.count({ where: { userId, status: 'APPROVED' } });
+
+    // Recalculado a cada chamada (não cacheado) — como pointsAwarded pode
+    // mudar entre uma conquista RANKING_POSITION e outra dentro do mesmo
+    // loop (ex.: uma recompensa de pontos empurra a posição), reaproveitar um
+    // valor antigo poderia avaliar a posição errada. RANKING_POSITION é raro
+    // no catálogo (no máximo 2-3 conquistas), então o custo extra é mínimo.
+    async function getLeaderboardPosition(): Promise<number | null> {
+      const leaderboard = await RankingService.getGeneralLeaderboard(tx);
+      const index = leaderboard.findIndex((entry) => entry.id === userId);
+      return index === -1 ? null : index + 1;
+    }
 
     let pointsAwarded = 0;
 
@@ -257,6 +329,36 @@ export class AchievementService {
           });
           const maxStreak = computeMaxStreakDays(activities.map((a) => a.activityDate));
           satisfied = maxStreak >= (rule.days as number);
+          break;
+        }
+
+        case 'CUMULATIVE_QUANTITY': {
+          const agg = await tx.userActivity.aggregate({
+            where: { userId, status: 'APPROVED', activityTypeId: rule.activityTypeId as string },
+            _sum: { quantity: true },
+          });
+          satisfied = (agg._sum.quantity ?? 0) >= (rule.targetQuantity as number);
+          break;
+        }
+
+        case 'DISTINCT_MODALITIES': {
+          const grouped = await tx.userActivity.groupBy({
+            by: ['activityTypeId'],
+            where: { userId, status: 'APPROVED' },
+          });
+          satisfied = grouped.length >= (rule.count as number);
+          break;
+        }
+
+        case 'RANKING_POSITION': {
+          const position = await getLeaderboardPosition();
+          satisfied = position !== null && position <= (rule.maxPosition as number);
+          break;
+        }
+
+        case 'ACCOUNT_TENURE_DAYS': {
+          const tenureDays = Math.floor((Date.now() - user.createdAt.getTime()) / (24 * 60 * 60 * 1000));
+          satisfied = tenureDays >= (rule.days as number);
           break;
         }
       }

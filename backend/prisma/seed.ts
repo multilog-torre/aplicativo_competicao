@@ -182,21 +182,198 @@ async function main() {
     },
   ];
 
+  const createdModalities: Array<Awaited<ReturnType<typeof prisma.activityType.upsert>>> = [];
   for (const mod of modalities) {
-    await prisma.activityType.upsert({
+    const created = await prisma.activityType.upsert({
       where: { name: mod.name },
       update: mod,
       create: mod,
     });
+    createdModalities.push(created);
   }
   console.log('✅ Modalidades criadas:', modalities.length);
 
-  // 6. Conquistas (Achievements)
-  const achievements = [
+  // 6. Conquistas (Achievements) — geradas automaticamente a partir das
+  // modalidades REAIS já cadastradas acima (nunca hardcoded), garantindo pelo
+  // menos ~20 no total mesmo que o número de modalidades mude no futuro.
+  // planejamento: "Sistema de Conquistas com gestão admin e documentação
+  // automática" — o admin pode editar/desativar qualquer uma normalmente
+  // depois, porque isso é dado no banco, não configuração fixa de tela.
+  type AchievementSeed = {
+    name: string;
+    description: string;
+    icon: string;
+    category: string;
+    level: 'BRONZE' | 'PRATA' | 'OURO';
+    pointsReward: number;
+    ruleType: string;
+    ruleValue: string;
+    activityTypeId?: string;
+  };
+
+  const TIER_POINTS: Record<'BRONZE' | 'PRATA' | 'OURO', number> = { BRONZE: 30, PRATA: 80, OURO: 200 };
+  const TIER_LABEL: Record<'BRONZE' | 'PRATA' | 'OURO', string> = { BRONZE: 'Iniciante', PRATA: 'Avançado', OURO: 'Mestre' };
+  // Multiplicadores fixos pedidos: prata = 3x a meta bronze, ouro = 8x.
+  const TIER_MULTIPLIER: Record<'BRONZE' | 'PRATA' | 'OURO', number> = { BRONZE: 1, PRATA: 3, OURO: 8 };
+
+  /** 3 conquistas em níveis progressivos (bronze/prata/ouro) para UMA
+   * modalidade — cumulativa (soma quantity, ex.: km) quando a modalidade
+   * pontua por QUANTITY, ou por contagem de atividades quando pontua FIXED
+   * (cada atividade já representa 1 ocorrência inteira, ex.: 1 treino). */
+  function buildModalityAchievements(modality: (typeof createdModalities)[number]): AchievementSeed[] {
+    const isCumulative = modality.scoringType === 'QUANTITY' && !!modality.unit;
+    const baseTarget = isCumulative ? 10 : 5; // ex.: 10km ou 5 sessões na base (bronze)
+    const unitLabel = modality.unit ?? 'atividades';
+
+    return (['BRONZE', 'PRATA', 'OURO'] as const).map((level) => {
+      const target = baseTarget * TIER_MULTIPLIER[level];
+      const ruleType = isCumulative ? 'CUMULATIVE_QUANTITY' : 'SPECIFIC_MODALITY';
+      const ruleValue = isCumulative
+        ? { activityTypeId: modality.id, targetQuantity: target }
+        : { activityTypeId: modality.id, count: target };
+      const description = isCumulative
+        ? `Acumulou ${target} ${unitLabel} em atividades aprovadas de ${modality.name}.`
+        : `Completou ${target} atividades aprovadas de ${modality.name}.`;
+
+      return {
+        name: `${TIER_LABEL[level]} em ${modality.name}`,
+        description,
+        icon: modality.icon,
+        category: modality.name.toUpperCase(),
+        level,
+        pointsReward: TIER_POINTS[level],
+        ruleType,
+        ruleValue: JSON.stringify(ruleValue),
+        activityTypeId: modality.id,
+      };
+    });
+  }
+
+  const perModalityAchievements = createdModalities.flatMap(buildModalityAchievements);
+
+  // Conquistas transversais — não ligadas a uma única modalidade (consistência,
+  // ranking/pontuação, variedade e tempo de casa). "Milionário de Pontos" e
+  // "Centena" completam a progressão bronze/ouro do TOTAL_POINTS ao redor do
+  // "Clube dos 1.000" (prata) já existente, sem duplicar o mesmo limiar.
+  const transversalAchievements: AchievementSeed[] = [
+    {
+      name: 'Sequência de Ferro',
+      description: 'Registrou atividade aprovada em 7 dias consecutivos.',
+      icon: 'flame',
+      category: 'CONSISTENCIA',
+      level: 'BRONZE',
+      pointsReward: TIER_POINTS.BRONZE,
+      ruleType: 'STREAK_DAYS',
+      ruleValue: JSON.stringify({ days: 7 }),
+    },
+    {
+      name: 'Disciplina Total',
+      description: 'Registrou atividade aprovada em 30 dias consecutivos.',
+      icon: 'flame',
+      category: 'CONSISTENCIA',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'STREAK_DAYS',
+      ruleValue: JSON.stringify({ days: 30 }),
+    },
+    {
+      name: 'Centena',
+      description: 'Acumulou 100 pontos no ledger oficial.',
+      icon: 'gem',
+      category: 'RANKING_PONTUACAO',
+      level: 'BRONZE',
+      pointsReward: TIER_POINTS.BRONZE,
+      ruleType: 'TOTAL_POINTS',
+      ruleValue: JSON.stringify({ minPoints: 100 }),
+    },
+    {
+      name: 'Milionário de Pontos',
+      description: 'Acumulou 5.000 pontos no ledger oficial.',
+      icon: 'star',
+      category: 'RANKING_PONTUACAO',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'TOTAL_POINTS',
+      ruleValue: JSON.stringify({ minPoints: 5000 }),
+    },
+    {
+      name: 'No Pódio',
+      description: 'Alcançou o Top 3 do ranking geral.',
+      icon: 'medal',
+      category: 'RANKING_PONTUACAO',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'RANKING_POSITION',
+      ruleValue: JSON.stringify({ maxPosition: 3 }),
+    },
+    {
+      name: 'Líder Absoluto',
+      description: 'Alcançou o 1º lugar do ranking geral.',
+      icon: 'crown',
+      category: 'RANKING_PONTUACAO',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'RANKING_POSITION',
+      ruleValue: JSON.stringify({ maxPosition: 1 }),
+    },
+    {
+      name: 'Multitarefa',
+      description: 'Registrou atividade aprovada em 3 modalidades diferentes.',
+      icon: 'compass',
+      category: 'VARIEDADE',
+      level: 'BRONZE',
+      pointsReward: TIER_POINTS.BRONZE,
+      ruleType: 'DISTINCT_MODALITIES',
+      ruleValue: JSON.stringify({ count: 3 }),
+    },
+    {
+      name: 'Explorador Completo',
+      // Congela o número de modalidades ativas no momento do seed — se novas
+      // modalidades forem cadastradas depois, esta meta não sobe sozinha (o
+      // admin pode reeditá-la a qualquer momento pela tela de gestão).
+      description: `Registrou atividade aprovada em todas as ${createdModalities.length} modalidades disponíveis.`,
+      icon: 'sparkles',
+      category: 'VARIEDADE',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'DISTINCT_MODALITIES',
+      ruleValue: JSON.stringify({ count: createdModalities.length }),
+    },
+    {
+      name: 'Veterano',
+      description: 'Conta criada há pelo menos 90 dias.',
+      icon: 'clock',
+      category: 'TEMPO_DE_CASA',
+      level: 'PRATA',
+      pointsReward: TIER_POINTS.PRATA,
+      ruleType: 'ACCOUNT_TENURE_DAYS',
+      ruleValue: JSON.stringify({ days: 90 }),
+    },
+    {
+      name: 'Aniversário de Participação',
+      description: 'Conta criada há pelo menos 365 dias.',
+      icon: 'cake',
+      category: 'TEMPO_DE_CASA',
+      level: 'OURO',
+      pointsReward: TIER_POINTS.OURO,
+      ruleType: 'ACCOUNT_TENURE_DAYS',
+      ruleValue: JSON.stringify({ days: 365 }),
+    },
+  ];
+
+  // As 3 conquistas "nomeadas" originais (mantidas por compatibilidade com
+  // testes/histórico já existentes) + as geradas por modalidade + as
+  // transversais — upsert por nome, então o admin pode ter editado/desativado
+  // qualquer uma sem que um novo `npm run db:setup` a reviva com os valores
+  // padrão (update aplica os valores do seed mesmo assim — mesmo
+  // comportamento já usado por modalidades/níveis neste arquivo).
+  const namedAchievements: AchievementSeed[] = [
     {
       name: 'Primeiro Passo',
       description: 'Registrou e teve sua primeira atividade aprovada na plataforma!',
       icon: 'award',
+      category: 'CONSISTENCIA',
+      level: 'BRONZE',
       pointsReward: 50,
       ruleType: 'ACTIVITY_COUNT',
       ruleValue: JSON.stringify({ count: 1 }),
@@ -205,6 +382,8 @@ async function main() {
       name: 'Hábito de Ferro',
       description: 'Completou 10 atividades aprovadas no sistema.',
       icon: 'shield-check',
+      category: 'CONSISTENCIA',
+      level: 'PRATA',
       pointsReward: 100,
       ruleType: 'ACTIVITY_COUNT',
       ruleValue: JSON.stringify({ count: 10 }),
@@ -213,20 +392,24 @@ async function main() {
       name: 'Clube dos 1.000',
       description: 'Alcançou a marca de 1.000 pontos acumulados no ledger oficial!',
       icon: 'trophy',
+      category: 'RANKING_PONTUACAO',
+      level: 'PRATA',
       pointsReward: 150,
       ruleType: 'TOTAL_POINTS',
       ruleValue: JSON.stringify({ minPoints: 1000 }),
     },
   ];
 
-  for (const ach of achievements) {
+  const allAchievements = [...namedAchievements, ...perModalityAchievements, ...transversalAchievements];
+
+  for (const ach of allAchievements) {
     await prisma.achievement.upsert({
       where: { name: ach.name },
       update: ach,
       create: ach,
     });
   }
-  console.log('✅ Conquistas criadas');
+  console.log(`✅ Conquistas criadas: ${allAchievements.length} (mínimo de 20 exigido)`);
 
   // 6.1 Regras do Jogo — "Como funciona?" (Fase 21, planejamento.md §22)
   const gameRuleSteps = [

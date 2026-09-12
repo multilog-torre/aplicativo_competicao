@@ -292,7 +292,16 @@ export class ScoringService {
       await LevelService.recalculateForUser(params.userId, updatedUser.totalPoints, tx);
 
       // 4. Verifica e desbloqueia conquistas automaticamente (Fase 12) — mesma transação.
-      await AchievementService.checkAndUnlock(params.userId, tx);
+      // Exceto em CYCLE_RESET: é um ajuste administrativo que deve zerar o saldo de
+      // forma limpa, sem efeitos colaterais. Rodar o motor aqui é arriscado demais —
+      // critérios não-monetários (ex.: RANKING_POSITION) são avaliados contra o
+      // ranking geral no MEIO do laço que reseta todos os usuários um a um, então
+      // alguém ainda não resetado pode aparecer transitoriamente em 1º lugar e
+      // desbloquear "Líder Absoluto"/"No Pódio", creditando pontos de volta bem na
+      // hora em que o saldo deveria ir a zero.
+      if (params.transactionType !== 'CYCLE_RESET') {
+        await AchievementService.checkAndUnlock(params.userId, tx);
+      }
 
       // 5. Atualiza o progresso de desafios ativos (Fase 13) — apenas para créditos
       // originados de uma atividade aprovada (transactionType=ACTIVITY com activityId).

@@ -139,8 +139,9 @@ model ActivityType {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  activities UserActivity[]
-  challenges Challenge[]
+  activities   UserActivity[]
+  challenges   Challenge[]
+  achievements Achievement[]
 
   @@map("activity_types")
 }
@@ -249,17 +250,34 @@ model Achievement {
   id           String   @id @default(uuid())
   name         String   @unique
   description  String
+  // Ícone emoji/identificador de ícone (iconType='EMOJI') OU o storagePath de
+  // uma imagem enviada pelo admin (iconType='UPLOAD') — mesmo padrão de
+  // User.avatarType/avatarUrl: o significado do campo `icon` depende de
+  // `iconType`, nunca os dois ao mesmo tempo.
   icon         String   @default("trophy")
+  iconType     String   @default("EMOJI") @map("icon_type") // EMOJI | UPLOAD
+  category     String   @default("GERAL")
+  level        String   @default("BRONZE") @map("level") // BRONZE | PRATA | OURO
   pointsReward Int      @default(50) @map("points_reward")
-  ruleType     String   @map("rule_type") // ACTIVITY_COUNT, TOTAL_POINTS, STREAK_DAYS, SPECIFIC_MODALITY
-  ruleValue    String   @map("rule_value")
-  status       String   @default("ACTIVE")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  // ACTIVITY_COUNT, TOTAL_POINTS, STREAK_DAYS, SPECIFIC_MODALITY,
+  // CUMULATIVE_QUANTITY, DISTINCT_MODALITIES, RANKING_POSITION, ACCOUNT_TENURE_DAYS
+  ruleType       String  @map("rule_type")
+  ruleValue      String  @map("rule_value")
+  // FK "de verdade" pra modalidade, além do activityTypeId que já vive dentro
+  // do JSON de ruleValue pra SPECIFIC_MODALITY/CUMULATIVE_QUANTITY — usada
+  // pro admin filtrar/agrupar e pro catálogo de documentação, sem precisar
+  // desserializar ruleValue. Mantida em sincronia pelo service, nunca a
+  // fonte de verdade avaliada pelo motor (essa continua sendo ruleValue).
+  activityTypeId String? @map("activity_type_id")
+  status         String  @default("ACTIVE")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
+  activityType       ActivityType?        @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
   userAchievements   UserAchievement[]
   pointsTransactions PointsTransaction[]
 
+  @@index([activityTypeId])
   @@map("achievements")
 }
 
