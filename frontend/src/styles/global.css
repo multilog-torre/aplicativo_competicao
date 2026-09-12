@@ -1800,6 +1800,105 @@ textarea {
   color: var(--color-accent-contrast);
 }
 
+/* Celebração de conquista desbloqueada — canto superior, mais chamativa e
+   com z-index maior que o toast-stack comum (é o evento mais "especial" da
+   plataforma), com uma animação de entrada saltada (pop-in). */
+.achievement-toast-stack {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: center;
+  z-index: 210;
+  pointer-events: none;
+}
+
+@media (min-width: 480px) {
+  .achievement-toast-stack {
+    left: auto;
+  }
+}
+
+.achievement-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 2px solid #f2c94c;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  max-width: 360px;
+  animation: achievementToastPopIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes achievementToastPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.achievement-toast__icon {
+  flex-shrink: 0;
+}
+
+.achievement-toast__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #92730a;
+}
+
+.achievement-toast__name {
+  margin: 2px 0 0;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.achievement-toast__points {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* Destaque das conquistas mais recentes (Dashboard). */
+.recent-achievements-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recent-achievements-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.recent-achievements-list__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.recent-achievements-list__date {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
 /* ============================================================
    Autenticação
    ============================================================ */

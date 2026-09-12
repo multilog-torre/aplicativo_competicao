@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { AwardCycle, DashboardData } from '../types/api';
+import { AchievementWithProgress, AwardCycle, DashboardData } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
-import { StatusBadge } from '../components/ui/Badge';
+import { AchievementIcon, StatusBadge } from '../components/ui/Badge';
 import { ChartCard, GranularityTabs, LineChart, BarChart, PointsHistoryGranularity } from '../components/ui/Charts';
 import { FilterDrawer } from '../components/ui/FilterDrawer';
+import { useAuth } from '../context/AuthContext';
 
 interface DraftFilters {
   dateFrom: string;
@@ -98,7 +99,51 @@ function FilterFields({
   );
 }
 
+/** Destaque das conquistas mais recentes — mesmo dado do grid completo do
+ * Perfil (GET /achievements/users/:userId/progress), só que recortado às 3
+ * últimas desbloqueadas, pra dar um resumo rápido de "o que ganhei
+ * ultimamente" direto no Dashboard. */
+function RecentAchievementsCard({ userId }: { userId: string }) {
+  const [items, setItems] = useState<AchievementWithProgress[] | null>(null);
+
+  useEffect(() => {
+    api
+      .get<AchievementWithProgress[]>(`/achievements/users/${userId}/progress`)
+      .then(({ data }) => setItems(data))
+      .catch(() => setItems([]));
+  }, [userId]);
+
+  const recent = (items ?? [])
+    .filter((a): a is AchievementWithProgress & { unlockedAt: string } => a.unlocked && !!a.unlockedAt)
+    .sort((a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime())
+    .slice(0, 3);
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Conquistas recentes</h2>
+      {items === null ? (
+        <LoadingState label="Carregando conquistas…" />
+      ) : recent.length === 0 ? (
+        <EmptyState icon="🏆" title="Nenhuma conquista desbloqueada ainda" description="Registre atividades pra começar a desbloquear badges." />
+      ) : (
+        <ul className="recent-achievements-list">
+          {recent.map((a) => (
+            <li key={a.id} className="recent-achievements-list__item">
+              <AchievementIcon icon={a.icon} iconType={a.iconType} size={40} />
+              <div>
+                <p className="recent-achievements-list__name">{a.name}</p>
+                <p className="recent-achievements-list__date">{new Date(a.unlockedAt).toLocaleDateString('pt-BR')}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function DashboardPage() {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +238,8 @@ export function DashboardPage() {
           }
         </ChartCard>
       </div>
+
+      {user && <RecentAchievementsCard userId={user.id} />}
 
       <section className="card">
         <h2 className="card__title">Atividades recentes</h2>

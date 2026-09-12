@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Avatar } from '../ui/Badge';
 import { Logo } from '../ui/Logo';
+import { AchievementUnlockWatcher } from '../ui/AchievementUnlockWatcher';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
@@ -23,6 +24,7 @@ export function AppLayout() {
 
   return (
     <div className="app-shell">
+      <AchievementUnlockWatcher />
       <header className="topbar">
         <button
           type="button"
