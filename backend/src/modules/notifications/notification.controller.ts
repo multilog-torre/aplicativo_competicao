@@ -29,4 +29,11 @@ export class NotificationController {
     const result = await NotificationService.markAllAsRead(userId);
     return sendSuccess(res, result, 200);
   }
+
+  public static async delete(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const result = await NotificationService.delete(id, userId);
+    return sendSuccess(res, result, 200);
+  }
 }

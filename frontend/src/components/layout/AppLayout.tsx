@@ -6,6 +6,7 @@ import { Avatar } from '../ui/Badge';
 import { Logo } from '../ui/Logo';
 import { ParticipantsIcon } from '../ui/icons';
 import { AchievementUnlockWatcher } from '../ui/AchievementUnlockWatcher';
+import { NotificationBell } from '../ui/NotificationBell';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
@@ -42,6 +43,7 @@ export function AppLayout() {
         </span>
         <div className="topbar__user">
           <span className="topbar__user-name">{user?.name}</span>
+          <NotificationBell />
           <button
             type="button"
             className="theme-toggle"

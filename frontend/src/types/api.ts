@@ -377,3 +377,13 @@ export interface Pagination {
   limit: number;
   totalPages: number;
 }
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  referenceId: string | null;
+  createdAt: string;
+}

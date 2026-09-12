@@ -15,5 +15,6 @@ router.get('/', validateRequest({ query: ListNotificationsQuerySchema }), asyncH
 router.get('/unread-count', asyncHandler(NotificationController.getUnreadCount));
 router.post('/read-all', asyncHandler(NotificationController.markAllAsRead));
 router.post('/:id/read', asyncHandler(NotificationController.markAsRead));
+router.delete('/:id', asyncHandler(NotificationController.delete));
 
 export { router as notificationRoutes };

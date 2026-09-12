@@ -16,6 +16,9 @@
  * 12. Marcar todas como lidas zera o contador
  * 13. Participante não pode marcar notificação de outro usuário como lida (403)
  * 14. Filtro por isRead funciona na listagem
+ * 15. Excluir notificação própria funciona e ela some da listagem
+ * 16. Participante não pode excluir notificação de outro usuário (403)
+ * 17. Excluir notificação inexistente retorna 404
  */
 
 import http from 'http';
@@ -290,6 +293,37 @@ async function main() {
   const unreadFilterRes = await reqJson('GET', '/notifications?isRead=false', undefined, participantToken);
   const unreadFiltered = (unreadFilterRes.data as NotifBody)?.data ?? [];
   assert('Filtro isRead=false retorna apenas não lidas (todas já lidas -> vazio)', unreadFiltered.length === 0);
+
+  // ── PASSO 15-17: Exclusão de notificação ──────────────────────────────────────
+  console.log('\n1️⃣2️⃣ Testando exclusão de notificação...');
+  const beforeDeleteRes = await reqJson('GET', '/notifications?limit=100', undefined, participantToken);
+  const toDeleteId = ((beforeDeleteRes.data as NotifBody)?.data ?? [])[0]?.id ?? '';
+  const totalBeforeDelete = ((beforeDeleteRes.data as NotifBody)?.data ?? []).length;
+
+  const deleteRes = await reqJson('DELETE', `/notifications/${toDeleteId}`, undefined, participantToken);
+  assert('Excluir notificação própria funciona (200)', deleteRes.status === 200);
+
+  const afterDeleteRes = await reqJson('GET', '/notifications?limit=100', undefined, participantToken);
+  const afterDeleteList = (afterDeleteRes.data as NotifBody)?.data ?? [];
+  assert('Notificação excluída some da listagem', !afterDeleteList.some((n) => n.id === toDeleteId));
+  assert('Total da listagem diminuiu em 1', afterDeleteList.length === totalBeforeDelete - 1);
+
+  const otherListForDeleteRes = await reqJson('GET', '/notifications?limit=1', undefined, otherToken);
+  const otherIdForDelete = ((otherListForDeleteRes.data as NotifBody)?.data ?? [])[0]?.id ?? '';
+  if (otherIdForDelete) {
+    const crossDeleteRes = await reqJson('DELETE', `/notifications/${otherIdForDelete}`, undefined, participantToken);
+    assert('Participante não pode excluir notificação de outro usuário (403)', crossDeleteRes.status === 403);
+  } else {
+    assert('(sem notificação de outro usuário para testar exclusão cruzada — pulado)', true);
+  }
+
+  const deleteNonExistentRes = await reqJson(
+    'DELETE',
+    '/notifications/00000000-0000-0000-0000-000000000000',
+    undefined,
+    participantToken,
+  );
+  assert('Excluir notificação inexistente retorna 404', deleteNonExistentRes.status === 404);
 
   server.close();
 

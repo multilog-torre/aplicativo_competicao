@@ -76,4 +76,15 @@ export class NotificationService {
     const result = await prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
     return { updatedCount: result.count };
   }
+
+  /** Exclui uma notificação — só o próprio dono pode, mesma regra de markAsRead. */
+  public static async delete(id: string, userId: string): Promise<{ id: string }> {
+    const notification = await prisma.notification.findUnique({ where: { id } });
+    if (!notification) throw new NotFoundError(`Notificação com ID '${id}' não foi encontrada.`);
+    if (notification.userId !== userId) {
+      throw new ForbiddenError('Você não tem permissão para excluir a notificação de outro usuário.');
+    }
+    await prisma.notification.delete({ where: { id } });
+    return { id };
+  }
 }
