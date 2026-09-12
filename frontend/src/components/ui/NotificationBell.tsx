@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { NotificationItem } from '../../types/api';
 import { useToast } from '../../context/ToastContext';
 import { LoadingState, EmptyState } from './States';
+import { TrashIcon } from './icons';
 
 const POLL_INTERVAL_MS = 20000;
 
@@ -178,7 +179,7 @@ export function NotificationBell() {
                         title="Excluir notificação"
                         onClick={(e) => handleDelete(n, e)}
                       >
-                        🗑️
+                        <TrashIcon size={15} />
                       </button>
                     </li>
                   ))}
