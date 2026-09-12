@@ -23,6 +23,10 @@
  * 18. Desbloqueio por DISTINCT_MODALITIES (atividade aprovada em N modalidades diferentes)
  * 19. Desbloqueio por RANKING_POSITION (posição atual no ranking geral)
  * 20. Desbloqueio por ACCOUNT_TENURE_DAYS (dias desde a criação da conta)
+ * 21. GET /achievements/users/:userId/progress traz o catálogo completo com
+ *     progresso (current/target/percent) das ainda bloqueadas, self/admin
+ * 22. Troca de ícone por emoji (texto) e por upload de imagem (PNG),
+ *     incluindo download da imagem enviada e bloqueio pra não-admin
  */
 
 import http from 'http';
@@ -54,6 +58,20 @@ async function uploadEvidence(activityId: string, token: string): Promise<void> 
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
+}
+
+async function uploadAchievementIcon(achievementId: string, token: string): Promise<{ status: number; data: unknown }> {
+  const form = new FormData();
+  form.append('iconType', 'UPLOAD');
+  form.append('file', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' }), 'badge.png');
+  const res = await fetch(`${BASE_URL}/achievements/${achievementId}/icon`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  console.log(`[HTTP] PATCH  /achievements/${achievementId}/icon -> ${res.status}`);
+  return { status: res.status, data };
 }
 
 let passed = 0;
@@ -436,6 +454,102 @@ async function main() {
 
   const tenureUnlocked = await prisma.userAchievement.findFirst({ where: { userId: participantId, achievementId: tenureAchievementId } });
   assert('Conquista "Veterano Teste" (ACCOUNT_TENURE_DAYS >= 90) desbloqueada', !!tenureUnlocked);
+
+  // ── PASSO 21: Catálogo com progresso ────────────────────────────────────────────
+  console.log('\n1️⃣7️⃣ Testando GET /achievements/users/:userId/progress...');
+  type ProgressItem = {
+    id: string;
+    name: string;
+    unlocked: boolean;
+    unlockedAt: string | null;
+    progress: { current: number; target: number; percent: number; lowerIsBetter: boolean } | null;
+  };
+  type ProgressBody = { data?: ProgressItem[] };
+  const otherId = (otherLogin.data as LoginBody)?.data?.user?.id ?? '';
+
+  const progressRes = await reqJson('GET', `/achievements/users/${participantId}/progress`, undefined, participantToken);
+  assert('Progresso do próprio usuário retorna 200', progressRes.status === 200);
+  const progressCatalog = (progressRes.data as ProgressBody)?.data ?? [];
+
+  // Compara com um catálogo FRESCO (não o `catalog` capturado lá no passo 1,
+  // que já está desatualizado — várias conquistas foram criadas/desativadas
+  // ao longo do teste). O catálogo de progresso deve ter: toda conquista
+  // ATIVA agora, mais qualquer uma já desbloqueada que tenha sido desativada
+  // nesse meio-tempo (ex.: "Primeiro Passo", desativada no passo 10).
+  const freshCatalogRes = await reqJson('GET', '/achievements');
+  type FreshCatalogItem = { id: string; status: string };
+  const freshCatalog = (freshCatalogRes.data as { data?: FreshCatalogItem[] })?.data ?? [];
+  const freshUnlockedRes = await reqJson('GET', `/achievements/users/${participantId}`, undefined, participantToken);
+  const freshUnlocked = (freshUnlockedRes.data as UnlockedBody)?.data ?? [];
+  const activeCount = freshCatalog.filter((a) => a.status === 'ACTIVE').length;
+  const unlockedInactiveCount = freshCatalog.filter(
+    (a) => a.status !== 'ACTIVE' && freshUnlocked.some((u) => u.achievement.id === a.id),
+  ).length;
+  assert(
+    `Catálogo de progresso tem as ativas + as já desbloqueadas mesmo desativadas (esperado ${activeCount + unlockedInactiveCount}, obtido ${progressCatalog.length})`,
+    progressCatalog.length === activeCount + unlockedInactiveCount,
+  );
+
+  const unlockedInProgress = progressCatalog.find((p) => p.name === 'Primeiro Passo');
+  assert('Conquista já desbloqueada aparece com unlocked=true e progress=null', unlockedInProgress?.unlocked === true && unlockedInProgress?.progress === null);
+
+  const avancadoCorrida = progressCatalog.find((p) => p.name === 'Avançado em Corrida de Rua / Esteira');
+  assert(
+    'Conquista ainda bloqueada traz progress {current, target, percent}',
+    avancadoCorrida?.unlocked === false &&
+      typeof avancadoCorrida?.progress?.current === 'number' &&
+      typeof avancadoCorrida?.progress?.target === 'number' &&
+      (avancadoCorrida?.progress?.percent ?? -1) >= 0 &&
+      (avancadoCorrida?.progress?.percent ?? 101) <= 100,
+  );
+  assert(
+    `Progresso reflete os 5km já acumulados (current=5, obtido ${avancadoCorrida?.progress?.current})`,
+    avancadoCorrida?.progress?.current === 5,
+  );
+
+  const progressCrossRes = await reqJson('GET', `/achievements/users/${participantId}/progress`, undefined, otherToken);
+  assert('Outro participante não pode ver o progresso alheio (403)', progressCrossRes.status === 403);
+
+  const progressAdminRes = await reqJson('GET', `/achievements/users/${participantId}/progress`, undefined, masterToken);
+  assert('Admin pode consultar o progresso de qualquer usuário (200)', progressAdminRes.status === 200);
+
+  // ── PASSO 22: Troca de ícone (emoji e upload de imagem) ────────────────────────
+  console.log('\n1️⃣8️⃣ Testando troca de ícone (emoji e upload de imagem)...');
+  const emojiIconRes = await reqJson(
+    'PATCH',
+    `/achievements/${withCategory?.id}/icon`,
+    { iconType: 'EMOJI', icon: '🔥' },
+    masterToken,
+  );
+  type IconBody = { data?: { icon?: string; iconType?: string } };
+  assert('Troca de ícone por emoji retorna 200', emojiIconRes.status === 200);
+  assert('Ícone emoji é persistido como texto', (emojiIconRes.data as IconBody)?.data?.icon === '🔥');
+  assert('iconType fica EMOJI', (emojiIconRes.data as IconBody)?.data?.iconType === 'EMOJI');
+
+  const emojiIconBlockedRes = await reqJson(
+    'PATCH',
+    `/achievements/${withCategory?.id}/icon`,
+    { iconType: 'EMOJI', icon: '⭐' },
+    participantToken,
+  );
+  assert('Participante não pode trocar o ícone de uma conquista (403)', emojiIconBlockedRes.status === 403);
+
+  const uploadIconRes = await uploadAchievementIcon(withCategory?.id ?? '', masterToken);
+  assert('Upload de imagem do ícone retorna 200', uploadIconRes.status === 200);
+  const uploadedIcon = (uploadIconRes.data as IconBody)?.data;
+  assert('iconType fica UPLOAD', uploadedIcon?.iconType === 'UPLOAD');
+  assert(
+    'icon retornado é uma URL do backend (nunca o caminho de armazenamento cru)',
+    typeof uploadedIcon?.icon === 'string' && uploadedIcon.icon.startsWith(`/api/v1/achievements/${withCategory?.id}/icon`),
+  );
+
+  const iconDownloadRes = await fetch(`${BASE_URL}/achievements/${withCategory?.id}/icon`);
+  console.log(`[HTTP] GET    /achievements/${withCategory?.id}/icon -> ${iconDownloadRes.status}`);
+  assert('Download da imagem do ícone funciona SEM autenticação (catálogo é público)', iconDownloadRes.status === 200);
+  assert('Content-Type reflete a imagem enviada (PNG)', iconDownloadRes.headers.get('content-type') === 'image/png');
+
+  const noImageIconRes = await fetch(`${BASE_URL}/achievements/${customAchievementId}/icon`);
+  assert('Download de ícone de conquista sem imagem enviada retorna 404', noImageIconRes.status === 404);
 
   server.close();
 

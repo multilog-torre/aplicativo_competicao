@@ -7,6 +7,7 @@ export const EXTENSION_MIME_MAP: Record<string, string[]> = {
   jpg: ['image/jpeg'],
   jpeg: ['image/jpeg'],
   png: ['image/png'],
+  svg: ['image/svg+xml'],
   pdf: ['application/pdf'],
   txt: ['text/plain'],
 };

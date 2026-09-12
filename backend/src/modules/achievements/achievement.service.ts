@@ -2,10 +2,15 @@ import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { tryParseJson } from '../../shared/utils/json';
 import { TransactionClient } from '../../shared/types/prisma';
+import { UploadedFile } from '../../shared/types/upload';
+import { assertAllowedFile, EXTENSION_MIME_MAP } from '../../shared/utils/fileValidation';
 import { LevelService } from '../levels/level.service';
 import { NotificationService } from '../notifications/notification.service';
 import { RankingService } from '../ranking/ranking.service';
+import { getStorageProvider } from '../storage/storage.factory';
 import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
+
+const ALLOWED_ICON_EXTENSIONS = ['png', 'svg', 'jpg', 'jpeg'];
 
 /** Valida a forma de ruleValue de acordo com o ruleType — a coluna é um JSON string livre no banco. */
 function assertValidRuleValue(ruleType: string, ruleValue: Record<string, unknown>): void {
@@ -103,8 +108,15 @@ function computeMaxStreakDays(dates: Date[]): number {
   return maxStreak;
 }
 
-function toPublicShape<T extends { ruleValue: string }>(achievement: T) {
-  return { ...achievement, ruleValue: tryParseJson(achievement.ruleValue) };
+/** Mesmo padrão de User.avatarType/avatarUrl (ProfileService): quando o
+ * ícone é uma imagem enviada, nunca expõe o storagePath cru pro cliente —
+ * troca por uma URL do próprio backend que serve o arquivo sob demanda. */
+function toPublicShape<T extends { id: string; ruleValue: string; icon: string; iconType: string }>(achievement: T) {
+  return {
+    ...achievement,
+    ruleValue: tryParseJson(achievement.ruleValue),
+    icon: achievement.iconType === 'UPLOAD' ? `/api/v1/achievements/${achievement.id}/icon` : achievement.icon,
+  };
 }
 
 export class AchievementService {
@@ -240,6 +252,62 @@ export class AchievementService {
     };
   }
 
+  // ─── Ícone/imagem do brasão ────────────────────────────────────────────────────
+
+  /** Troca o ícone de uma conquista — emoji/identificador (EMOJI) ou upload de
+   * imagem PNG/SVG (UPLOAD), mesmo padrão de ProfileService.setAvatar. */
+  public static async setIcon(id: string, iconType: string, icon: string | undefined, file: UploadedFile | undefined, adminId: string) {
+    const existing = await prisma.achievement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError(`Conquista com ID '${id}' não foi encontrada.`);
+
+    let iconValue: string;
+    if (iconType === 'UPLOAD') {
+      if (!file) throw new AppError('Nenhum arquivo foi enviado. Utilize o campo "file".', 422, 'FILE_REQUIRED');
+      assertAllowedFile(file, ALLOWED_ICON_EXTENSIONS);
+      const storage = getStorageProvider();
+      const { storagePath } = await storage.save({
+        buffer: file.buffer,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        folder: `achievements/${id}`,
+      });
+      iconValue = storagePath;
+    } else {
+      if (!icon) throw new AppError('Informe o emoji/identificador do ícone no campo "icon".', 422, 'ICON_REQUIRED');
+      iconValue = icon;
+    }
+
+    const updated = await prisma.achievement.update({ where: { id }, data: { icon: iconValue, iconType } });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'UPDATE',
+        entity: 'Achievement',
+        entityId: id,
+        oldValues: JSON.stringify({ icon: existing.icon, iconType: existing.iconType }),
+        newValues: JSON.stringify({ icon: updated.icon, iconType: updated.iconType }),
+      },
+    });
+
+    return toPublicShape(updated);
+  }
+
+  /** Imagem enviada (iconType='UPLOAD') — pública, mesmo padrão de acesso do
+   * catálogo de conquistas (GET /achievements já é público). */
+  public static async getIconForDownload(id: string) {
+    const achievement = await prisma.achievement.findUnique({ where: { id }, select: { iconType: true, icon: true } });
+    if (!achievement || achievement.iconType !== 'UPLOAD' || !achievement.icon) {
+      throw new NotFoundError('Esta conquista não possui uma imagem de ícone enviada.');
+    }
+
+    const storage = getStorageProvider();
+    const buffer = await storage.read(achievement.icon);
+    const extension = achievement.icon.split('.').pop()?.toLowerCase() ?? '';
+    const mimeType = EXTENSION_MIME_MAP[extension]?.[0] ?? 'application/octet-stream';
+    return { buffer, mimeType };
+  }
+
   // ─── Consulta das conquistas desbloqueadas por um usuário ─────────────────────
 
   public static async listUnlockedForUser(userId: string, requestingUserId: string, isAdmin: boolean) {
@@ -258,6 +326,143 @@ export class AchievementService {
       unlockedAt: ua.unlockedAt,
       achievement: toPublicShape(ua.achievement),
     }));
+  }
+
+  /**
+   * Catálogo COMPLETO (conquistas ativas) com o progresso do usuário em cada
+   * uma — usado pela grade "Minhas Conquistas" (brasões desbloqueados em
+   * destaque, bloqueados em silhueta com barra de progresso). Diferente de
+   * `checkAndUnlock`, é só leitura (nunca desbloqueia nada aqui) e roda fora
+   * de transação, com o client Prisma normal.
+   *
+   * O progresso é sempre calculado NA HORA a partir dos dados brutos (nunca
+   * um valor persistido que poderia ficar desatualizado) — mesmo espírito do
+   * motor de desbloqueio, só que devolvendo {current, target} em vez de um
+   * booleano satisfied/not-satisfied.
+   */
+  public static async getCatalogWithProgressForUser(userId: string, requestingUserId: string, isAdmin: boolean) {
+    if (!isAdmin && userId !== requestingUserId) {
+      throw new ForbiddenError('Você não tem permissão para visualizar o progresso de outro usuário.');
+    }
+
+    // O catálogo pra progresso é "toda conquista ATIVA (candidata a desbloquear)
+    // + qualquer uma que o usuário já tenha, mesmo que tenha sido desativada
+    // depois" — uma conquista já concedida é vitalícia (Regra de Ouro do
+    // ledger) e não pode simplesmente sumir do perfil da pessoa só porque um
+    // admin a desativou; só as ainda BLOQUEADAS respeitam o filtro ACTIVE
+    // (não faz sentido mostrar progresso rumo a algo que não pode mais ser
+    // conquistado).
+    const [unlockedRows, user, approvedActivities] = await Promise.all([
+      prisma.userAchievement.findMany({ where: { userId } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { totalPoints: true, createdAt: true } }),
+      prisma.userActivity.findMany({
+        where: { userId, status: 'APPROVED' },
+        select: { activityTypeId: true, activityDate: true, quantity: true },
+      }),
+    ]);
+    if (!user) throw new NotFoundError(`Usuário com ID '${userId}' não foi encontrado.`);
+
+    const unlockedIds = unlockedRows.map((u) => u.achievementId);
+    const achievements = await prisma.achievement.findMany({
+      where: { OR: [{ status: 'ACTIVE' }, { id: { in: unlockedIds } }] },
+      orderBy: [{ category: 'asc' }, { pointsReward: 'asc' }],
+    });
+
+    const unlockedByAchievementId = new Map(unlockedRows.map((u) => [u.achievementId, u]));
+
+    // Dados agregados uma única vez em memória — evita 1 query por conquista.
+    const countByModality = new Map<string, number>();
+    const quantityByModality = new Map<string, number>();
+    for (const a of approvedActivities) {
+      countByModality.set(a.activityTypeId, (countByModality.get(a.activityTypeId) ?? 0) + 1);
+      quantityByModality.set(a.activityTypeId, (quantityByModality.get(a.activityTypeId) ?? 0) + a.quantity);
+    }
+    const approvedCount = approvedActivities.length;
+    const distinctModalities = new Set(approvedActivities.map((a) => a.activityTypeId)).size;
+    const maxStreak = computeMaxStreakDays(approvedActivities.map((a) => a.activityDate));
+    const tenureDays = Math.floor((Date.now() - user.createdAt.getTime()) / (24 * 60 * 60 * 1000));
+
+    // RANKING_POSITION é raro no catálogo — só busca o leaderboard se alguma
+    // conquista realmente precisar dele.
+    let leaderboardPosition: number | null | undefined;
+    async function getLeaderboardPosition(): Promise<number | null> {
+      if (leaderboardPosition === undefined) {
+        const leaderboard = await RankingService.getGeneralLeaderboard();
+        const index = leaderboard.findIndex((entry) => entry.id === userId);
+        leaderboardPosition = index === -1 ? null : index + 1;
+      }
+      return leaderboardPosition;
+    }
+
+    const result = [];
+    for (const achievement of achievements) {
+      const unlockedRow = unlockedByAchievementId.get(achievement.id);
+
+      if (unlockedRow) {
+        result.push({ ...toPublicShape(achievement), unlocked: true, unlockedAt: unlockedRow.unlockedAt, progress: null });
+        continue;
+      }
+
+      const rule = tryParseJson(achievement.ruleValue) as Record<string, unknown>;
+      let current = 0;
+      let target = 1;
+      // Quanto MENOR, melhor (ex.: posição no ranking) — inverte o cálculo do
+      // percentual pra continuar fazendo sentido como barra de progresso.
+      let lowerIsBetter = false;
+
+      switch (achievement.ruleType) {
+        case 'ACTIVITY_COUNT':
+          current = approvedCount;
+          target = rule.count as number;
+          break;
+        case 'TOTAL_POINTS':
+          current = user.totalPoints;
+          target = rule.minPoints as number;
+          break;
+        case 'STREAK_DAYS':
+          current = maxStreak;
+          target = rule.days as number;
+          break;
+        case 'SPECIFIC_MODALITY':
+          current = countByModality.get(rule.activityTypeId as string) ?? 0;
+          target = (rule.count as number) ?? 1;
+          break;
+        case 'CUMULATIVE_QUANTITY':
+          current = quantityByModality.get(rule.activityTypeId as string) ?? 0;
+          target = rule.targetQuantity as number;
+          break;
+        case 'DISTINCT_MODALITIES':
+          current = distinctModalities;
+          target = rule.count as number;
+          break;
+        case 'RANKING_POSITION': {
+          const position = await getLeaderboardPosition();
+          current = position ?? 0;
+          target = rule.maxPosition as number;
+          lowerIsBetter = true;
+          break;
+        }
+        case 'ACCOUNT_TENURE_DAYS':
+          current = tenureDays;
+          target = rule.days as number;
+          break;
+      }
+
+      const percent = lowerIsBetter
+        ? current > 0
+          ? Math.max(0, Math.min(100, Math.round((target / current) * 100)))
+          : 0
+        : Math.max(0, Math.min(100, Math.round((current / target) * 100)));
+
+      result.push({
+        ...toPublicShape(achievement),
+        unlocked: false,
+        unlockedAt: null,
+        progress: { current, target, percent, lowerIsBetter },
+      });
+    }
+
+    return result;
   }
 
   // ─── Verificação e desbloqueio automático (Fase 12) ───────────────────────────
