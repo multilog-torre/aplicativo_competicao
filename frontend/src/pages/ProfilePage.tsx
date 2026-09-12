@@ -5,6 +5,7 @@ import { AvatarPreset, Department, Gender, GENDER_LABELS, ProfileData } from '..
 const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 import { LoadingState, ErrorState, EmptyState } from '../components/ui/States';
 import { Avatar, StatusBadge } from '../components/ui/Badge';
+import { AchievementGrid } from '../components/ui/AchievementGrid';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { todayLocalISODate } from '../utils/date';
@@ -89,24 +90,7 @@ export function ProfilePage() {
 
       <section className="card">
         <h2 className="card__title">Minhas Conquistas</h2>
-        {!profile.achievements || profile.achievements.length === 0 ? (
-          <EmptyState icon="🏆" title="Nenhuma conquista desbloqueada ainda" />
-        ) : (
-          <ul className="achievement-list">
-            {profile.achievements.map((a) => (
-              <li key={a.id} className="achievement-list__item">
-                <span className="achievement-list__icon" aria-hidden="true">
-                  🏆
-                </span>
-                <div>
-                  <div className="achievement-list__name">{a.achievement.name}</div>
-                  <div className="achievement-list__description">{a.achievement.description}</div>
-                </div>
-                <span className="achievement-list__date">{new Date(a.unlockedAt).toLocaleDateString('pt-BR')}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <AchievementGrid userId={profile.id} />
       </section>
 
       <section className="card">

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { ActivityType, Level } from '../types/api';
+import { Achievement, AchievementLevel, ActivityType, Level } from '../types/api';
 import { LoadingState, ErrorState } from '../components/ui/States';
+import { AchievementIcon } from '../components/ui/Badge';
+import { describeRule } from '../utils/achievementRules';
+
+const LEVEL_LABELS: Record<AchievementLevel, string> = { BRONZE: 'Bronze', PRATA: 'Prata', OURO: 'Ouro' };
 
 interface GameRuleStep {
   id: string;
@@ -53,6 +57,7 @@ export function RulesPage() {
   const [steps, setSteps] = useState<GameRuleStep[]>([]);
   const [modalities, setModalities] = useState<ActivityType[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,11 +68,13 @@ export function RulesPage() {
       api.get<GameRuleStep[]>('/game-rules'),
       api.get<ActivityType[]>('/activity-types?status=ACTIVE'),
       api.get<Level[]>('/levels'),
+      api.get<Achievement[]>('/achievements'),
     ])
-      .then(([rulesRes, modalitiesRes, levelsRes]) => {
+      .then(([rulesRes, modalitiesRes, levelsRes, achievementsRes]) => {
         setSteps(rulesRes.data);
         setModalities(modalitiesRes.data);
         setLevels(levelsRes.data);
+        setAchievements(achievementsRes.data);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar as regras.'))
       .finally(() => setLoading(false));
@@ -171,6 +178,84 @@ export function RulesPage() {
           ciclo termina.
         </p>
       </section>
+
+      <AchievementCatalogSection achievements={achievements} activityTypes={modalities} />
     </div>
+  );
+}
+
+/**
+ * Catálogo de conquistas — documentação viva: renderiza direto do banco
+ * (GET /achievements) toda vez que a página carrega, sem nada gerado ou
+ * hardcoded. Qualquer conquista criada/editada/desativada pelo admin
+ * aparece aqui automaticamente na próxima visita, exatamente como as
+ * seções de modalidade/nível acima.
+ */
+function AchievementCatalogSection({ achievements, activityTypes }: { achievements: Achievement[]; activityTypes: ActivityType[] }) {
+  if (achievements.length === 0) return null;
+
+  const active = achievements.filter((a) => a.status === 'ACTIVE');
+  const discontinued = achievements.filter((a) => a.status !== 'ACTIVE');
+
+  const grouped = new Map<string, Achievement[]>();
+  for (const a of active) {
+    const list = grouped.get(a.category) ?? [];
+    list.push(a);
+    grouped.set(a.category, list);
+  }
+
+  return (
+    <section className="card">
+      <h2 className="card__title">🏆 Catálogo de Conquistas</h2>
+      <p className="steps-list__description">
+        Desbloqueadas automaticamente ao cumprir o critério — acompanhe seu progresso na aba "Meu Perfil".
+      </p>
+
+      {Array.from(grouped.entries()).map(([category, items]) => (
+        <div key={category} className="achievement-catalog__category">
+          <h3 className="achievement-catalog__category-title">{category}</h3>
+          <div className="achievement-catalog__grid">
+            {items.map((a) => (
+              <div key={a.id} className="achievement-catalog__card">
+                <AchievementIcon icon={a.icon} iconType={a.iconType} size={44} />
+                <div className="achievement-catalog__card-body">
+                  <div className="achievement-catalog__name">
+                    {a.name}
+                    <span className={`badge badge--level-${a.level.toLowerCase()}`}>{LEVEL_LABELS[a.level] ?? a.level}</span>
+                  </div>
+                  <p className="achievement-catalog__description">{a.description}</p>
+                  <p className="achievement-catalog__criterion">Critério: {describeRule(a.ruleType, a.ruleValue, activityTypes)}</p>
+                  <div className="achievement-catalog__footer">
+                    <span className="achievement-catalog__points">+{a.pointsReward} pts</span>
+                    {typeof a.unlockedCount === 'number' && (
+                      <span className="achievement-catalog__unlocked-count">
+                        {a.unlockedCount} pessoa{a.unlockedCount === 1 ? '' : 's'} já conquistou
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {discontinued.length > 0 && (
+        <details className="achievement-catalog__discontinued">
+          <summary>Conquistas descontinuadas ({discontinued.length})</summary>
+          <p className="steps-list__description">
+            Não podem mais ser conquistadas, mas quem já as tinha continua com elas — uma conquista concedida nunca é
+            revogada.
+          </p>
+          <ul className="achievement-catalog__discontinued-list">
+            {discontinued.map((a) => (
+              <li key={a.id}>
+                <strong>{a.name}</strong> — {a.description}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }

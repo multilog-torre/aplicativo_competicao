@@ -532,6 +532,22 @@ textarea {
   color: var(--color-text);
 }
 
+/* Nível da conquista (bronze/prata/ouro) — cores fixas e universalmente
+   reconhecíveis de pódio, fora da paleta de marca de propósito (mesmo
+   critério já usado pras cores semânticas de sucesso/aviso/perigo). */
+.badge--level-bronze {
+  background: #fbe4d0;
+  color: #a4571f;
+}
+.badge--level-prata {
+  background: #e6e8ec;
+  color: #5b6472;
+}
+.badge--level-ouro {
+  background: #fdf0c8;
+  color: #92730a;
+}
+
 .avatar {
   flex-shrink: 0;
   border-radius: 999px;
@@ -584,6 +600,196 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* ============================================================
+   Catálogo de Conquistas (RulesPage) e grade "Minhas Conquistas" (Perfil)
+   ============================================================ */
+.achievement-catalog__category {
+  margin-top: 18px;
+}
+
+.achievement-catalog__category-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin: 0 0 10px;
+}
+
+.achievement-catalog__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.achievement-catalog__card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.achievement-catalog__card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.achievement-catalog__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.achievement-catalog__description,
+.achievement-catalog__criterion {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.achievement-catalog__footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+}
+
+.achievement-catalog__points {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.achievement-catalog__unlocked-count {
+  color: var(--color-text-muted);
+}
+
+.achievement-catalog__discontinued {
+  margin-top: 18px;
+  padding: 12px;
+  background: var(--color-neutral-bg);
+  border-radius: var(--radius-md);
+}
+
+.achievement-catalog__discontinued summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.achievement-catalog__discontinued-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Grade de brasões no Perfil — desbloqueados em destaque, bloqueados em
+   silhueta (grayscale + opacidade reduzida) com barra de progresso. */
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.achievement-grid__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  text-align: center;
+}
+
+.achievement-grid__item:hover {
+  border-color: var(--color-accent);
+}
+
+.achievement-grid__item--locked .achievement-grid__icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.achievement-grid__item--locked .achievement-grid__name {
+  color: var(--color-text-muted);
+}
+
+.achievement-grid__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.achievement-grid__progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.achievement-grid__progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+  overflow: hidden;
+}
+
+.achievement-grid__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.achievement-grid__progress-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.achievement-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.achievement-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.achievement-detail__category {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.achievement-detail__criterion {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.achievement-detail__points {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.achievement-detail__status--unlocked {
+  color: var(--color-success);
+  font-weight: 600;
 }
 
 /* ============================================================
