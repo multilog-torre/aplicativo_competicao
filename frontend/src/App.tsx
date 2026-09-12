@@ -9,6 +9,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { RankingPage } from './pages/RankingPage';
+import { ParticipantsPage } from './pages/ParticipantsPage';
 import { MuralPage } from './pages/MuralPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -41,6 +42,7 @@ export function App() {
                   <Route path="/painel" element={<OverviewPage />} />
                   <Route path="/atividades" element={<ActivitiesPage />} />
                   <Route path="/ranking" element={<RankingPage />} />
+                  <Route path="/participantes" element={<ParticipantsPage />} />
                   <Route path="/mural" element={<MuralPage />} />
                   <Route path="/eventos" element={<EventsPage />} />
                   <Route path="/perfil" element={<ProfilePage />} />

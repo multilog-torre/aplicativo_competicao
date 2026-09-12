@@ -84,9 +84,23 @@ export interface ProfileData {
   achievementsCount: number;
   achievements?: Array<{ id: string; unlockedAt: string; achievement: { id: string; name: string; description: string; icon: string; pointsReward: number } }>;
   recentActivities?: UserActivity[];
-  // Só presentes no perfil PRÓPRIO — nunca no perfil público de outro colega.
   birthDate?: string | null;
+  age?: number | null;
   gender?: Gender | null;
+  createdAt?: string;
+}
+
+/** Item da seção "Participantes" — lista de todos os competidores. */
+export interface ParticipantEntry {
+  id: string;
+  name: string;
+  position: string | null;
+  avatarType: string;
+  avatarUrl: string | null;
+  department: { id: string; name: string } | null;
+  totalPoints: number;
+  level: { id: string; levelNumber: number; name: string; badgeIcon: string } | null;
+  achievementsCount: number;
 }
 
 export interface ActivityType {

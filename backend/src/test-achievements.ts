@@ -272,12 +272,14 @@ async function main() {
   assert('Conquista "Mestre da Meditação" desbloqueada (2 sessões aprovadas)', !!customUnlocked);
 
   // ── PASSO 11: Acesso próprio vs. cruzado ──────────────────────────────────────
-  console.log('\n9️⃣ Testando controle de acesso às conquistas de outro usuário...');
+  // Conquistas de qualquer colega são públicas a qualquer autenticado — decisão
+  // de transparência da seção "Participantes" (perfil completo entre colegas).
+  console.log('\n9️⃣ Testando visibilidade das conquistas de outro usuário...');
   const ownAccessRes = await reqJson('GET', `/achievements/users/${participantId}`, undefined, participantToken);
   assert('Dono acessa as próprias conquistas (200)', ownAccessRes.status === 200);
 
   const crossAccessRes = await reqJson('GET', `/achievements/users/${participantId}`, undefined, otherToken);
-  assert('Outro participante não pode ver conquistas alheias (403)', crossAccessRes.status === 403);
+  assert('Outro participante também pode ver as conquistas (200, seção Participantes)', crossAccessRes.status === 200);
 
   // ── PASSO 12: Admin acessa qualquer usuário ───────────────────────────────────
   const adminAccessRes = await reqJson('GET', `/achievements/users/${participantId}`, undefined, masterToken);
@@ -508,7 +510,7 @@ async function main() {
   );
 
   const progressCrossRes = await reqJson('GET', `/achievements/users/${participantId}/progress`, undefined, otherToken);
-  assert('Outro participante não pode ver o progresso alheio (403)', progressCrossRes.status === 403);
+  assert('Outro participante também pode ver o progresso (200, seção Participantes)', progressCrossRes.status === 200);
 
   const progressAdminRes = await reqJson('GET', `/achievements/users/${participantId}/progress`, undefined, masterToken);
   assert('Admin pode consultar o progresso de qualquer usuário (200)', progressAdminRes.status === 200);

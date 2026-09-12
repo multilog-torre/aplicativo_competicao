@@ -16,6 +16,7 @@ import { gameRuleRoutes } from '../modules/game-rules/game-rule.routes';
 import { healthRoutes } from '../modules/health/health.routes';
 import { levelRoutes } from '../modules/levels/level.routes';
 import { notificationRoutes } from '../modules/notifications/notification.routes';
+import { participantRoutes } from '../modules/participants/participant.routes';
 import { postRoutes } from '../modules/posts/post.routes';
 import { profileRoutes } from '../modules/profile/profile.routes';
 import { rankingRoutes } from '../modules/ranking/ranking.routes';
@@ -51,6 +52,10 @@ router.use('/admin/dashboard', adminDashboardRoutes);
 
 // Rotas de Ranking Dinâmico (Fase 10)
 router.use('/ranking', rankingRoutes);
+
+// Rotas da seção "Participantes" — lista de todos os competidores, ponto de
+// entrada pra abrir o perfil público completo de qualquer colega.
+router.use('/participants', participantRoutes);
 
 // Rotas de Níveis de Progressão (Fase 11)
 router.use('/levels', levelRoutes);

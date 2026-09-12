@@ -10,9 +10,10 @@
  * 6. Upload de foto (UPLOAD) funciona e gera avatarUrl como downloadUrl
  * 7. Download da foto de avatar funciona e retorna o conteúdo correto
  * 8. Trocar para INITIALS limpa o avatarUrl
- * 9. Perfil público de outro usuário mostra dados básicos (nome, nível, pontos, ranking)
- * 10. Perfil público de outro usuário NÃO lista as conquistas (apenas a contagem)
- * 11. Perfil público de outro usuário NÃO expõe atividades recentes
+ * 9. Perfil de outro usuário mostra dados básicos (nome, nível, pontos, ranking)
+ * 10. Perfil de outro usuário TAMBÉM lista conquistas e atividades recentes — seção
+ *     "Participantes": perfil completo é transparente entre colegas de competição
+ * 11. (removido — ver item 10; não há mais restrição de privacidade cruzada aqui)
  * 12. Perfil próprio de fato lista as conquistas e atividades recentes
  * 13. Download de avatar de usuário sem foto enviada retorna 404
  * 14. Usuário inexistente no perfil público retorna 404
@@ -178,14 +179,16 @@ async function main() {
   assert('Retorno para INITIALS funciona (200)', setInitialsRes.status === 200);
   assert('avatarUrl fica null em INITIALS', (setInitialsRes.data as AvatarBody)?.data?.avatarUrl === null);
 
-  // ── PASSO 9-11: Perfil público de outro usuário ───────────────────────────────
-  console.log('\n7️⃣ Testando perfil público (dados básicos, sem privacidade violada)...');
+  // ── PASSO 9-11: Perfil de outro usuário (seção "Participantes") ────────────────
+  // Decisão de produto: o perfil de um colega é tão completo quanto o próprio —
+  // data de nascimento/idade, atividades recentes, conquistas e nível inclusos.
+  console.log('\n7️⃣ Testando perfil completo de outro usuário (seção Participantes)...');
   const publicProfileRes = await reqJson('GET', `/profile/${participantId}`, undefined, otherToken);
-  assert('Perfil público retorna 200', publicProfileRes.status === 200);
+  assert('Perfil de outro usuário retorna 200', publicProfileRes.status === 200);
   const publicProfile = (publicProfileRes.data as ProfileBody)?.data;
-  assert('Perfil público contém totalPoints e level (já públicos via /ranking)', !!publicProfile?.level && typeof publicProfile.totalPoints === 'number');
-  assert('Perfil público NÃO lista achievements (apenas contagem)', publicProfile?.achievements === undefined && typeof publicProfile?.achievementsCount === 'number');
-  assert('Perfil público NÃO expõe recentActivities', publicProfile?.recentActivities === undefined);
+  assert('Perfil contém totalPoints e level (já públicos via /ranking)', !!publicProfile?.level && typeof publicProfile.totalPoints === 'number');
+  assert('Perfil de outro usuário TAMBÉM lista achievements (array)', Array.isArray(publicProfile?.achievements));
+  assert('Perfil de outro usuário TAMBÉM expõe recentActivities (array)', Array.isArray(publicProfile?.recentActivities));
 
   // ── PASSO 12: Perfil próprio lista tudo ───────────────────────────────────────
   console.log('\n8️⃣ Confirmando que o perfil PRÓPRIO lista conquistas e atividades...');

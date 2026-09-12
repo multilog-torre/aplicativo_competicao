@@ -318,6 +318,12 @@ textarea {
   margin: 0 0 20px;
 }
 
+.page__subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: -14px 0 20px;
+}
+
 .page__header .page__title {
   margin-bottom: 0;
 }
@@ -1128,6 +1134,54 @@ textarea {
 .ranking-row__points {
   font-weight: 700;
   white-space: nowrap;
+}
+
+/* ============================================================
+   Participantes
+   ============================================================ */
+/* A linha de participante reaproveita o visual de .ranking-row, mas é um
+   <button> inteiro clicável (abre o perfil), não só o nome — por isso reseta
+   a aparência nativa de botão e ajusta as colunas do grid (sem a coluna de
+   posição numérica, que só existe no Ranking). */
+.participant-row {
+  width: 100%;
+  grid-template-columns: auto 1fr auto auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+
+.participant-row:hover {
+  border-color: var(--color-accent);
+}
+
+.participant-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.participant-profile__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.participant-profile__name {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.participant-profile__position,
+.participant-profile__department {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
 }
 
 /* ============================================================

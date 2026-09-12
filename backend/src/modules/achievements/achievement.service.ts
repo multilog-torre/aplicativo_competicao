@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database';
-import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { tryParseJson } from '../../shared/utils/json';
 import { TransactionClient } from '../../shared/types/prisma';
 import { UploadedFile } from '../../shared/types/upload';
@@ -323,11 +323,10 @@ export class AchievementService {
 
   // ─── Consulta das conquistas desbloqueadas por um usuário ─────────────────────
 
-  public static async listUnlockedForUser(userId: string, requestingUserId: string, isAdmin: boolean) {
-    if (!isAdmin && userId !== requestingUserId) {
-      throw new ForbiddenError('Você não tem permissão para visualizar as conquistas de outro usuário.');
-    }
-
+  public static async listUnlockedForUser(userId: string, _requestingUserId: string, _isAdmin: boolean) {
+    // Conquistas desbloqueadas são visíveis a qualquer colega autenticado —
+    // mesma decisão de transparência da seção "Participantes" (perfil público
+    // completo), não mais restrita a self-ou-admin.
     const unlocked = await prisma.userAchievement.findMany({
       where: { userId },
       orderBy: { unlockedAt: 'desc' },
@@ -353,10 +352,9 @@ export class AchievementService {
    * motor de desbloqueio, só que devolvendo {current, target} em vez de um
    * booleano satisfied/not-satisfied.
    */
-  public static async getCatalogWithProgressForUser(userId: string, requestingUserId: string, isAdmin: boolean) {
-    if (!isAdmin && userId !== requestingUserId) {
-      throw new ForbiddenError('Você não tem permissão para visualizar o progresso de outro usuário.');
-    }
+  public static async getCatalogWithProgressForUser(userId: string, _requestingUserId: string, _isAdmin: boolean) {
+    // Progresso rumo às conquistas também é visível a qualquer colega
+    // autenticado — mesma decisão de transparência da seção "Participantes".
 
     // O catálogo pra progresso é "toda conquista ATIVA (candidata a desbloquear)
     // + qualquer uma que o usuário já tenha, mesmo que tenha sido desativada

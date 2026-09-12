@@ -10,6 +10,16 @@ import { ChangePasswordDTO, UpdateProfileDTO } from './profile.dto';
 
 const ALLOWED_AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png'];
 
+/** Idade em anos completos na data de hoje, a partir da data de nascimento. */
+function calculateAge(birthDate: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const hasHadBirthdayThisYear =
+    today.getMonth() > birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
+}
+
 /**
  * Catálogo fixo de avatares pré-definidos. Segue o mesmo padrão já usado em
  * todo o projeto (ícone como string, renderizado pelo frontend — ex.:
@@ -38,16 +48,15 @@ export class ProfileService {
   }
 
   /**
-   * Perfil "público" de outro usuário, dentro da corporação: dados já
-   * visíveis via /ranking (nome, avatar, departamento, pontos, nível) mais
-   * uma contagem de conquistas — sem listar quais, e sem histórico de
-   * atividades, respeitando a mesma restrição de privacidade da Fase 12
-   * (achievements/users/:userId é self-ou-admin) e das Fases 6/7 (atividades
-   * são privadas ao dono).
+   * Perfil de outro usuário, visto por um colega, dentro da seção
+   * "Participantes": mostra o mesmo conteúdo completo do perfil próprio
+   * (data de nascimento/idade, atividades recentes, conquistas, nível) —
+   * decisão explícita de transparência entre colegas de competição. Só a
+   * senha e o e-mail nunca são expostos aqui (nem estão incluídos em
+   * `buildProfile`).
    */
-  public static async getPublicProfile(userId: string, requestingUserId: string, isAdmin: boolean) {
-    const isSelfOrAdmin = userId === requestingUserId || isAdmin;
-    return this.buildProfile(userId, isSelfOrAdmin);
+  public static async getPublicProfile(userId: string, _requestingUserId: string, _isAdmin: boolean) {
+    return this.buildProfile(userId, true);
   }
 
   private static async buildProfile(userId: string, includePrivateDetails: boolean) {
@@ -98,9 +107,8 @@ export class ProfileService {
 
     return {
       ...base,
-      // Dados pessoais (aniversário/sexo) — nunca expostos no perfil público
-      // de outro colega, só ao próprio usuário ou a um admin.
       birthDate: user.birthDate,
+      age: user.birthDate ? calculateAge(user.birthDate) : null,
       gender: user.gender,
       achievements,
       recentActivities: recentActivities.map((a) => ({
