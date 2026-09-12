@@ -1143,6 +1143,11 @@ textarea {
    <button> inteiro clicável (abre o perfil), não só o nome — por isso reseta
    a aparência nativa de botão e ajusta as colunas do grid (sem a coluna de
    posição numérica, que só existe no Ranking). */
+.sidebar__icon-svg {
+  color: #c2570b; /* laranja escuro — a pedido do usuário */
+  vertical-align: -3px;
+}
+
 .participant-row {
   width: 100%;
   grid-template-columns: auto 1fr auto auto;
