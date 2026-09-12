@@ -4,6 +4,7 @@ import { Department, ParticipantEntry } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Avatar } from '../components/ui/Badge';
 import { ParticipantProfileModal } from '../components/ui/ParticipantProfileModal';
+import { ParticipantsIcon } from '../components/ui/icons';
 
 /**
  * Seção "Participantes": todo mundo que compete, navegável por busca e
@@ -67,7 +68,7 @@ export function ParticipantsPage() {
 
       {loading && <LoadingState label="Carregando participantes…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
-      {!loading && !error && entries.length === 0 && <EmptyState icon="🧑‍🤝‍🧑" title="Nenhum participante encontrado" />}
+      {!loading && !error && entries.length === 0 && <EmptyState icon={<ParticipantsIcon size={40} />} title="Nenhum participante encontrado" />}
 
       {!loading && !error && entries.length > 0 && (
         <ul className="ranking-list">

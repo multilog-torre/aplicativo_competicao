@@ -1143,9 +1143,17 @@ textarea {
    <button> inteiro clicável (abre o perfil), não só o nome — por isso reseta
    a aparência nativa de botão e ajusta as colunas do grid (sem a coluna de
    posição numérica, que só existe no Ranking). */
-.sidebar__icon-svg {
-  color: #c2570b; /* laranja escuro — a pedido do usuário */
+/* Ícone padrão da seção Participantes (ver ui/icons.tsx) — laranja escuro em
+   qualquer lugar que apareça: item do menu, estados vazios etc. */
+.icon-participants {
+  color: #c2570b;
   vertical-align: -3px;
+}
+
+.state-block__icon .icon-participants {
+  width: 40px;
+  height: 40px;
+  vertical-align: 0;
 }
 
 .participant-row {
