@@ -87,4 +87,10 @@ export class NotificationService {
     await prisma.notification.delete({ where: { id } });
     return { id };
   }
+
+  /** Exclui TODAS as notificações do próprio usuário — "Excluir todas" do painel. */
+  public static async deleteAll(userId: string): Promise<{ deletedCount: number }> {
+    const result = await prisma.notification.deleteMany({ where: { userId } });
+    return { deletedCount: result.count };
+  }
 }

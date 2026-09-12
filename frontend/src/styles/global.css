@@ -1695,7 +1695,11 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 100;
+  /* Acima dos drawers (filter/notification, z-index 110) — um Modal de
+     confirmação pode ser aberto POR CIMA de um drawer já aberto (ex.:
+     confirmar "Excluir todas" dentro do painel de notificações), e nesse
+     caso precisa ficar por cima, nunca atrás. */
+  z-index: 120;
 }
 
 .modal {
@@ -1904,9 +1908,41 @@ textarea {
 }
 
 .notification-drawer-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* Sobrescreve `.topbar .btn--ghost` (texto branco, pensado pro fundo escuro
+   do topbar) — como o painel de notificações é renderizado dentro do próprio
+   <header class="topbar"> no DOM (é um <div style="position:fixed"> filho de
+   NotificationBell, que fica dentro do topbar), esses botões herdavam a cor
+   branca do topbar mesmo estando visualmente sobre o fundo BRANCO do painel
+   — texto e ícone brancos sobre branco, invisíveis. Esse foi o bug relatado
+   pelo usuário ("o ícone do botão não aparece").
+*/
+.notification-drawer-panel__actions .btn--ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text);
+  border-color: var(--color-border);
+  background: transparent;
+}
+
+.notification-drawer-panel__actions .btn--ghost:hover:not(:disabled) {
+  background: var(--color-neutral-bg);
+  opacity: 1;
+}
+
+.notification-drawer-panel__delete-all:hover:not(:disabled) {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
 }
 
 .notification-drawer-panel__body {

@@ -19,6 +19,7 @@
  * 15. Excluir notificação própria funciona e ela some da listagem
  * 16. Participante não pode excluir notificação de outro usuário (403)
  * 17. Excluir notificação inexistente retorna 404
+ * 18. Excluir TODAS as notificações do próprio usuário funciona e não afeta outro usuário
  */
 
 import http from 'http';
@@ -324,6 +325,24 @@ async function main() {
     participantToken,
   );
   assert('Excluir notificação inexistente retorna 404', deleteNonExistentRes.status === 404);
+
+  // ── PASSO 18: Excluir todas ───────────────────────────────────────────────────
+  console.log('\n1️⃣3️⃣ Testando exclusão de todas as notificações...');
+  const otherCountBeforeDeleteAllRes = await reqJson('GET', '/notifications?limit=100', undefined, otherToken);
+  const otherCountBeforeDeleteAll = ((otherCountBeforeDeleteAllRes.data as NotifBody)?.data ?? []).length;
+  assert('Outro usuário tem notificações antes do "excluir todas" do participante', otherCountBeforeDeleteAll > 0);
+
+  const deleteAllRes = await reqJson('DELETE', '/notifications', undefined, participantToken);
+  assert('Excluir todas as notificações funciona (200)', deleteAllRes.status === 200);
+
+  const afterDeleteAllRes = await reqJson('GET', '/notifications?limit=100', undefined, participantToken);
+  assert('Listagem do participante fica vazia após "excluir todas"', ((afterDeleteAllRes.data as NotifBody)?.data ?? []).length === 0);
+
+  const otherCountAfterDeleteAllRes = await reqJson('GET', '/notifications?limit=100', undefined, otherToken);
+  assert(
+    '"Excluir todas" não afeta as notificações de outro usuário',
+    ((otherCountAfterDeleteAllRes.data as NotifBody)?.data ?? []).length === otherCountBeforeDeleteAll,
+  );
 
   server.close();
 

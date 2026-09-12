@@ -29,3 +29,14 @@ export function TrashIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
+
+/** Ícone de "marcar como lida" (visto/check) — mesma razão do TrashIcon: SVG
+ * com currentColor em vez de emoji, pra garantir a mesma aparência (e a
+ * mesma cor) em qualquer navegador/SO. */
+export function CheckIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 448 512" width={size} height={size} fill="currentColor" aria-hidden="true">
+      <path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z" />
+    </svg>
+  );
+}

@@ -15,6 +15,9 @@ router.get('/', validateRequest({ query: ListNotificationsQuerySchema }), asyncH
 router.get('/unread-count', asyncHandler(NotificationController.getUnreadCount));
 router.post('/read-all', asyncHandler(NotificationController.markAllAsRead));
 router.post('/:id/read', asyncHandler(NotificationController.markAsRead));
+// '/' (excluir todas) precisa vir ANTES de '/:id' — senão o Express tentaria
+// tratar a rota fixa como se ':id' fosse uma string vazia.
+router.delete('/', asyncHandler(NotificationController.deleteAll));
 router.delete('/:id', asyncHandler(NotificationController.delete));
 
 export { router as notificationRoutes };

@@ -36,4 +36,10 @@ export class NotificationController {
     const result = await NotificationService.delete(id, userId);
     return sendSuccess(res, result, 200);
   }
+
+  public static async deleteAll(req: Request, res: Response): Promise<Response> {
+    const userId = req.user!.id;
+    const result = await NotificationService.deleteAll(userId);
+    return sendSuccess(res, result, 200);
+  }
 }

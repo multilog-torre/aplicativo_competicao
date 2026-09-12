@@ -3,7 +3,8 @@ import { api, ApiError } from '../../api/client';
 import { NotificationItem } from '../../types/api';
 import { useToast } from '../../context/ToastContext';
 import { LoadingState, EmptyState } from './States';
-import { TrashIcon } from './icons';
+import { TrashIcon, CheckIcon } from './icons';
+import { ConfirmModal } from './Modal';
 
 const POLL_INTERVAL_MS = 20000;
 
@@ -32,6 +33,8 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   function loadUnreadCount() {
     api
@@ -100,6 +103,23 @@ export function NotificationBell() {
     }
   }
 
+  async function handleDeleteAll() {
+    if (!items || items.length === 0) return;
+    setDeletingAll(true);
+    const previous = items;
+    try {
+      await api.delete('/notifications');
+      setItems([]);
+      setUnreadCount(0);
+      setConfirmDeleteAll(false);
+    } catch (err) {
+      setItems(previous);
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível excluir as notificações.', 'error');
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   async function handleDelete(n: NotificationItem, e: MouseEvent) {
     e.stopPropagation();
     const previous = items;
@@ -151,7 +171,15 @@ export function NotificationBell() {
                 onClick={handleMarkAllRead}
                 disabled={!items || items.length === 0 || items.every((n) => n.isRead)}
               >
-                Marcar todas como lidas
+                <CheckIcon size={13} /> Marcar todas como lidas
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--small notification-drawer-panel__delete-all"
+                onClick={() => setConfirmDeleteAll(true)}
+                disabled={!items || items.length === 0}
+              >
+                <TrashIcon size={13} /> Excluir todas
               </button>
             </div>
 
@@ -188,6 +216,18 @@ export function NotificationBell() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmDeleteAll && (
+        <ConfirmModal
+          title="Excluir todas as notificações"
+          message="Isso vai excluir permanentemente todas as suas notificações. Essa ação não pode ser desfeita. Deseja continuar?"
+          confirmLabel="Excluir todas"
+          danger
+          loading={deletingAll}
+          onConfirm={handleDeleteAll}
+          onCancel={() => setConfirmDeleteAll(false)}
+        />
       )}
     </>
   );
