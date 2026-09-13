@@ -981,7 +981,17 @@ textarea {
   padding-top: 4px;
 }
 
-.chart-zoom-modal-body .chart-card__body {
+/* BarChart não tem uma largura intrínseca (diferente de LineChart/MultiLineChart,
+   cujo SVG já nasce com um width em pixel calculado em JS) — sua barra "1fr"
+   só existe de verdade quando o contêiner tem uma largura definida. Dentro do
+   modal de zoom, .chart-zoom-modal-body é flex com justify-content:center,
+   que dimensiona o filho pelo conteúdo (shrink-to-fit); como o conteúdo da
+   coluna 1fr é um <div> vazio, ela colapsava pra 0px — a barra sumia,
+   sobrando só rótulo e número. Força esse filho a ocupar 100% da largura do
+   modal, igual ele já faz naturalmente na visão padrão do card (bug relatado
+   pelo usuário: "quando clico no zoom a barrinha some").
+*/
+.chart-zoom-modal-body .bar-chart {
   width: 100%;
 }
 
