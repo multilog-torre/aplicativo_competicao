@@ -317,7 +317,7 @@ export function OverviewPage() {
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Pontos distribuídos</span>
-          <span className="stat-card__value stat-card__value--small">{indicators.points.totalDistributed.toLocaleString('pt-BR')}</span>
+          <span className="stat-card__value">{indicators.points.totalDistributed.toLocaleString('pt-BR')}</span>
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Atividades pendentes</span>

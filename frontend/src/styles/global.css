@@ -432,6 +432,12 @@ textarea {
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  /* Só centraliza o TEXTO (label/value), nunca com align-items:center no
+     contêiner — isso encolheria elementos de largura 100% como
+     .progress-bar (mesmo bug já visto no BarChart: um filho flex sem
+     largura própria colapsa pro tamanho do conteúdo). */
+  align-items: stretch;
+  text-align: center;
   gap: 6px;
 }
 
