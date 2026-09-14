@@ -4,7 +4,7 @@ import { AdminUser, Department, Gender, GENDER_LABELS, RoleCatalogItem } from '.
 
 const GENDER_OPTIONS: Gender[] = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'];
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
-import { Modal } from '../components/ui/Modal';
+import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { todayLocalISODate } from '../utils/date';
@@ -39,6 +39,8 @@ export function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [managingRoles, setManagingRoles] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   function load() {
     setLoading(true);
@@ -66,6 +68,21 @@ export function AdminUsersPage() {
       load();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Não foi possível aprovar o cadastro.', 'error');
+    }
+  }
+
+  async function onConfirmDelete() {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    try {
+      const { data } = await api.delete<{ status: 'DELETED' | 'DEACTIVATED'; message: string }>(`/admin/users/${deleting.id}`);
+      showToast(data.message, data.status === 'DELETED' ? 'success' : 'info');
+      setDeleting(null);
+      load();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível excluir o usuário.', 'error');
+    } finally {
+      setDeletingBusy(false);
     }
   }
 
@@ -130,6 +147,11 @@ export function AdminUsersPage() {
                     <button type="button" className="btn btn--small btn--secondary" onClick={() => setManagingRoles(u)}>
                       Papéis
                     </button>
+                    {u.id !== currentUser?.id && (
+                      <button type="button" className="btn btn--small btn--danger" onClick={() => setDeleting(u)}>
+                        Excluir
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -176,6 +198,18 @@ export function AdminUsersPage() {
             showToast('Papéis atualizados com sucesso!', 'success');
             load();
           }}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmModal
+          title="Excluir usuário"
+          message={`Tem certeza que deseja excluir "${deleting.name}"? Se a conta já tiver algum histórico no sistema (atividades, pontos, publicações etc.), ela será desativada em vez de excluída, para preservar a integridade dos dados.`}
+          confirmLabel="Excluir"
+          danger
+          loading={deletingBusy}
+          onConfirm={onConfirmDelete}
+          onCancel={() => setDeleting(null)}
         />
       )}
     </div>

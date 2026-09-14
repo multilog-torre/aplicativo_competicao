@@ -19,6 +19,12 @@
  * 15. Remover o próprio ADMIN_MASTER é bloqueado (422 CANNOT_SELF_DEMOTE)
  * 16. Remover o ÚLTIMO ADMIN_MASTER do sistema é bloqueado (422 LAST_ADMIN_MASTER)
  * 17. Todas as ações geram auditoria (CREATE_USER, UPDATE_USER, UPDATE_USER_ROLES)
+ * 18. DELETE /admin/users/:id exige autenticação e papel ADMIN_MASTER
+ * 19. Excluir a própria conta é bloqueado (422 CANNOT_DELETE_SELF)
+ * 20. Excluir um usuário sem NENHUM histórico apaga de verdade (DELETED)
+ * 21. Excluir um usuário que já tem histórico (login, atividades, etc.) apenas
+ *     desativa a conta (DEACTIVATED) em vez de excluir — Regra de Ouro
+ * 22. As duas ações geram auditoria (DELETE e DEACTIVATE)
  */
 
 import http from 'http';
@@ -197,6 +203,71 @@ async function main() {
 
   const auditRolesRes = await reqJson('GET', `/admin/audit-logs?action=UPDATE_USER_ROLES&entityId=${newUserId}`, undefined, masterToken);
   assert('Alteração de papéis gerou auditoria', ((auditRolesRes.data as AuditBody)?.data ?? []).length > 0);
+
+  // ── PASSO 18: Autenticação/autorização da rota de exclusão ────────────────────
+  console.log('\n1️⃣3️⃣ Testando autenticação e autorização de DELETE /admin/users/:id...');
+  const deleteUnauthRes = await reqJson('DELETE', `/admin/users/${newUserId}`);
+  assert('DELETE exige autenticação (401 sem token)', deleteUnauthRes.status === 401);
+
+  const deleteParticipantBlockedRes = await reqJson('DELETE', `/admin/users/${newUserId}`, undefined, participantToken);
+  assert('Participante não pode excluir (403)', deleteParticipantBlockedRes.status === 403);
+
+  const deleteAdminBlockedRes = await reqJson('DELETE', `/admin/users/${newUserId}`, undefined, adminToken);
+  assert('ADMIN comum (não master) não pode excluir (403)', deleteAdminBlockedRes.status === 403);
+
+  // ── PASSO 19: Auto-exclusão bloqueada ──────────────────────────────────────────
+  console.log('\n1️⃣4️⃣ Testando bloqueio de auto-exclusão...');
+  const selfDeleteRes = await reqJson('DELETE', `/admin/users/${masterId}`, undefined, masterToken);
+  assert('Auto-exclusão é bloqueada (422)', selfDeleteRes.status === 422);
+
+  // ── PASSO 20: Excluir usuário sem histórico apaga de verdade ──────────────────
+  console.log('\n1️⃣5️⃣ Testando exclusão de usuário sem nenhum histórico (DELETED)...');
+  type DeleteBody = { data?: { status?: 'DELETED' | 'DEACTIVATED'; message?: string } };
+  const freshUserEmail = `teste.exclusao.${Date.now()}@empresa.com`;
+  const freshUserRes = await reqJson(
+    'POST',
+    '/admin/users',
+    { name: 'Usuário Nunca Usado', email: freshUserEmail, password: 'senha123' },
+    masterToken,
+  );
+  const freshUserId = (freshUserRes.data as CreateUserBody)?.data?.id ?? '';
+  assert('Usuário "nunca usado" criado para o teste', !!freshUserId);
+
+  const hardDeleteRes = await reqJson('DELETE', `/admin/users/${freshUserId}`, undefined, masterToken);
+  assert('Exclusão retorna 200', hardDeleteRes.status === 200);
+  assert('Usuário sem histórico é DELETED (excluído de verdade)', (hardDeleteRes.data as DeleteBody)?.data?.status === 'DELETED');
+
+  const getDeletedRes = await reqJson('GET', `/admin/users/${freshUserId}`, undefined, masterToken);
+  assert('Usuário excluído não existe mais (404)', getDeletedRes.status === 404);
+
+  // ── PASSO 21: Excluir usuário COM histórico apenas desativa ───────────────────
+  console.log('\n1️⃣6️⃣ Testando exclusão de usuário com histórico (DEACTIVATED em vez de excluído)...');
+  // newUserId já logou várias vezes ao longo deste teste (gera audit log de LOGIN
+  // a cada login) — já tem histórico suficiente pra cair na Regra de Ouro.
+  const softDeleteRes = await reqJson('DELETE', `/admin/users/${newUserId}`, undefined, masterToken);
+  assert('Exclusão retorna 200', softDeleteRes.status === 200);
+  assert(
+    'Usuário com histórico é DEACTIVATED (desativado, não excluído)',
+    (softDeleteRes.data as DeleteBody)?.data?.status === 'DEACTIVATED',
+  );
+
+  const getDeactivatedRes = await reqJson('GET', `/admin/users/${newUserId}`, undefined, masterToken);
+  type UserBody = { data?: { status?: string } };
+  assert('Usuário desativado continua existindo no banco', getDeactivatedRes.status === 200);
+  assert('Status do usuário ficou INACTIVE', (getDeactivatedRes.data as UserBody)?.data?.status === 'INACTIVE');
+
+  // ── PASSO 22: Auditoria das duas exclusões ────────────────────────────────────
+  console.log('\n1️⃣7️⃣ Testando auditoria das exclusões...');
+  const auditDeleteRes = await reqJson('GET', `/admin/audit-logs?action=DELETE&entity=User&entityId=${freshUserId}`, undefined, masterToken);
+  assert('Exclusão definitiva gerou auditoria (DELETE)', ((auditDeleteRes.data as AuditBody)?.data ?? []).length > 0);
+
+  const auditDeactivateRes = await reqJson(
+    'GET',
+    `/admin/audit-logs?action=DEACTIVATE&entity=User&entityId=${newUserId}`,
+    undefined,
+    masterToken,
+  );
+  assert('Exclusão convertida em desativação gerou auditoria (DEACTIVATE)', ((auditDeactivateRes.data as AuditBody)?.data ?? []).length > 0);
 
   server.close();
 

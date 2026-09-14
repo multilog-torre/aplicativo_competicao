@@ -57,3 +57,10 @@ Catálogo simples (`Department`): nome (único), descrição, status `ACTIVE`/`I
 - **Listar/buscar**: por nome, e-mail, papel ou status, paginado.
 - **Editar**: nome, cargo, departamento, nascimento, sexo, status. Toda edição é auditada com valores antes/depois.
 - **Conceder/revogar papéis**: substitui o conjunto de papéis do usuário pelo informado (não é incremental) — protegido pelas duas regras de auto-exclusão descritas acima.
+- **Excluir** (`DELETE /admin/users/:id`): mesma Regra de Ouro aplicada a conquistas/desafios/recompensas/departamentos — nada com histórico é apagado de verdade.
+  - Bloqueado: excluir a própria conta (422 `CANNOT_DELETE_SELF`); excluir o último `ADMIN_MASTER` do sistema (422 `LAST_ADMIN_MASTER`, mesma regra de `setRoles`).
+  - Antes de excluir, o backend verifica **qualquer** histórico do usuário: atividades registradas ou validadas, transações de pontos (como dono ou como quem lançou), conquistas, desafios, pódios de ciclo, eventos criados/aprovados/confirmados, resgates, posts/comentários/curtidas, notificações e entradas de auditoria — praticamente qualquer conta que já logou uma vez já tem histórico, porque o próprio login já grava uma entrada de auditoria.
+  - **Sem nenhum histórico** (conta criada por engano, nunca logou, nunca usada) → excluída de verdade (`status: 'DELETED'` na resposta).
+  - **Com qualquer histórico** → a conta é apenas desativada (`status` do usuário vira `INACTIVE`, resposta `status: 'DEACTIVATED'`) — mesmo efeito de editar o status manualmente, só que disparado pelo botão "Excluir".
+  - Ambos os casos geram auditoria (`DELETE` ou `DEACTIVATE`, entidade `User`).
+  - No frontend (Admin > Gerenciar Usuários), o botão "Excluir" não aparece na própria linha do admin logado; a confirmação já avisa que uma conta com histórico será desativada em vez de excluída.

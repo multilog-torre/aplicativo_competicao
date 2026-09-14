@@ -243,4 +243,102 @@ export class AdminUserService {
     const updated = await prisma.user.findUniqueOrThrow({ where: { id }, include: USER_INCLUDE });
     return toPublicShape(updated);
   }
+
+  /**
+   * Exclusão de conta — mesma "Regra de Ouro" já aplicada a conquistas,
+   * desafios, recompensas e departamentos: nada que já tenha histórico é
+   * apagado de verdade (aqui, isso é praticamente qualquer conta que já
+   * logou uma vez — o próprio login já grava uma entrada de auditoria).
+   * Uma conta com histórico é desativada (status INACTIVE, igual ao que já
+   * existia via "Editar > Status") em vez de excluída; só uma conta nunca
+   * usada (criada por engano, nunca logou, nenhuma atividade/ponto/post)
+   * é removida do banco de fato.
+   */
+  public static async delete(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new AppError('Você não pode excluir a própria conta.', 422, 'CANNOT_DELETE_SELF');
+    }
+
+    const existing = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        ...USER_INCLUDE,
+        _count: {
+          select: {
+            activities: true,
+            validatedActivities: true,
+            pointsTransactions: true,
+            createdTransactions: true,
+            userAchievements: true,
+            challenges: true,
+            cycleWins: true,
+            eventsCreated: true,
+            eventsApproved: true,
+            eventParticipations: true,
+            eventAttendanceConfirmed: true,
+            userRewards: true,
+            posts: true,
+            comments: true,
+            postLikes: true,
+            notifications: true,
+            auditLogs: true,
+          },
+        },
+      },
+    });
+    if (!existing) throw new NotFoundError(`Usuário com ID '${id}' não foi encontrado.`);
+
+    const currentRoleNames = existing.userRoles.map((ur) => ur.role.name);
+    if (currentRoleNames.includes('ADMIN_MASTER')) {
+      const adminMasterCount = await prisma.userRole.count({ where: { role: { name: 'ADMIN_MASTER' } } });
+      if (adminMasterCount <= 1) {
+        throw new AppError(
+          'Não é possível excluir o último ADMIN_MASTER do sistema — isso deixaria a plataforma sem governança.',
+          422,
+          'LAST_ADMIN_MASTER',
+        );
+      }
+    }
+
+    const hasHistory = Object.values(existing._count).some((count) => count > 0);
+
+    if (hasHistory) {
+      if (existing.status !== 'INACTIVE') {
+        await prisma.user.update({ where: { id }, data: { status: 'INACTIVE' } });
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'DEACTIVATE',
+          entity: 'User',
+          entityId: id,
+          oldValues: JSON.stringify({ status: existing.status }),
+          newValues: JSON.stringify({ status: 'INACTIVE', reason: 'Exclusão solicitada, mas a conta já possui histórico.' }),
+        },
+      });
+
+      return {
+        status: 'DEACTIVATED' as const,
+        message: 'Esta conta já possui histórico no sistema (atividades, pontos, publicações ou outro registro) — desativada em vez de excluída para preservar a integridade dos dados.',
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.userRole.deleteMany({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'DELETE',
+        entity: 'User',
+        entityId: id,
+        oldValues: JSON.stringify({ name: existing.name, email: existing.email }),
+      },
+    });
+
+    return { status: 'DELETED' as const, message: 'Usuário excluído com sucesso.' };
+  }
 }

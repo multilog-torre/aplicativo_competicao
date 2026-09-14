@@ -38,4 +38,11 @@ export class AdminUserController {
     const user = await AdminUserService.setRoles(id, data, adminId);
     return sendSuccess(res, user, 200);
   }
+
+  public static async delete(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const adminId = req.user!.id;
+    const result = await AdminUserService.delete(id, adminId);
+    return sendSuccess(res, result, 200);
+  }
 }

@@ -16,5 +16,6 @@ router.get('/:id', asyncHandler(AdminUserController.getById));
 router.post('/', validateRequest({ body: CreateUserSchema }), asyncHandler(AdminUserController.create));
 router.patch('/:id', validateRequest({ body: UpdateUserSchema }), asyncHandler(AdminUserController.update));
 router.patch('/:id/roles', validateRequest({ body: SetUserRolesSchema }), asyncHandler(AdminUserController.setRoles));
+router.delete('/:id', asyncHandler(AdminUserController.delete));
 
 export { router as adminUserRoutes };
