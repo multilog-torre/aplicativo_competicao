@@ -313,10 +313,7 @@ export function OverviewPage() {
       <div className="stat-grid">
         <div className="stat-card">
           <span className="stat-card__label">Colaboradores</span>
-          <span className="stat-card__value">
-            {indicators.activeUsers}
-            <small> / {indicators.totalUsers}</small>
-          </span>
+          <span className="stat-card__value">{indicators.activeUsers}</span>
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Pontos distribuídos</span>
