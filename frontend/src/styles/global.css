@@ -1037,6 +1037,12 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Reserva espaço pro botão de zoom flutuante (.chart-zoom-btn--floating,
+     32px + 6px de margem do canto) — diferente de LineChart/MultiLineChart
+     (SVG que já reserva essa faixa embaixo pros rótulos do eixo X),
+     BarChart não tem nada ali por padrão, então o botão ficava por cima da
+     última barra (bug relatado pelo usuário). */
+  padding-bottom: 44px;
 }
 
 .bar-chart__row {
