@@ -1008,6 +1008,12 @@ textarea {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--color-border);
+  /* Reserva espaço pro botão de zoom flutuante (.chart-zoom-btn--floating,
+     32px + 6px de margem do canto), mesma correção já aplicada em
+     .bar-chart — com muitos usuários a legenda quebra em 2+ linhas e a
+     última fica colada no fundo do card, onde o botão flutua por cima,
+     escondendo o nome de quem cai ali. */
+  padding-bottom: 44px;
 }
 
 .multi-line-legend__item {
