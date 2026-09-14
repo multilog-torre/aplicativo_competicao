@@ -37,6 +37,8 @@ Existem **dois caminhos**, com regras bem diferentes:
 | `PENDING_APPROVAL` | Login bloqueado com mensagem específica ("aguardando aprovação"). Só existe para contas de autocadastro. |
 | `INACTIVE` | Login bloqueado ("conta inativa ou suspensa"). Um admin não pode desativar a própria conta (`admin-user.service.ts`). |
 
+Um usuário `INACTIVE` (por desativação manual ou por uma tentativa de exclusão convertida em desativação, ver "Excluir" abaixo) some de todo indicador/gráfico de **composição atual** da equipe — contagem de colaboradores (`indicators.activeUsers`), colaboradores por departamento, Top 5 do ranking geral, "Evolução dos usuários". Ele **não** desaparece de gráficos de **histórico** (pontos/atividades já distribuídos, ledger) — o que ele já fez enquanto estava ativo continua registrado para sempre, mesma Regra de Ouro do resto do sistema. Um usuário excluído de verdade (sem nenhum histórico) simplesmente não existe mais em lugar nenhum.
+
 ## Login e sessão
 
 - `POST /auth/login`: valida e-mail/senha, gera `accessToken` (JWT curto, payload com `sub`, `email`, `name`, `roles`) e `refreshToken` (JWT longo, só com `sub`). Todo login bem-sucedido grava uma entrada `LOGIN` na auditoria.

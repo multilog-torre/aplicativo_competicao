@@ -244,9 +244,19 @@ export class AdminDashboardService {
     return { total, active, completedParticipations };
   }
 
+  /**
+   * "Colaboradores por departamento" — igual a todo indicador/gráfico de
+   * composição de usuários deste painel (activeUsers, topRanking,
+   * topUsersEvolution), conta só quem está `ACTIVE` hoje. Diferente dos
+   * gráficos de HISTÓRICO (pontos/atividades distribuídos), que nunca
+   * escondem uma contribuição já registrada só porque a pessoa foi
+   * desativada depois — este é sobre "quem compõe a empresa agora", não
+   * sobre o que já aconteceu, então filtra sem violar a Regra de Ouro do
+   * ledger (nada de histórico é apagado, isso é só uma foto do presente).
+   */
   private static async getUsersByDepartment() {
     const departments = await prisma.department.findMany({
-      select: { id: true, name: true, _count: { select: { users: true } } },
+      select: { id: true, name: true, _count: { select: { users: { where: { status: 'ACTIVE' } } } } },
       orderBy: { name: 'asc' },
     });
     return departments.map((d) => ({ departmentId: d.id, departmentName: d.name, count: d._count.users }));
