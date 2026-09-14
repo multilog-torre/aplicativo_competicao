@@ -281,17 +281,19 @@ export class CycleService {
   }
 
   private static async closeCycle(cycleId: string): Promise<void> {
-    // 1. Pódio: top 3 por totalPoints (representa os pontos ganhos desde o
-    // último reset — seja o início do sistema, seja o ciclo anterior).
-    const topUsers = await prisma.user.findMany({
-      where: { status: 'ACTIVE', totalPoints: { gt: 0 } },
-      orderBy: [{ totalPoints: 'desc' }, { name: 'asc' }],
-      take: 3,
-      select: { id: true, name: true, totalPoints: true },
-    });
-
     const cycle = await prisma.awardCycle.findUniqueOrThrow({ where: { id: cycleId }, include: { prizes: true } });
     const prizeByPosition = new Map(cycle.prizes.map((p) => [p.position, p]));
+
+    // 1. Pódio: top 3 por totalPoints (representa os pontos ganhos desde o
+    // último reset — seja o início do sistema, seja o ciclo anterior). Em
+    // caso de empate exato, o desempate NUNCA é por ordem alfabética do
+    // nome — isso decidiria arbitrariamente quem leva qual prêmio, se as
+    // posições tiverem prêmios diferentes. Ver rankWithTiebreak().
+    const candidates = await prisma.user.findMany({
+      where: { status: 'ACTIVE', totalPoints: { gt: 0 } },
+      select: { id: true, name: true, totalPoints: true },
+    });
+    const topUsers = (await this.rankWithTiebreak(candidates, cycle.startDate)).slice(0, 3);
 
     // 2. Registra o pódio e marca o ciclo como CLOSED numa única transação —
     // feito ANTES do reset para garantir que o ciclo nunca seja reprocessado
@@ -326,6 +328,12 @@ export class CycleService {
     // direto (Regra de Ouro, planejamento.md §10). O nível é recalculado
     // automaticamente como consequência (ScoringService.creditPoints já
     // chama LevelService.recalculateForUser).
+    // Nomes do pódio, pra quem NÃO ganhou também saber quem ganhou — a
+    // notificação de pódio (acima) já é pessoal e específica pra cada
+    // vencedor; esta aqui é o "anúncio" que todo o resto da empresa recebe.
+    const podiumNames = topUsers.map((u, i) => `${i + 1}º ${u.name}`).join(', ');
+    const announcementSuffix = podiumNames ? ` Pódio: ${podiumNames}.` : '';
+
     const allUsers = await prisma.user.findMany({ where: { status: 'ACTIVE', totalPoints: { not: 0 } }, select: { id: true, totalPoints: true } });
     for (const user of allUsers) {
       await ScoringService.creditPoints({
@@ -342,11 +350,64 @@ export class CycleService {
         await NotificationService.create({
           userId: user.id,
           title: 'Novo ciclo começou! 🔄',
-          message: `O ciclo "${cycle.name}" foi encerrado e as pontuações foram reiniciadas. Boa sorte no próximo!`,
+          message: `O ciclo "${cycle.name}" foi encerrado e as pontuações foram reiniciadas.${announcementSuffix} Boa sorte no próximo!`,
           type: 'CYCLE_ENDED',
           referenceId: cycleId,
         });
       }
     }
+  }
+
+  /**
+   * Ordena candidatos ao pódio por pontuação (desc). Em empate exato, NUNCA
+   * desempata por ordem alfabética do nome — decisão combinada com o
+   * usuário, porque isso influenciaria diretamente quem leva qual prêmio de
+   * forma arbitrária. O critério de desempate é QUEM CHEGOU NAQUELE TOTAL
+   * PRIMEIRO dentro do ciclo: para cada candidato, soma cronologicamente as
+   * transações de pontos dele desde o início do ciclo e marca o instante em
+   * que essa soma atingiu (ou superou) o total final — quem chegou lá mais
+   * cedo vence o empate. Nome só entra como ÚLTIMO critério, no caso
+   * raríssimo dos dois terem chegado no exato mesmo instante (ex.: dois
+   * lançamentos manuais em lote, mesmo timestamp).
+   *
+   * Quem não tem nenhuma transação dentro do período do ciclo (ex.: já
+   * carregava o total inteiro de antes do ciclo começar, sem fazer nada
+   * durante ele) é tratado como tendo "chegado" no início do ciclo — o
+   * melhor desempate possível, e o único jeito consistente de lidar com
+   * esse caso de borda sem inventar uma data arbitrária.
+   */
+  private static async rankWithTiebreak(
+    candidates: Array<{ id: string; name: string; totalPoints: number }>,
+    cycleStartDate: Date,
+  ): Promise<Array<{ id: string; name: string; totalPoints: number }>> {
+    if (candidates.length === 0) return [];
+
+    const transactions = await prisma.pointsTransaction.findMany({
+      where: { userId: { in: candidates.map((c) => c.id) }, createdAt: { gte: cycleStartDate } },
+      orderBy: { createdAt: 'asc' },
+      select: { userId: true, points: true, createdAt: true },
+    });
+
+    const finalByUser = new Map(candidates.map((c) => [c.id, c.totalPoints]));
+    const runningByUser = new Map<string, number>();
+    const reachedAtByUser = new Map<string, Date>();
+
+    for (const tx of transactions) {
+      const running = (runningByUser.get(tx.userId) ?? 0) + tx.points;
+      runningByUser.set(tx.userId, running);
+      const final = finalByUser.get(tx.userId);
+      if (final !== undefined && !reachedAtByUser.has(tx.userId) && running >= final) {
+        reachedAtByUser.set(tx.userId, tx.createdAt);
+      }
+    }
+
+    const reachedAt = (id: string) => reachedAtByUser.get(id) ?? cycleStartDate;
+
+    return [...candidates].sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      const diff = reachedAt(a.id).getTime() - reachedAt(b.id).getTime();
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
   }
 }

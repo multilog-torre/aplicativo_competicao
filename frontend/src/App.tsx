@@ -13,6 +13,7 @@ import { ParticipantsPage } from './pages/ParticipantsPage';
 import { MuralPage } from './pages/MuralPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { OverviewPage } from './pages/OverviewPage';
+import { HallOfFamePage } from './pages/HallOfFamePage';
 import { EventsPage } from './pages/EventsPage';
 import { AdminEventsPage } from './pages/AdminEventsPage';
 import { RulesPage } from './pages/RulesPage';
@@ -42,6 +43,7 @@ export function App() {
                   <Route path="/painel" element={<OverviewPage />} />
                   <Route path="/atividades" element={<ActivitiesPage />} />
                   <Route path="/ranking" element={<RankingPage />} />
+                  <Route path="/hall-da-fama" element={<HallOfFamePage />} />
                   <Route path="/participantes" element={<ParticipantsPage />} />
                   <Route path="/mural" element={<MuralPage />} />
                   <Route path="/eventos" element={<EventsPage />} />

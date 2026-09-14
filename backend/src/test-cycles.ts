@@ -19,9 +19,12 @@
  *    - vencedores e não-vencedores recebem notificação CYCLE_ENDED
  * 9. Conquistas (achievements) NUNCA são resetadas nem re-concedidas —
  *    permanecem vitalícias mesmo após o reset geral de pontos
- * 10. Cancelamento de ciclo funciona e não dispara pódio nem reset
- * 11. Exclusão de ciclo já iniciado é bloqueada (422) — só cabe cancelar
- * 12. Exclusão de ciclo que ainda não começou funciona (200)
+ * 10. Desempate do pódio em caso de pontuação EXATAMENTE igual: quem chegou
+ *     naquele total primeiro vence, NUNCA ordem alfabética do nome
+ * 11. Notificação de quem não ficou no pódio cita os nomes dos vencedores
+ * 12. Cancelamento de ciclo funciona e não dispara pódio nem reset
+ * 13. Exclusão de ciclo já iniciado é bloqueada (422) — só cabe cancelar
+ * 14. Exclusão de ciclo que ainda não começou funciona (200)
  */
 
 import http from 'http';
@@ -288,14 +291,66 @@ async function main() {
     achievementsAfterSecondBonus.filter((a) => a.achievement.name === 'Clube dos 1.000').length === 1,
   );
 
-  // ── PASSO 10: cancelamento não dispara pódio nem reset ───────────────────────────
-  console.log('\n🔟 Testando cancelamento de ciclo...');
+  // ── PASSO 10: desempate por quem chegou primeiro, nunca por nome ─────────────────
+  console.log('\n🔟 Testando desempate do pódio por quem chegou primeiro (não por nome)...');
+  // Carlos e Beatriz estão ambos a 0 (resetados no passo 8). Dá a mesma
+  // pontuação pros dois, em momentos diferentes — Carlos primeiro. Se o
+  // desempate fosse por nome, Beatriz ("B") venceria Carlos ("C"); pelo
+  // critério correto (quem chegou primeiro), Carlos deve vencer. O valor
+  // (2500) precisa superar o que Renan já acumulou no passo 9 (1100), pra
+  // garantir que só Carlos/Beatriz disputem o 1º/2º lugar deste ciclo —
+  // Renan (1100) fica em 3º, e Gestor (ganha só 5, abaixo de todo mundo)
+  // fica de fora do pódio, sobrando como alguém não-vencedor mas com pontos
+  // != 0 pra testar a notificação de reset com a menção ao pódio.
+  await reqJson('POST', '/scoring/manual', { userId: carlosId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Carlos primeiro.' }, masterToken);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await reqJson('POST', '/scoring/manual', { userId: beatrizId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Beatriz depois.' }, masterToken);
+  await reqJson('POST', '/scoring/manual', { userId: gestorId, transactionType: 'BONUS', points: 5, description: 'Pontos mínimos de teste, fora do pódio.' }, masterToken);
+
+  const cycleEStart = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  const cycleEEnd = new Date(now.getTime() - 1000).toISOString();
+  const createERes = await reqJson(
+    'POST',
+    '/cycles',
+    { name: 'Ciclo de Testes E (desempate)', startDate: cycleEStart, endDate: cycleEEnd, prizes: [{ position: 1, title: 'Prêmio do 1º' }] },
+    masterToken,
+  );
+  const cycleEId = (createERes.data as CycleBody)?.data?.id ?? '';
+
+  const cycleEDetailRes = await reqJson('GET', `/cycles/${cycleEId}`);
+  const cycleEWinners = (cycleEDetailRes.data as CycleBody)?.data?.winners ?? [];
+  const cycleEWinnerByPosition = new Map(cycleEWinners.map((w) => [w.position, w]));
+  assert(
+    'Carlos (chegou primeiro) fica em 1º, apesar de "Beatriz" vir antes em ordem alfabética',
+    cycleEWinnerByPosition.get(1)?.user.name === 'Carlos Eduardo',
+  );
+  assert('Beatriz (chegou depois, mesma pontuação) fica em 2º', cycleEWinnerByPosition.get(2)?.user.name === 'Beatriz Santos');
+
+  // ── PASSO 11: notificação de quem não ganhou cita os vencedores ─────────────────
+  // Gestor ganhou só 5 pontos de teste (abaixo de todo mundo) — fica de fora
+  // do pódio (que agora é Carlos/Beatriz/Renan), mas como tinha pontos != 0
+  // é resetado e recebe a notificação genérica, que deve citar o pódio.
+  console.log('\n1️⃣1️⃣ Testando que a notificação de reset cita os vencedores pelo nome...');
+  const gestorNotifAfterERes = await reqJson('GET', '/notifications?limit=50', undefined, gestorToken);
+  const gestorNotifsAfterE = (gestorNotifAfterERes.data as NotificationsBody)?.data ?? [];
+  assert(
+    'Gestor (fora do pódio do ciclo E) recebeu notificação citando "1º Carlos Eduardo, 2º Beatriz Santos, 3º Renan Lima"',
+    gestorNotifsAfterE.some(
+      (n) =>
+        n.type === 'CYCLE_ENDED' &&
+        n.referenceId === cycleEId &&
+        n.message.includes('1º Carlos Eduardo, 2º Beatriz Santos, 3º Renan Lima'),
+    ),
+  );
+
+  // ── PASSO 12: cancelamento não dispara pódio nem reset ───────────────────────────
+  console.log('\n1️⃣2️⃣ Testando cancelamento de ciclo...');
   const cancelRes = await reqJson('POST', `/cycles/${cycleBId}/cancel`, undefined, masterToken);
   assert('Cancelamento funciona (200)', cancelRes.status === 200);
   assert('effectiveStatus é CANCELLED', (cancelRes.data as CycleBody)?.data?.effectiveStatus === 'CANCELLED');
 
-  // ── PASSO 11-12: exclusão ────────────────────────────────────────────────────────
-  console.log('\n1️⃣1️⃣ Testando regras de exclusão de ciclo...');
+  // ── PASSO 13-14: exclusão ────────────────────────────────────────────────────────
+  console.log('\n1️⃣3️⃣ Testando regras de exclusão de ciclo...');
   const deleteStartedRes = await reqJson('DELETE', `/cycles/${cycleAId}`, undefined, masterToken);
   assert('Exclusão de ciclo já iniciado/encerrado é bloqueada (422)', deleteStartedRes.status === 422);
 

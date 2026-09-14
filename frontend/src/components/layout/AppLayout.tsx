@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/painel', label: 'Painel Geral', icon: '📈' },
   { to: '/atividades', label: 'Atividades', icon: '🏃' },
   { to: '/ranking', label: 'Ranking', icon: '🏆' },
+  { to: '/hall-da-fama', label: 'Hall da Fama', icon: '🎖️' },
   { to: '/participantes', label: 'Participantes', icon: <ParticipantsIcon /> },
   { to: '/mural', label: 'Mural', icon: '📣' },
   { to: '/eventos', label: 'Eventos', icon: '🎉' },
