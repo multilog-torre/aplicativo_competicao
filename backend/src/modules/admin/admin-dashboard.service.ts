@@ -77,6 +77,7 @@ export class AdminDashboardService {
       pointsHistory,
       topActivities,
       topUsersEvolution,
+      modalityHighlights,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { status: 'ACTIVE' } }),
@@ -94,6 +95,7 @@ export class AdminDashboardService {
       this.getPointsHistory(filters),
       this.getActivitiesByModality(filters),
       this.getTopUsersEvolution(filters),
+      this.getModalityHighlights(filters),
     ]);
 
     const topModality = activitiesByModality[0] ?? null;
@@ -126,6 +128,7 @@ export class AdminDashboardService {
         topUsersEvolution,
         usersByDepartment,
         redemptionsByStatus,
+        modalityHighlights,
       },
     };
   }
@@ -232,6 +235,71 @@ export class AdminDashboardService {
         approvedCount: g._count._all,
       }))
       .sort((a, b) => b.approvedCount - a.approvedCount);
+  }
+
+  /**
+   * "Destaques por modalidade" — quem é o destaque de cada modalidade. A
+   * métrica é PONTOS (soma de `calculatedPoints` das atividades aprovadas
+   * daquela pessoa naquela modalidade), nunca contagem de atividades nem
+   * quantidade bruta — é o único critério que funciona igual pras 4 formas
+   * de pontuação (Fixo/Por quantidade/Tempo/Multiplicador), já que pontos é
+   * a unidade de comparação comum usada no resto do sistema (ranking,
+   * ledger). Respeita os mesmos filtros do painel que topActivities.
+   */
+  private static async getModalityHighlights(filters?: ResolvedFilters) {
+    const grouped = await prisma.userActivity.groupBy({
+      by: ['activityTypeId', 'userId'],
+      where: {
+        status: 'APPROVED',
+        ...(filters?.dateFrom || filters?.dateTo
+          ? { validatedAt: { gte: filters?.dateFrom, lte: filters?.dateTo } }
+          : {}),
+        ...(filters?.userId ? { userId: filters.userId } : {}),
+        ...(filters?.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
+        ...(filters?.activityTypeId ? { activityTypeId: filters.activityTypeId } : {}),
+      },
+      _sum: { calculatedPoints: true },
+    });
+    if (grouped.length === 0) return [];
+
+    // Reduz pra "melhor pessoa por modalidade" em memória — groupBy do
+    // Prisma não tem um "top 1 por grupo" nativo. Empate exato (raro):
+    // desempata por nome, só pra ordem determinística (não é uma premiação
+    // com prêmio em disputa, diferente do pódio de ciclo).
+    const bestByType = new Map<string, { userId: string; points: number }>();
+    for (const g of grouped) {
+      const points = g._sum.calculatedPoints ?? 0;
+      if (points <= 0) continue;
+      const current = bestByType.get(g.activityTypeId);
+      if (!current || points > current.points) {
+        bestByType.set(g.activityTypeId, { userId: g.userId, points });
+      }
+    }
+    if (bestByType.size === 0) return [];
+
+    const [types, users] = await Promise.all([
+      prisma.activityType.findMany({
+        where: { id: { in: Array.from(bestByType.keys()) } },
+        select: { id: true, name: true, icon: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: Array.from(new Set(Array.from(bestByType.values()).map((v) => v.userId))) } },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const typeById = new Map(types.map((t) => [t.id, t]));
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    return Array.from(bestByType.entries())
+      .map(([activityTypeId, best]) => ({
+        activityTypeId,
+        modalityName: typeById.get(activityTypeId)?.name ?? 'Modalidade removida',
+        icon: typeById.get(activityTypeId)?.icon ?? 'activity',
+        userId: best.userId,
+        userName: userById.get(best.userId)?.name ?? 'Usuário removido',
+        points: best.points,
+      }))
+      .sort((a, b) => b.points - a.points || a.modalityName.localeCompare(b.modalityName, 'pt-BR'));
   }
 
   private static async getChallengeCounts() {

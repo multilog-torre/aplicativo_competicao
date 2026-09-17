@@ -366,6 +366,22 @@ export function OverviewPage() {
         <TopUsersEvolutionChart topUsersEvolution={charts.topUsersEvolution} onUserClick={filterByUser} />
       </div>
 
+      <ChartCard title="Destaques por Modalidade">
+        {() =>
+          charts.modalityHighlights.length === 0 ? (
+            <p className="chart-empty-message">Nenhuma atividade aprovada neste período.</p>
+          ) : (
+            <BarChart
+              data={charts.modalityHighlights.map((h) => ({
+                label: `${h.modalityName} — ${h.userName}`,
+                value: h.points,
+              }))}
+              color="var(--color-primary-bg)"
+            />
+          )
+        }
+      </ChartCard>
+
       <section className="card">
         <h2 className="card__title">Top 5 do ranking geral</h2>
         {topRanking.length === 0 ? (

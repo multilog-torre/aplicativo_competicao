@@ -299,6 +299,7 @@ export interface AdminDashboardData {
     topUsersEvolution: { day: UserEvolutionSeries[]; month: UserEvolutionSeries[]; year: UserEvolutionSeries[] };
     usersByDepartment: Array<{ departmentId: string; departmentName: string; count: number }>;
     redemptionsByStatus: Array<{ status: string; count: number }>;
+    modalityHighlights: Array<{ activityTypeId: string; modalityName: string; icon: string; userId: string; userName: string; points: number }>;
   };
 }
 

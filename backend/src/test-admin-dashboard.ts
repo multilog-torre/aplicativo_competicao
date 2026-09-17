@@ -18,6 +18,8 @@
  * 14. charts.usersByDepartment soma o total de usuários ativos
  * 15. charts.redemptionsByStatus reflete o resgate criado
  * 16. charts.topActivities tem no máximo 5 modalidades, ordenado
+ * 16.5. charts.modalityHighlights aponta o destaque (por PONTOS) de cada
+ *       modalidade — Renan aparece como destaque de Corrida
  * 17. charts.topUsersEvolution (day/month/year) tem no máximo 5 usuários,
  *     cada série com o mesmo tamanho do pointsHistory correspondente
  * 18. Filtro por userId restringe pointsHistory/topUsersEvolution a 1 usuário
@@ -93,6 +95,7 @@ type DashboardBody = {
       usersByDepartment?: Array<{ count: number }>;
       redemptionsByStatus?: Array<{ status: string; count: number }>;
       topActivities?: Array<{ activityTypeId: string; name: string; approvedCount: number }>;
+      modalityHighlights?: Array<{ activityTypeId: string; modalityName: string; userId: string; userName: string; points: number }>;
       topUsersEvolution?: {
         day?: Array<{ userId: string; name: string; series?: Array<{ date: string; label: string; points: number }> }>;
         month?: Array<{ userId: string; name: string; series?: Array<{ date: string; label: string; points: number }> }>;
@@ -278,6 +281,20 @@ async function main() {
   const topActivitiesSorted = topActivities.every((a, i) => i === 0 || topActivities[i - 1].approvedCount >= a.approvedCount);
   assert('topActivities está ordenado por quantidade (desc)', topActivitiesSorted);
   assert('topActivities aponta Corrida em 1º (mesma modalidade do topModality)', topActivities[0]?.name?.includes('Corrida') ?? false);
+
+  // ── PASSO 16.5: Destaques por modalidade (métrica = pontos, não contagem) ──────
+  console.log('\n1️⃣1️⃣.5️⃣ Testando charts.modalityHighlights (destaque por PONTOS)...');
+  const modalityHighlights = dashboard?.charts?.modalityHighlights ?? [];
+  // Não afirma QUEM é o destaque (outras suítes rodando antes desta, na mesma
+  // cadeia de regressão sem reset entre elas, também podem aprovar Corrida
+  // pra outros usuários e mudar quem pontuou mais) — mesmo cuidado já tomado
+  // pelo teste de topActivities acima, que só confere o nome da modalidade.
+  const runningHighlight = modalityHighlights.find((h) => h.modalityName?.includes('Corrida'));
+  assert('Existe um destaque para a modalidade Corrida', !!runningHighlight);
+  assert('O destaque de Corrida tem nome de usuário preenchido', !!runningHighlight?.userName);
+  assert('O destaque de Corrida tem pontos > 0', (runningHighlight?.points ?? 0) > 0);
+  const highlightsSorted = modalityHighlights.every((h, i) => i === 0 || modalityHighlights[i - 1].points >= h.points);
+  assert('modalityHighlights está ordenado por pontos (desc)', highlightsSorted);
 
   // ── PASSO 17: Evolução dos usuários (top 5, multi-linha) ──────────────────────
   console.log('\n1️⃣2️⃣ Testando charts.topUsersEvolution (evolução dos usuários)...');
