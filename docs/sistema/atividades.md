@@ -7,7 +7,7 @@ Cadastro administrável (`ADMIN`/`ADMIN_MASTER`) que define **como uma atividade
 - **Categoria**: `SPORTS`, `HEALTH`, `EDUCATION`, `SOCIAL`, `OTHER`.
 - **Tipo de pontuação** (`scoringType`) — ver [pontuacao.md](./pontuacao.md) para a fórmula exata de cada um: `FIXED`, `QUANTITY`, `TIME`, `MULTIPLIER`.
 - **`basePoints`** e **`multiplier`**: parâmetros da fórmula acima.
-- **Limites** opcionais: `dailyLimit`, `weeklyLimit`, `monthlyLimit` — número máximo de atividades **aprovadas** dessa modalidade que um usuário pode ter no período. Sem limite configurado, não há restrição.
+- **Limites** opcionais: `dailyLimit`, `weeklyLimit`, `monthlyLimit` — número máximo de **atividades (registros)** aprovadas dessa modalidade que um usuário pode ter no período. Sem limite configurado, não há restrição. **Importante**: é uma contagem de registros, não uma soma de `quantity` — um limite diário de 30, por exemplo, permite no máximo 30 *atividades* de Corrida naquele dia, não 30 km somados; uma única atividade pode ter qualquer `quantity`. Na tela de edição de modalidade (Admin > Modalidades), deixar um desses três campos em branco remove o limite existente (envia `null`); deixar em branco só na criação simplesmente nasce sem limite.
 - **`requiresEvidence`**: se `true`, a atividade só pode ser aprovada com pelo menos um arquivo de evidência anexado.
 - **`allowedFileTypes`**: lista de extensões aceitas para evidência daquela modalidade especificamente.
 - **`status`**: `ACTIVE`/`INACTIVE` — uma modalidade inativa não aceita novos registros, mas o histórico de atividades já registradas nela continua intacto.

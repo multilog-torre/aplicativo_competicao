@@ -189,9 +189,13 @@ function ModalityFormModal({
       basePoints: Number(basePoints),
       unit: unit || undefined,
       multiplier: Number(multiplier) || 1,
-      dailyLimit: dailyLimit ? Number(dailyLimit) : undefined,
-      weeklyLimit: weeklyLimit ? Number(weeklyLimit) : undefined,
-      monthlyLimit: monthlyLimit ? Number(monthlyLimit) : undefined,
+      // Ao editar, campo vazio precisa mandar `null` (remove o limite já
+      // configurado) — enviar `undefined` faria a API simplesmente ignorar o
+      // campo (mantendo o valor antigo). Na criação, `undefined` é o certo
+      // (nasce sem limite).
+      dailyLimit: dailyLimit ? Number(dailyLimit) : isEditing ? null : undefined,
+      weeklyLimit: weeklyLimit ? Number(weeklyLimit) : isEditing ? null : undefined,
+      monthlyLimit: monthlyLimit ? Number(monthlyLimit) : isEditing ? null : undefined,
       requiresEvidence,
       allowedFileTypes,
       status,
@@ -294,6 +298,7 @@ function ModalityFormModal({
           <span className="field__label">Limite mensal</span>
           <input type="number" min="1" placeholder="Sem limite" value={monthlyLimit} onChange={(e) => setMonthlyLimit(e.target.value)} />
         </label>
+        <p className="field__hint">Deixe qualquer um desses três campos vazio para não ter limite (ou para remover um limite já configurado).</p>
 
         <label className="field field--checkbox">
           <input type="checkbox" checked={requiresEvidence} onChange={(e) => setRequiresEvidence(e.target.checked)} />

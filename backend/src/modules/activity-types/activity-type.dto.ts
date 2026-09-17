@@ -20,7 +20,16 @@ export const createActivityTypeSchema = z.object({
 
 export type CreateActivityTypeDTO = z.infer<typeof createActivityTypeSchema>;
 
-export const updateActivityTypeSchema = createActivityTypeSchema.partial();
+// Na edição, diferente da criação, os três limites precisam aceitar `null`
+// explícito — é o único jeito de REMOVER um limite já configurado (enviar o
+// campo omitido significa "não alterar", não "desativar"). Na criação isso
+// não é necessário: uma modalidade nova simplesmente nasce sem limite se o
+// campo não for enviado.
+export const updateActivityTypeSchema = createActivityTypeSchema.partial().extend({
+  dailyLimit: z.number().int().positive().nullable().optional(),
+  weeklyLimit: z.number().int().positive().nullable().optional(),
+  monthlyLimit: z.number().int().positive().nullable().optional(),
+});
 
 export type UpdateActivityTypeDTO = z.infer<typeof updateActivityTypeSchema>;
 
