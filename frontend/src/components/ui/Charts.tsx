@@ -7,6 +7,10 @@ export interface Point {
   /** Texto opcional pro topo do tooltip (ex.: "11/09/2026" ou o nome de um usuário).
    * Quando ausente, o tooltip usa `label`. */
   tooltipLabel?: string;
+  /** Segunda linha opcional do rótulo, do BarChart — ex.: o nome da pessoa em
+   * destaque, abaixo do nome da modalidade. Sempre visível (não só no hover),
+   * diferente de tooltipLabel. */
+  sublabel?: string;
 }
 
 /** Granularidade dos gráficos de histórico de pontos (Painel Geral e
@@ -402,8 +406,15 @@ export function BarChart({ data, color = 'var(--color-accent)' }: { data: Point[
     <div className="bar-chart">
       {data.map((d) => (
         <div key={d.label} className="bar-chart__row" title={`${d.tooltipLabel ?? d.label}: ${d.value}`}>
-          <span className="bar-chart__label" title={d.label}>
-            {d.label}
+          <span className="bar-chart__label">
+            <span className="bar-chart__label-line" title={d.label}>
+              {d.label}
+            </span>
+            {d.sublabel && (
+              <span className="bar-chart__label-sub" title={d.sublabel}>
+                {d.sublabel}
+              </span>
+            )}
           </span>
           <div className="bar-chart__track">
             <div

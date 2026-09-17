@@ -373,8 +373,10 @@ export function OverviewPage() {
           ) : (
             <BarChart
               data={charts.modalityHighlights.map((h) => ({
-                label: `${h.modalityName} — ${h.userName}`,
+                label: h.modalityName,
+                sublabel: h.userName,
                 value: h.points,
+                tooltipLabel: `${h.modalityName} — ${h.userName}`,
               }))}
               color="var(--color-primary-bg)"
             />

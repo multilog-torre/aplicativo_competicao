@@ -1059,14 +1059,33 @@ textarea {
 
 .bar-chart__row {
   display: grid;
-  grid-template-columns: 100px 1fr 44px;
+  /* 140px em vez de 100px — dá espaço pra .bar-chart__label-sub (ex.: o nome
+     da pessoa em destaque) ficar sempre visível, não só no hover. */
+  grid-template-columns: 140px 1fr 44px;
   align-items: center;
   gap: 10px;
 }
 
 .bar-chart__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bar-chart__label-line {
   font-size: 0.88rem;
   color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Segunda linha do rótulo (ex.: nome de quem se destacou) — sempre visível,
+   nunca escondida atrás de hover, só um pouco mais discreta que a primeira. */
+.bar-chart__label-sub {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
