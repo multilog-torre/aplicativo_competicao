@@ -25,6 +25,7 @@ import { AdminPointsPage } from './pages/AdminPointsPage';
 import { AdminCyclesPage } from './pages/AdminCyclesPage';
 import { AdminDepartmentsPage } from './pages/AdminDepartmentsPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
+import { AdminSettingsPage } from './pages/AdminSettingsPage';
 
 export function App() {
   return (
@@ -62,6 +63,7 @@ export function App() {
 
                   <Route element={<MasterRoute />}>
                     <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+                    <Route path="/admin/configuracoes" element={<AdminSettingsPage />} />
                   </Route>
                 </Route>
               </Route>

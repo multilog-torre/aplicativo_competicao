@@ -8,7 +8,7 @@ Três papéis fixos, cadastrados no seed (`Role`: `PARTICIPANTE`, `ADMIN`, `ADMI
 |---|---|
 | `PARTICIPANTE` | Uso normal da plataforma: registrar atividades, ver o próprio perfil e o de colegas, participar de desafios/eventos, resgatar prêmios, postar no mural. Papel padrão de todo autocadastro. |
 | `ADMIN` | Tudo do participante + aprovar/rejeitar atividades e eventos, gerenciar modalidades/níveis/conquistas/desafios/ciclos/recompensas/departamentos, lançar pontos manuais, moderar o mural. |
-| `ADMIN_MASTER` | Tudo do ADMIN + gestão de contas (criar usuário, aprovar autocadastro, conceder/revogar papéis administrativos) + acesso à trilha de auditoria. É o único papel com acesso irrestrito: `requireRoles`/`requirePermission` sempre liberam automaticamente quem tem `ADMIN_MASTER`, mesmo que a rota peça outro papel específico. |
+| `ADMIN_MASTER` | Tudo do ADMIN + gestão de contas (criar usuário, aprovar autocadastro, conceder/revogar papéis administrativos) + acesso à trilha de auditoria + alterar configurações do sistema (`/admin/configuracoes`, ex.: aprovação automática de atividades — ver [atividades.md](./atividades.md)). É o único papel com acesso irrestrito: `requireRoles`/`requirePermission` sempre liberam automaticamente quem tem `ADMIN_MASTER`, mesmo que a rota peça outro papel específico. |
 
 Duas proteções contra a plataforma ficar "sem dono": um `ADMIN_MASTER` não pode remover o próprio acesso de `ADMIN_MASTER`, e não é possível remover o último `ADMIN_MASTER` do sistema (`admin-user.service.ts`, `setRoles`).
 

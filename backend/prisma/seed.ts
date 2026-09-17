@@ -417,7 +417,7 @@ async function main() {
     { stepNumber: 2, title: 'Faça a atividade', description: 'Realize a atividade escolhida — academia, corrida, leitura ou qualquer outra modalidade configurada.', icon: 'activity' },
     { stepNumber: 3, title: 'Registre', description: 'Registre a atividade no sistema, informando data, quantidade e uma descrição.', icon: 'clipboard-list' },
     { stepNumber: 4, title: 'Envie evidência', description: 'Quando a modalidade exigir, envie uma foto ou comprovante da atividade realizada.', icon: 'upload' },
-    { stepNumber: 5, title: 'Aguarde aprovação', description: 'Um administrador vai validar sua atividade e a evidência enviada.', icon: 'clock' },
+    { stepNumber: 5, title: 'Aprovação', description: 'Sua atividade é aprovada automaticamente assim que tiver tudo certo (ou por um administrador, se a aprovação automática estiver desativada).', icon: 'clock' },
     { stepNumber: 6, title: 'Receba pontos', description: 'Após a aprovação, os pontos são creditados automaticamente na sua conta.', icon: 'star' },
     { stepNumber: 7, title: 'Suba no ranking', description: 'Acompanhe sua posição no ranking geral, por modalidade ou por departamento.', icon: 'trending-up' },
     { stepNumber: 8, title: 'Conquiste premiações', description: 'Troque seus pontos acumulados por prêmios no catálogo de premiações.', icon: 'gift' },
@@ -431,6 +431,16 @@ async function main() {
     });
   }
   console.log('✅ Regras do jogo ("Como funciona?") criadas');
+
+  // 6.2 Configurações do sistema — aprovação automática de atividades
+  // ATIVADA por padrão (decisão de negócio a pedido do usuário). Um
+  // ADMIN_MASTER pode desligar em Admin > Configurações, sem deploy.
+  await prisma.systemSetting.upsert({
+    where: { key: 'AUTO_APPROVE_ACTIVITIES' },
+    update: {},
+    create: { key: 'AUTO_APPROVE_ACTIVITIES', value: 'true' },
+  });
+  console.log('✅ Configuração de aprovação automática de atividades criada (ATIVADA por padrão)');
 
   // 7. Catálogo de Premiações
   const rewards = [

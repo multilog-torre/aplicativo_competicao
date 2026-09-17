@@ -107,6 +107,11 @@ async function main() {
   const participantId = (participantLogin.data as LoginBody)?.data?.user?.id ?? '';
   assert('Tokens obtidos com sucesso', !!masterToken && !!participantToken && !!otherToken);
 
+  // Este arquivo testa fluxos que dependem de atividades PENDENTES aguardando
+  // aprovação manual — desativa a aprovação automática (ativada por padrão
+  // desde a Fase de Aprovação Automática) pra preservar esse comportamento.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, masterToken);
+
   // ── PASSO 1: Catálogo público ─────────────────────────────────────────────────
   console.log('\n1️⃣ Testando catálogo público de conquistas...');
   const catalogRes = await reqJson('GET', '/achievements');

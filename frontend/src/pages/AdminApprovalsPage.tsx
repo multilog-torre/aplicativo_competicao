@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError, API_URL, getToken } from '../api/client';
-import { ActivityDetail, EvidenceItem } from '../types/api';
+import { ActivityDetail, EvidenceItem, SystemSettings } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { useAuthedImage } from '../api/useAuthedImage';
@@ -25,6 +25,14 @@ export function AdminApprovalsPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [autoApproveEnabled, setAutoApproveEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api
+      .get<SystemSettings>('/settings')
+      .then(({ data }) => setAutoApproveEnabled(data.autoApproveActivities))
+      .catch(() => undefined); // não crítico pra esta tela — só um aviso informativo
+  }, []);
 
   function load() {
     setLoading(true);
@@ -52,6 +60,14 @@ export function AdminApprovalsPage() {
   return (
     <div className="page">
       <h1 className="page__title">Atividades Pendentes</h1>
+
+      {autoApproveEnabled && (
+        <div className="alert alert--info" style={{ marginBottom: 16 }}>
+          ℹ️ A aprovação automática está <strong>ativada</strong> — a maioria das atividades já é aprovada sozinha,
+          sem passar por aqui. Só aparecem nesta fila as que ainda esperam evidência obrigatória, ou tudo se a
+          aprovação automática for desativada em <strong>Admin &gt; Configurações</strong>.
+        </div>
+      )}
 
       {loading && <LoadingState label="Carregando pendências…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}

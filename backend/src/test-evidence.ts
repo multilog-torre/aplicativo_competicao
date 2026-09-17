@@ -92,6 +92,13 @@ async function main() {
   const adminToken = (adminLogin.data as LoginBody)?.data?.tokens?.accessToken ?? '';
   assert('Tokens obtidos com sucesso', !!participantToken && !!otherToken && !!adminToken);
 
+  // Este arquivo testa o fluxo de evidência com atividades PENDENTES (nunca
+  // avaliadas) — desativa a aprovação automática (ativada por padrão desde a
+  // Fase de Aprovação Automática) pra evitar que a modalidade usada aqui
+  // (sem exigência de evidência) já apareça aprovada antes da hora.
+  // `adminToken` aqui é admin@empresa.com, que é ADMIN_MASTER.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, adminToken);
+
   const runningType = await prisma.activityType.findFirst({
     where: { name: { contains: 'Corrida' }, status: 'ACTIVE' },
   });
@@ -191,8 +198,12 @@ async function main() {
   );
   assert('Atividade inexistente retorna 404', notFoundUploadRes.status === 404);
 
-  // ── PASSO 9: Bloqueio após atividade sair de PENDING ──────────────────────────
-  console.log('\n9️⃣ Testando bloqueio de upload após avaliação da atividade...');
+  // ── PASSO 9: Upload em atividade avaliada ──────────────────────────────────────
+  // Decisão revisada (Fase de Aprovação Automática): uma atividade APPROVED
+  // ainda aceita evidência extra (ex.: modalidade sem exigência, aprovada
+  // automaticamente, mas a pessoa manda um comprovante opcional mesmo
+  // assim) — só REJECTED/CANCELLED são histórico fechado de verdade.
+  console.log('\n9️⃣ Testando upload em atividade já avaliada (APPROVED aceita, REJECTED bloqueia)...');
   await prisma.userActivity.update({ where: { id: activityId }, data: { status: 'APPROVED' } });
   const afterApprovalRes = await reqUpload(
     `/activities/${activityId}/evidence`,
@@ -201,7 +212,17 @@ async function main() {
     'image/jpeg',
     jpgBuffer,
   );
-  assert('Upload bloqueado após atividade não estar mais PENDING (422)', afterApprovalRes.status === 422);
+  assert('Upload numa atividade APPROVED continua funcionando (201)', afterApprovalRes.status === 201);
+
+  await prisma.userActivity.update({ where: { id: activityId }, data: { status: 'REJECTED' } });
+  const afterRejectionRes = await reqUpload(
+    `/activities/${activityId}/evidence`,
+    participantToken,
+    'tardio2.jpg',
+    'image/jpeg',
+    jpgBuffer,
+  );
+  assert('Upload bloqueado numa atividade REJECTED (422)', afterRejectionRes.status === 422);
   await prisma.userActivity.update({ where: { id: activityId }, data: { status: 'PENDING' } }); // restaura para os próximos testes
 
   // ── PASSO 10: Listagem não expõe caminho físico ───────────────────────────────

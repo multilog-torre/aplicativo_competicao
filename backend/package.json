@@ -44,7 +44,8 @@
     "test:cycles": "tsx src/test-cycles.ts",
     "test:departments": "tsx src/test-departments.ts",
     "test:events": "tsx src/test-events.ts",
-    "test:event-groups": "tsx src/test-event-groups.ts"
+    "test:event-groups": "tsx src/test-event-groups.ts",
+    "test:auto-approve": "tsx src/test-auto-approve.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

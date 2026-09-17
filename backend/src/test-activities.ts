@@ -82,6 +82,12 @@ async function main() {
   const totalBeforeRegister = (participantLogin.data as LoginBody)?.data?.user?.totalPoints ?? 0;
   assert('Tokens obtidos com sucesso', !!adminToken && !!participantToken && !!otherToken);
 
+  // Este arquivo testa o registro de atividades, que nasce PENDING antes de
+  // qualquer avaliação — desativa a aprovação automática (ativada por
+  // padrão desde a Fase de Aprovação Automática) pra preservar esse
+  // comportamento. `adminToken` aqui é admin@empresa.com, que é ADMIN_MASTER.
+  await req('PATCH', '/settings', { autoApproveActivities: false }, adminToken);
+
   const activityType = await prisma.activityType.findFirst({
     where: { name: { contains: 'Corrida' }, status: 'ACTIVE' },
   });

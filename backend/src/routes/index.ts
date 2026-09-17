@@ -23,6 +23,7 @@ import { rankingRoutes } from '../modules/ranking/ranking.routes';
 import { rewardRoutes } from '../modules/rewards/reward.routes';
 import { roleRoutes } from '../modules/roles/role.routes';
 import { scoringRoutes } from '../modules/scoring/scoring.routes';
+import { settingsRoutes } from '../modules/settings/settings.routes';
 
 const router = Router();
 
@@ -96,5 +97,8 @@ router.use('/admin/users', adminUserRoutes);
 
 // Catálogo público de papéis (usado no seletor de gestão de usuários)
 router.use('/roles', roleRoutes);
+
+// Configurações do sistema (ex.: aprovação automática de atividades)
+router.use('/settings', settingsRoutes);
 
 export { router as apiRouter };

@@ -97,6 +97,11 @@ async function main() {
   const participantId = (participantLogin.data as LoginBody)?.data?.user?.id ?? '';
   assert('Tokens obtidos com sucesso', !!masterToken && !!participantToken);
 
+  // Este arquivo testa fluxos que dependem de atividades PENDENTES aguardando
+  // aprovação manual — desativa a aprovação automática (ativada por padrão
+  // desde a Fase de Aprovação Automática) pra preservar esse comportamento.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, masterToken);
+
   // ── PASSO 1: Autenticação obrigatória ─────────────────────────────────────────
   console.log('\n1️⃣ Testando exigência de autenticação...');
   const unauthenticatedRes = await reqJson('GET', '/dashboard');

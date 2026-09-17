@@ -79,6 +79,11 @@ async function main() {
   const participantId = (participantLogin.data as LoginBody)?.data?.user?.id ?? '';
   assert('Tokens obtidos com sucesso', !!masterToken && !!participantToken);
 
+  // Este arquivo testa fluxos que dependem de atividades PENDENTES aguardando
+  // aprovação manual — desativa a aprovação automática (ativada por padrão
+  // desde a Fase de Aprovação Automática) pra preservar esse comportamento.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, masterToken);
+
   // ── PASSO 1: Acesso e ordenação básica ────────────────────────────────────────
   console.log('\n1️⃣ Testando acesso e ordenação do ranking geral...');
   const generalRes = await reqJson('GET', '/ranking?limit=100', undefined, participantToken);

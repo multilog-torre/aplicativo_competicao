@@ -1,16 +1,37 @@
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { AdminActivityService } from '../admin/admin-activity.service';
 import { ScoringService } from '../scoring/scoring.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateActivityDTO, ListActivitiesQueryDTO } from './activity.dto';
+
+const ACTIVITY_WITH_TYPE_INCLUDE = {
+  activityType: {
+    select: { id: true, name: true, icon: true, unit: true, requiresEvidence: true, allowedFileTypes: true },
+  },
+} as const;
 
 export class ActivityService {
   /**
-   * Registra uma nova atividade para validação administrativa posterior.
+   * Registra uma nova atividade. O cálculo de pontos é feito aqui
+   * (calculatedPoints) — apenas o backend decide isso (planejamento.md §5.1).
    *
-   * REGRA DA FASE 6: a atividade nasce sempre com status PENDING.
-   * O cálculo de pontos é feito aqui (calculatedPoints) apenas como PREVISÃO —
-   * nenhum points_transaction é criado e o total do usuário NÃO é alterado.
-   * O crédito oficial de pontos só ocorre na aprovação administrativa (Fase 8).
+   * A atividade sempre NASCE como PENDING; nenhum points_transaction é
+   * criado ainda nesta função. O que acontece a partir daí depende da
+   * configuração "Aprovação automática de atividades" (settings.service.ts,
+   * decisão de negócio a pedido do usuário — padrão ATIVADO):
+   *
+   * - Modalidade NÃO exige evidência + auto-aprovação ativa: aprova sozinha
+   *   agora mesmo, via AdminActivityService.approve(id, null) — mesmo motor
+   *   de pontos/nível/conquistas/desafios da aprovação manual, só que sem
+   *   nenhum humano por trás (auditado como AUTO_APPROVE_ACTIVITY).
+   * - Modalidade EXIGE evidência: nunca aprova aqui, mesmo com a
+   *   configuração ativa — não existe evidência anexada ainda neste ponto
+   *   (ela só chega numa chamada separada, `POST /activities/:id/evidence`).
+   *   Quem decide se aprova depois de a evidência chegar é
+   *   EvidenceService.upload.
+   * - Auto-aprovação desativada: comportamento de sempre — fica PENDING até
+   *   um administrador aprovar/rejeitar manualmente (Admin > Aprovações).
    */
   public static async create(dto: CreateActivityDTO, userId: string) {
     const activityType = await prisma.activityType.findUnique({
@@ -53,12 +74,13 @@ export class ActivityService {
         calculatedPoints: points,
         status: 'PENDING',
       },
-      include: {
-        activityType: {
-          select: { id: true, name: true, icon: true, unit: true, requiresEvidence: true, allowedFileTypes: true },
-        },
-      },
+      include: ACTIVITY_WITH_TYPE_INCLUDE,
     });
+
+    if (!activityType.requiresEvidence && (await SettingsService.isAutoApproveActivitiesEnabled())) {
+      await AdminActivityService.approve(activity.id, null);
+      return prisma.userActivity.findUniqueOrThrow({ where: { id: activity.id }, include: ACTIVITY_WITH_TYPE_INCLUDE });
+    }
 
     return activity;
   }

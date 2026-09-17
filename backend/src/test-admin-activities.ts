@@ -89,6 +89,12 @@ async function main() {
   const participantId = (participantLogin.data as LoginBody)?.data?.user?.id ?? '';
   assert('Tokens obtidos com sucesso', !!adminToken && !!participantToken);
 
+  // Este arquivo testa especificamente o fluxo de aprovação MANUAL (Fase 8)
+  // — desativa a aprovação automática (ativada por padrão desde a Fase de
+  // Aprovação Automática) pra continuar exercitando esse fluxo do mesmo
+  // jeito. `adminToken` aqui é admin@empresa.com, que é ADMIN_MASTER.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, adminToken);
+
   // Modalidade que NÃO exige evidência (Meditação, do seed) — simplifica o cenário feliz
   const noEvidenceType = await prisma.activityType.findFirst({
     where: { name: { contains: 'Meditação' }, requiresEvidence: false },

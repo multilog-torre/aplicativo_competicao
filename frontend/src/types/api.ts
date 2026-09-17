@@ -372,6 +372,10 @@ export interface EventParticipantEntry {
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null; department: { name: string } | null };
 }
 
+export interface SystemSettings {
+  autoApproveActivities: boolean;
+}
+
 export interface Pagination {
   total: number;
   page: number;

@@ -49,8 +49,18 @@ export class AdminActivityService {
    * Verificação de nível, conquistas e desafios ocorrem dentro de
    * ScoringService.creditPoints (Fases 11, 12 e 13). A notificação de
    * aprovação (Fase 16) é criada aqui, na mesma transação atômica.
+   *
+   * `adminId = null` significa aprovação AUTOMÁTICA — chamada por
+   * ActivityService/EvidenceService quando a configuração "Aprovação
+   * automática de atividades" está ativa (settings.service.ts), nunca por
+   * uma pessoa. Reaproveita exatamente este mesmo método (mesmas
+   * validações, mesmo motor de pontos) — só muda quem aparece como
+   * responsável na auditoria e o texto da notificação. Desligar a
+   * configuração não muda este método em nada: a fila manual de
+   * aprovação (Admin > Aprovações) sempre funcionou e continua
+   * funcionando do mesmo jeito, chamada com um adminId real.
    */
-  public static async approve(activityId: string, adminId: string) {
+  public static async approve(activityId: string, adminId: string | null) {
     return prisma.$transaction(async (tx) => {
       const activity = await tx.userActivity.findUnique({
         where: { id: activityId },
@@ -97,7 +107,7 @@ export class AdminActivityService {
           points: activity.calculatedPoints,
           transactionType: 'ACTIVITY',
           description: `Pontuação referente a ${activity.activityType.name} (${quantityLabel}) - Atividade #${activity.id.slice(0, 8)}`,
-          createdBy: adminId,
+          createdBy: adminId ?? undefined,
           activityId: activity.id,
           referenceType: 'UserActivity',
           referenceId: activity.id,
@@ -108,7 +118,7 @@ export class AdminActivityService {
       await tx.auditLog.create({
         data: {
           userId: adminId,
-          action: 'APPROVE_ACTIVITY',
+          action: adminId ? 'APPROVE_ACTIVITY' : 'AUTO_APPROVE_ACTIVITY',
           entity: 'UserActivity',
           entityId: activity.id,
           oldValues: JSON.stringify({ status: 'PENDING' }),
@@ -124,7 +134,9 @@ export class AdminActivityService {
         {
           userId: activity.userId,
           title: 'Atividade aprovada! ✅',
-          message: `Sua atividade de ${activity.activityType.name} (${quantityLabel}) foi aprovada e você ganhou ${activity.calculatedPoints} pontos.`,
+          message: adminId
+            ? `Sua atividade de ${activity.activityType.name} (${quantityLabel}) foi aprovada e você ganhou ${activity.calculatedPoints} pontos.`
+            : `Sua atividade de ${activity.activityType.name} (${quantityLabel}) foi aprovada automaticamente e você ganhou ${activity.calculatedPoints} pontos.`,
           type: 'ACTIVITY_APPROVED',
           referenceId: activity.id,
         },

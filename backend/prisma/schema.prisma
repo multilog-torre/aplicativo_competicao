@@ -586,3 +586,20 @@ model GameRuleStep {
 
   @@map("game_rule_steps")
 }
+
+// -------------------------------------------------------------
+// 9. CONFIGURAÇÕES DO SISTEMA (chave/valor, editável pelo ADMIN_MASTER)
+// -------------------------------------------------------------
+
+// Tabela genérica de configurações — pensada pra caber qualquer switch futuro
+// sem exigir uma migração de banco nova a cada configuração. `value` é
+// sempre string (ex.: "true"/"false" pra booleanos); a interpretação de tipo
+// fica a cargo de cada chave conhecida no SettingsService, nunca do schema.
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("system_settings")
+}

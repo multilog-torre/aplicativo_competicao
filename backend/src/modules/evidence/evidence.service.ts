@@ -1,6 +1,8 @@
 import { env } from '../../config/env';
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { AdminActivityService } from '../admin/admin-activity.service';
+import { SettingsService } from '../settings/settings.service';
 import { UploadedFile } from '../../shared/types/upload';
 import { assertAllowedFile } from '../../shared/utils/fileValidation';
 import { getStorageProvider } from '../storage/storage.factory';
@@ -10,8 +12,13 @@ export type { UploadedFile };
 export class EvidenceService {
   /**
    * Envia uma evidência (foto/PDF/comprovante) vinculada a uma atividade.
-   * Apenas o autor da atividade pode enviar evidências, e apenas enquanto
-   * ela estiver PENDING (ainda não avaliada pelo administrador).
+   * Apenas o autor da atividade pode enviar evidências. Uma vez REJECTED ou
+   * CANCELLED, a atividade é histórico fechado e não aceita mais nada; já
+   * PENDING ou APPROVED aceitam evidência normalmente — APPROVED é permitido
+   * porque com a aprovação automática ativa (settings.service.ts) uma
+   * modalidade sem exigência de evidência pode já ter sido aprovada antes
+   * da pessoa enviar um comprovante opcional mesmo assim (o registro de
+   * atividade sempre permite anexar um arquivo, exigido ou não).
    */
   public static async upload(activityId: string, userId: string, file: UploadedFile) {
     const activity = await prisma.userActivity.findUnique({
@@ -27,9 +34,9 @@ export class EvidenceService {
       throw new ForbiddenError('Você só pode enviar evidências para as suas próprias atividades.');
     }
 
-    if (activity.status !== 'PENDING') {
+    if (activity.status === 'REJECTED' || activity.status === 'CANCELLED') {
       throw new AppError(
-        'Não é possível enviar evidências para uma atividade que já foi avaliada.',
+        'Não é possível enviar evidências para uma atividade rejeitada ou cancelada.',
         422,
         'ACTIVITY_NOT_EDITABLE',
       );
@@ -81,6 +88,15 @@ export class EvidenceService {
         newValues: JSON.stringify({ activityId, fileName: file.originalname, fileSize: file.size }),
       },
     });
+
+    // A evidência que acabou de chegar pode ser exatamente o que faltava
+    // pra essa atividade se aprovar sozinha (modalidade EXIGE evidência —
+    // pra quem não exige, a aprovação automática já rodou na criação, em
+    // ActivityService.create). Continua PENDING se a configuração estiver
+    // desativada, ou se a atividade já tiver sido avaliada por outro motivo.
+    if (activity.status === 'PENDING' && activity.activityType.requiresEvidence && (await SettingsService.isAutoApproveActivitiesEnabled())) {
+      await AdminActivityService.approve(activityId, null);
+    }
 
     return this.toPublicShape(evidence, activityId);
   }

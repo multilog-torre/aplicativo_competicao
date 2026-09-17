@@ -144,6 +144,15 @@ export function AppLayout() {
                   <span aria-hidden="true">👥</span> Gerenciar Usuários
                 </NavLink>
               )}
+              {isAdminMaster && (
+                <NavLink
+                  to="/admin/configuracoes"
+                  className={({ isActive }) => `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <span aria-hidden="true">⚙️</span> Configurações
+                </NavLink>
+              )}
             </>
           )}
         </nav>

@@ -123,6 +123,11 @@ async function main() {
   const participantToken = (participantLogin.data as LoginBody)?.data?.tokens?.accessToken ?? '';
   assert('Tokens obtidos com sucesso', !!masterToken && !!participantToken);
 
+  // Este arquivo testa fluxos que dependem de atividades PENDENTES aguardando
+  // aprovação manual — desativa a aprovação automática (ativada por padrão
+  // desde a Fase de Aprovação Automática) pra preservar esse comportamento.
+  await reqJson('PATCH', '/settings', { autoApproveActivities: false }, masterToken);
+
   // ── PASSO 1-3: Autenticação e autorização ─────────────────────────────────────
   console.log('\n1️⃣ Testando autenticação e autorização...');
   const unauthenticatedRes = await reqJson('GET', '/admin/dashboard');

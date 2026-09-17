@@ -28,6 +28,7 @@
   --color-text-muted: #6b7280;
   --color-accent: #22d3ee;
   --color-accent-contrast: #001e42;
+  --color-accent-bg: #e0f7fb;
   --color-primary-bg: #001e42;
   --color-primary-contrast: #ffffff;
   --color-success: #15803d;
@@ -58,6 +59,7 @@
   --color-text-muted: #a0a3ac;
   --color-accent: #22d3ee;
   --color-accent-contrast: #001e42;
+  --color-accent-bg: #103a42;
   --color-primary-bg: #22d3ee;
   --color-primary-contrast: #001e42;
   --color-success: #4ade80;
@@ -1681,6 +1683,11 @@ textarea {
 .alert--success {
   background: var(--color-success-bg);
   color: var(--color-success);
+}
+
+.alert--info {
+  background: var(--color-accent-bg);
+  color: var(--color-text);
 }
 
 .state-block {
