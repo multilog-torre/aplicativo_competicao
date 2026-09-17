@@ -14,6 +14,28 @@ Cadastro administrável (`ADMIN`/`ADMIN_MASTER`) que define **como uma atividade
 
 Excluir uma modalidade sem nenhuma atividade vinculada apaga de verdade; havendo histórico, vira soft-delete (`INACTIVE`).
 
+## Modalidades do seed e a recalibragem por esforço físico
+
+Os valores abaixo refletem o seed atual (`backend/prisma/seed.ts`) — cada modalidade é livremente editável por um admin depois, então isto é o ponto de partida, não uma regra imutável.
+
+| Modalidade | `scoringType` | Taxa | `dailyLimit` (registros/dia) | Evidência |
+|---|---|---|---|---|
+| Academia & Musculação | `FIXED` | 20 pts/sessão | 1 | Sim |
+| Corrida de Rua / Esteira | `QUANTITY` | 8 pts/km | 30 | Sim |
+| Caminhada | `QUANTITY` | 5 pts/km | 20 | Sim |
+| Ciclismo | `QUANTITY` | 3 pts/km | 80 | Sim |
+| Leitura de Livros | `MULTIPLIER` | 0,1 pt/página | 5 | Sim |
+| Meditação & Mindfulness | `FIXED` | 15 pts/sessão | 2 | Não |
+
+Corrida/Caminhada/Ciclismo foram recalibradas por **esforço físico real**, não só por percepção: usando MET (Equivalente Metabólico, referência de educação física/saúde ocupacional) dividido pela velocidade média de cada modalidade como proxy de "esforço por km", ancorando Caminhada em 5 pts/km (valor já existente antes da recalibragem):
+
+- **Ciclismo caiu de 5 para 3 pts/km** — pedalar exige bem menos esforço por km do que caminhar ou correr (é a distorção original que motivou a recalibragem: antes, Ciclismo permitia mais pontos no teto diário do que Corrida, apesar de ser a modalidade mais fácil das três).
+- **Corrida caiu de 10 para 8 pts/km** — por km (não por minuto), correr não exige muito mais esforço fisiológico do que caminhar; a vantagem de quem corre já vem naturalmente de percorrer mais km no mesmo tempo, não precisa de uma taxa por km desproporcional.
+
+**Leitura de Livros deixou de pontuar por livro concluído (`FIXED`, 30 pts fixos) e passou a pontuar por página lida** (`MULTIPLIER`, 0,1 pt/página — 300 páginas ≈ 30 pts, mantendo equivalência com o valor antigo para um livro médio), registrada de forma incremental por sessão (a pessoa registra o progresso conforme lê, não só quando termina o livro) — dá crédito por leitura parcial em livros longos e livros maiores naturalmente valem mais que livros curtos.
+
+`dailyLimit: 5` na Leitura é **5 registros de sessão de leitura por dia**, não "5 páginas" — mesma ressalva da nota sobre limites acima: não existe hoje uma forma de capar a *soma* de páginas (ou km) por dia, só a *contagem* de registros.
+
 ## Ciclo de vida de uma atividade registrada (`UserActivity`)
 
 ```

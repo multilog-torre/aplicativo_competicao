@@ -79,12 +79,17 @@ async function main() {
   console.log('✅ Departamentos criados:', Object.keys(createdDepts).length);
 
   // 4. Níveis de Gamificação
+  // Faixas recalibradas para o ciclo de premiação de 3 meses (totalPoints
+  // zera a cada fechamento de ciclo — ver ciclos.md): o nível máximo
+  // (Campeão, 5.500 pts) foi pensado pra ser alcançável só perto do fim do
+  // ciclo por alguém muito engajado (atividade quase diária, múltiplas
+  // modalidades), não nas primeiras semanas.
   const levels = [
     { levelNumber: 1, name: 'Iniciante', minPoints: 0, badgeIcon: 'compass', description: 'Primeiros passos na competição' },
-    { levelNumber: 2, name: 'Explorador', minPoints: 500, badgeIcon: 'map-pin', description: 'Consistência inicial demonstrada' },
-    { levelNumber: 3, name: 'Competidor', minPoints: 1000, badgeIcon: 'flame', description: 'Presença constante nos rankings' },
-    { levelNumber: 4, name: 'Destaque', minPoints: 2500, badgeIcon: 'star', description: 'Inspiração e alto engajamento' },
-    { levelNumber: 5, name: 'Campeão', minPoints: 5000, badgeIcon: 'crown', description: 'Elite máxima da corporação' },
+    { levelNumber: 2, name: 'Explorador', minPoints: 700, badgeIcon: 'map-pin', description: 'Consistência inicial demonstrada' },
+    { levelNumber: 3, name: 'Competidor', minPoints: 1800, badgeIcon: 'flame', description: 'Presença constante nos rankings' },
+    { levelNumber: 4, name: 'Destaque', minPoints: 3200, badgeIcon: 'star', description: 'Inspiração e alto engajamento' },
+    { levelNumber: 5, name: 'Campeão', minPoints: 5500, badgeIcon: 'crown', description: 'Elite máxima da corporação' },
   ];
 
   const createdLevels: Record<number, string> = {};
@@ -99,6 +104,13 @@ async function main() {
   console.log('✅ Níveis de progressão criados');
 
   // 5. Modalidades de Atividades
+  // Corrida/Caminhada/Ciclismo (pts/km) recalibrados por esforço físico
+  // real (base MET ÷ velocidade média de cada modalidade), não só por
+  // percepção: pedalar exige menos esforço por km do que correr ou
+  // caminhar, então deixou de valer o mesmo que Caminhada. Corrida também
+  // caiu (de 10 para 8) porque, por km, correr não exige muito mais
+  // esforço fisiológico do que caminhar — só percorre a distância mais
+  // rápido, o que já a beneficia sozinho (mais km no mesmo tempo).
   const modalities = [
     {
       name: 'Academia & Musculação',
@@ -118,11 +130,11 @@ async function main() {
       category: 'SPORTS',
       icon: 'run',
       description: 'Corrida ao ar livre ou em esteira',
-      rulesDescription: '10 pontos para cada 1 km percorrido (comprovado via app Strava/Garmin/Smartwatch)',
+      rulesDescription: '8 pontos para cada 1 km percorrido (comprovado via app Strava/Garmin/Smartwatch)',
       scoringType: 'QUANTITY',
-      basePoints: 10,
+      basePoints: 8,
       unit: 'km',
-      multiplier: 10.0,
+      multiplier: 8.0,
       dailyLimit: 30,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png,pdf',
@@ -146,11 +158,11 @@ async function main() {
       category: 'SPORTS',
       icon: 'bike',
       description: 'Pedal urbano, estrada ou spinning',
-      rulesDescription: '5 pontos para cada 1 km pedalado',
+      rulesDescription: '3 pontos para cada 1 km pedalado',
       scoringType: 'QUANTITY',
-      basePoints: 5,
+      basePoints: 3,
       unit: 'km',
-      multiplier: 5.0,
+      multiplier: 3.0,
       dailyLimit: 80,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png',
@@ -160,11 +172,26 @@ async function main() {
       category: 'EDUCATION',
       icon: 'book-open',
       description: 'Leitura de livros técnicos, ficção ou desenvolvimento pessoal',
-      rulesDescription: '30 pontos por livro concluído ou resumo entregue',
-      scoringType: 'FIXED',
-      basePoints: 30,
-      unit: 'livro',
-      dailyLimit: 1,
+      // Pontua por página lida (não mais por livro concluído), registrada de
+      // forma incremental por sessão — dá crédito por progresso parcial em
+      // livros longos, e livros maiores naturalmente valem mais que livros
+      // curtos. Taxa escolhida pra manter equivalência com o valor fixo
+      // anterior num livro médio: 300 páginas × 0,1 = 30 pts (era 30 pts
+      // fixos por livro). scoringType MULTIPLIER porque a taxa por unidade
+      // precisa ser decimal — QUANTITY exige basePoints inteiro
+      // (ver pontuacao.md); basePoints aqui não é usado no cálculo.
+      //
+      // dailyLimit aqui é "5 REGISTROS de leitura por dia" (contagem de
+      // atividades, não soma de páginas — mesma semântica de todo
+      // dailyLimit no sistema, ver atividades.md), não "5 páginas". Não
+      // existe hoje um jeito de limitar a SOMA de páginas por dia — mesma
+      // limitação que já existe pra km em Corrida/Caminhada/Ciclismo.
+      rulesDescription: '0,1 ponto por página lida (300 páginas ≈ 30 pontos) — registre o progresso a cada sessão de leitura',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'página',
+      multiplier: 0.1,
+      dailyLimit: 5,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png,pdf,txt',
     },
@@ -221,8 +248,16 @@ async function main() {
    * pontua por QUANTITY, ou por contagem de atividades quando pontua FIXED
    * (cada atividade já representa 1 ocorrência inteira, ex.: 1 treino). */
   function buildModalityAchievements(modality: (typeof createdModalities)[number]): AchievementSeed[] {
-    const isCumulative = modality.scoringType === 'QUANTITY' && !!modality.unit;
-    const baseTarget = isCumulative ? 10 : 5; // ex.: 10km ou 5 sessões na base (bronze)
+    // MULTIPLIER entra aqui também (não só QUANTITY): é o caso da Leitura de
+    // Livros, que pontua por página (taxa decimal) mas é tão cumulativa
+    // quanto um "km percorrido" — a distinção QUANTITY/MULTIPLIER é só sobre
+    // ONDE mora a taxa por unidade (basePoints inteiro vs multiplier
+    // decimal), não sobre se a modalidade é cumulativa.
+    const isCumulative = (modality.scoringType === 'QUANTITY' || modality.scoringType === 'MULTIPLIER') && !!modality.unit;
+    // Meta-base (bronze) por tipo de unidade — 10km faz sentido pra
+    // corrida/caminhada/ciclismo, mas seria trivial demais para páginas
+    // (10 páginas = 2 minutos de leitura). 300 páginas ≈ 1 livro médio.
+    const baseTarget = !isCumulative ? 5 : modality.unit === 'página' ? 300 : 10;
     const unitLabel = modality.unit ?? 'atividades';
 
     return (['BRONZE', 'PRATA', 'OURO'] as const).map((level) => {
