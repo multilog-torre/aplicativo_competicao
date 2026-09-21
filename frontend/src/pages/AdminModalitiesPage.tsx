@@ -285,20 +285,22 @@ function ModalityFormModal({
 
         <div className="form__row">
           <label className="field">
-            <span className="field__label">Limite diário</span>
+            <span className="field__label">Limite diário (nº de registros)</span>
             <input type="number" min="1" placeholder="Sem limite" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
           </label>
           <label className="field">
-            <span className="field__label">Limite semanal</span>
+            <span className="field__label">Limite semanal (nº de registros)</span>
             <input type="number" min="1" placeholder="Sem limite" value={weeklyLimit} onChange={(e) => setWeeklyLimit(e.target.value)} />
           </label>
         </div>
 
         <label className="field">
-          <span className="field__label">Limite mensal</span>
+          <span className="field__label">Limite mensal (nº de registros)</span>
           <input type="number" min="1" placeholder="Sem limite" value={monthlyLimit} onChange={(e) => setMonthlyLimit(e.target.value)} />
         </label>
-        <p className="field__hint">Deixe qualquer um desses três campos vazio para não ter limite (ou para remover um limite já configurado).</p>
+        <p className="field__hint">
+          Esses três limites contam <strong>quantas atividades a pessoa pode registrar</strong> no período — não a soma de quilômetros/páginas/quantidade. Ex.: limite diário de 20 permite no máximo 20 <em>registros</em> naquele dia, cada um podendo ter qualquer quantidade. Deixe um campo vazio para não ter limite (ou para remover um limite já configurado).
+        </p>
 
         <label className="field field--checkbox">
           <input type="checkbox" checked={requiresEvidence} onChange={(e) => setRequiresEvidence(e.target.checked)} />

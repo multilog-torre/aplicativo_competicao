@@ -162,21 +162,21 @@ export class ScoringService {
     if (dailyLimit && dailyCount >= dailyLimit) {
       return {
         allowed: false,
-        reason: `Limite diário de ${dailyLimit} atividade(s) nesta modalidade já foi atingido para esta data.`,
+        reason: `Você já atingiu o limite de ${dailyLimit} registro(s) por dia nesta modalidade. Esse limite conta o número de atividades registradas, não a quantidade/km/páginas de cada uma.`,
       };
     }
 
     if (weeklyLimit && weeklyCount >= weeklyLimit) {
       return {
         allowed: false,
-        reason: `Limite semanal de ${weeklyLimit} atividade(s) nesta modalidade já foi atingido para esta semana.`,
+        reason: `Você já atingiu o limite de ${weeklyLimit} registro(s) por semana nesta modalidade. Esse limite conta o número de atividades registradas, não a quantidade/km/páginas de cada uma.`,
       };
     }
 
     if (monthlyLimit && monthlyCount >= monthlyLimit) {
       return {
         allowed: false,
-        reason: `Limite mensal de ${monthlyLimit} atividade(s) nesta modalidade já foi atingido para este mês.`,
+        reason: `Você já atingiu o limite de ${monthlyLimit} registro(s) por mês nesta modalidade. Esse limite conta o número de atividades registradas, não a quantidade/km/páginas de cada uma.`,
       };
     }
 

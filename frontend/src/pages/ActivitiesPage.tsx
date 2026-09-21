@@ -120,6 +120,15 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }, []);
 
   const selectedType = types.find((t) => t.id === activityTypeId);
+  // Modalidades FIXED (ex.: Academia, Meditação) sempre valem os mesmos
+  // pontos por registro — a quantidade não entra na fórmula (ver
+  // pontuacao.md). Esconder o campo evita a pessoa achar que "2" vale mais
+  // que "1" nessas modalidades; o valor enviado fica travado em 1.
+  const quantityMatters = selectedType?.scoringType !== 'FIXED';
+
+  useEffect(() => {
+    if (!quantityMatters) setQuantity('1');
+  }, [quantityMatters]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -178,16 +187,23 @@ function NewActivityModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </select>
           </label>
 
-          <div className="form__row">
-            <label className="field">
-              <span className="field__label">Quantidade{selectedType?.unit ? ` (${selectedType.unit})` : ''}</span>
-              <input type="number" min="0.01" step="0.01" required value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-            </label>
+          {quantityMatters ? (
+            <div className="form__row">
+              <label className="field">
+                <span className="field__label">Quantidade{selectedType?.unit ? ` (${selectedType.unit})` : ''}</span>
+                <input type="number" min="0.01" step="0.01" required value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field__label">Data</span>
+                <input type="date" required value={activityDate} max={todayLocalISODate()} onChange={(e) => setActivityDate(e.target.value)} />
+              </label>
+            </div>
+          ) : (
             <label className="field">
               <span className="field__label">Data</span>
               <input type="date" required value={activityDate} max={todayLocalISODate()} onChange={(e) => setActivityDate(e.target.value)} />
             </label>
-          </div>
+          )}
 
           <label className="field">
             <span className="field__label">Descrição (opcional)</span>
