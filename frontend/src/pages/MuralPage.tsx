@@ -71,6 +71,7 @@ function MuralFeed({
   eventTitle?: string;
   onLeftGroup: () => void;
 }) {
+  const { isAdmin } = useAuth();
   const { showToast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,19 +79,25 @@ function MuralFeed({
   const [composerOpen, setComposerOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // Filtro de moderação — só pra admin: por padrão vê o mesmo feed de
+  // qualquer participante (PUBLISHED + as próprias); pode escolher ver a
+  // fila de ocultas/moderadas de todo mundo, pra poder restaurar.
+  const [statusFilter, setStatusFilter] = useState<'' | 'HIDDEN' | 'MODERATED'>('');
 
   function load() {
     setLoading(true);
     setError(null);
-    const query = eventId ? `?limit=30&eventId=${eventId}` : '?limit=30';
+    const params = new URLSearchParams({ limit: '30' });
+    if (eventId) params.set('eventId', eventId);
+    if (isAdmin && statusFilter) params.set('status', statusFilter);
     api
-      .get<Post[]>(`/posts${query}`)
+      .get<Post[]>(`/posts?${params.toString()}`)
       .then(({ data }) => setPosts(data))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o mural.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [eventId]);
+  useEffect(load, [eventId, statusFilter]);
 
   async function handleLeaveGroup() {
     if (!eventId) return;
@@ -116,6 +123,17 @@ function MuralFeed({
             : 'Compartilhe algo com toda a equipe.'}
         </p>
         <div className="table__actions">
+          {isAdmin && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as '' | 'HIDDEN' | 'MODERATED')}
+              aria-label="Filtrar por status de moderação"
+            >
+              <option value="">Publicações visíveis</option>
+              <option value="HIDDEN">🙈 Ocultas (de todos)</option>
+              <option value="MODERATED">⚠️ Moderadas (de todos)</option>
+            </select>
+          )}
           {eventId && (
             <button type="button" className="btn btn--secondary btn--small" onClick={() => setConfirmLeaveOpen(true)}>
               🚪 Sair do grupo
@@ -172,8 +190,13 @@ function MuralFeed({
   );
 }
 
+const MODERATION_STATUS_LABELS: Record<string, string> = {
+  HIDDEN: '🙈 Oculta',
+  MODERATED: '⚠️ Moderada',
+};
+
 function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { showToast } = useToast();
   const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? post.imageDownloadUrl : null);
   const [liked, setLiked] = useState(post.likedByMe);
@@ -181,6 +204,11 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [moderateAction, setModerateAction] = useState<'HIDE' | 'MODERATE' | null>(null);
+  const [confirmRestoreOpen, setConfirmRestoreOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const isOwner = post.user.id === user?.id;
 
   async function toggleLike() {
     const next = !liked;
@@ -210,6 +238,20 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
     }
   }
 
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      await api.post(`/posts/${post.id}/moderate`, { action: 'RESTORE' });
+      showToast('Publicação restaurada — voltou a ficar visível pra todos.', 'success');
+      onChanged();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível restaurar a publicação.', 'error');
+    } finally {
+      setRestoring(false);
+      setConfirmRestoreOpen(false);
+    }
+  }
+
   return (
     <article className="post-card">
       <header className="post-card__header">
@@ -218,11 +260,31 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
           <div className="post-card__author">{post.user.name}</div>
           <time className="post-card__date">{new Date(post.createdAt).toLocaleString('pt-BR')}</time>
         </div>
-        {post.user.id === user?.id && (
-          <button type="button" className="post-card__delete" aria-label="Excluir publicação" onClick={() => setConfirmDeleteOpen(true)}>
-            🗑️
-          </button>
+        {post.status !== 'PUBLISHED' && (
+          <span className="badge badge--warning">{MODERATION_STATUS_LABELS[post.status] ?? post.status}</span>
         )}
+        <div className="table__actions" style={{ marginLeft: 'auto' }}>
+          {isAdmin && post.status === 'PUBLISHED' && (
+            <>
+              <button type="button" className="post-card__delete" aria-label="Ocultar publicação" title="Ocultar" onClick={() => setModerateAction('HIDE')}>
+                🙈
+              </button>
+              <button type="button" className="post-card__delete" aria-label="Moderar publicação" title="Moderar" onClick={() => setModerateAction('MODERATE')}>
+                ⚠️
+              </button>
+            </>
+          )}
+          {isAdmin && post.status !== 'PUBLISHED' && (
+            <button type="button" className="post-card__delete" aria-label="Restaurar publicação" title="Restaurar" onClick={() => setConfirmRestoreOpen(true)}>
+              ♻️
+            </button>
+          )}
+          {(isOwner || isAdmin) && (
+            <button type="button" className="post-card__delete" aria-label="Excluir publicação" title="Excluir" onClick={() => setConfirmDeleteOpen(true)}>
+              🗑️
+            </button>
+          )}
+        </div>
       </header>
 
       <p className="post-card__content">{post.content}</p>
@@ -247,7 +309,11 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
       {confirmDeleteOpen && (
         <ConfirmModal
           title="Excluir publicação"
-          message="Tem certeza que deseja excluir esta publicação? Essa ação não pode ser desfeita."
+          message={
+            isOwner
+              ? 'Tem certeza que deseja excluir esta publicação? Essa ação não pode ser desfeita.'
+              : `Tem certeza que deseja excluir a publicação de ${post.user.name}? Essa ação não pode ser desfeita e fica registrada na auditoria.`
+          }
           confirmLabel="Excluir"
           danger
           loading={deleting}
@@ -255,16 +321,111 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
           onCancel={() => setConfirmDeleteOpen(false)}
         />
       )}
+
+      {confirmRestoreOpen && (
+        <ConfirmModal
+          title="Restaurar publicação"
+          message={`Restaurar a publicação de ${post.user.name}? Ela volta a ficar visível pra todo mundo no mural.`}
+          confirmLabel="Restaurar"
+          loading={restoring}
+          onConfirm={handleRestore}
+          onCancel={() => setConfirmRestoreOpen(false)}
+        />
+      )}
+
+      {moderateAction && (
+        <ModerateModal
+          postId={post.id}
+          action={moderateAction}
+          authorName={post.user.name}
+          onClose={() => setModerateAction(null)}
+          onModerated={() => {
+            setModerateAction(null);
+            onChanged();
+          }}
+        />
+      )}
     </article>
   );
 }
 
+function ModerateModal({
+  postId,
+  action,
+  authorName,
+  onClose,
+  onModerated,
+}: {
+  postId: string;
+  action: 'HIDE' | 'MODERATE';
+  authorName: string;
+  onClose: () => void;
+  onModerated: () => void;
+}) {
+  const { showToast } = useToast();
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const title = action === 'HIDE' ? 'Ocultar publicação' : 'Moderar publicação';
+  const confirmLabel = action === 'HIDE' ? 'Ocultar' : 'Moderar';
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = reason.trim();
+    if (trimmed.length > 0 && trimmed.length < 5) {
+      setError('O motivo, se informado, precisa ter pelo menos 5 caracteres.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.post(`/posts/${postId}/moderate`, { action, reason: trimmed || undefined });
+      showToast(action === 'HIDE' ? 'Publicação ocultada.' : 'Publicação moderada.', 'success');
+      onModerated();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível concluir a moderação.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="form">
+        {error && <div className="alert alert--error">{error}</div>}
+        <p className="steps-list__description" style={{ marginTop: 0 }}>
+          {action === 'HIDE'
+            ? `A publicação de ${authorName} deixa de aparecer pra outras pessoas — só ${authorName} e admins continuam vendo.`
+            : `A publicação de ${authorName} é marcada como moderada (mesmo efeito de visibilidade de ocultar, mas sinaliza uma violação de conduta, não só uma remoção de rotina).`}
+        </p>
+        <label className="field">
+          <span className="field__label">Motivo (opcional)</span>
+          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Por que esta publicação está sendo removida da visibilidade pública?" />
+        </label>
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={submitting}>
+            {submitting ? 'Aguarde…' : confirmLabel}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function CommentsSection({ postId }: { postId: string }) {
+  const { user, isAdmin } = useAuth();
   const { showToast } = useToast();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -291,6 +452,18 @@ function CommentsSection({ postId }: { postId: string }) {
     }
   }
 
+  async function handleDeleteComment(commentId: string) {
+    setDeletingId(commentId);
+    try {
+      await api.delete(`/posts/${postId}/comments/${commentId}`);
+      load();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Não foi possível excluir o comentário.', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="comments">
       {loading ? (
@@ -300,10 +473,22 @@ function CommentsSection({ postId }: { postId: string }) {
           {comments.map((c) => (
             <li key={c.id} className="comments__item">
               <Avatar name={c.user.name} avatarType={c.user.avatarType} avatarUrl={c.user.avatarUrl} userId={c.user.id} size={28} />
-              <div>
+              <div style={{ flex: 1 }}>
                 <span className="comments__author">{c.user.name}</span>
                 <p className="comments__text">{c.content}</p>
               </div>
+              {(c.user.id === user?.id || isAdmin) && (
+                <button
+                  type="button"
+                  className="post-card__delete"
+                  aria-label="Excluir comentário"
+                  title="Excluir comentário"
+                  disabled={deletingId === c.id}
+                  onClick={() => handleDeleteComment(c.id)}
+                >
+                  🗑️
+                </button>
+              )}
             </li>
           ))}
           {comments.length === 0 && <li className="comments__empty">Nenhum comentário ainda.</li>}
