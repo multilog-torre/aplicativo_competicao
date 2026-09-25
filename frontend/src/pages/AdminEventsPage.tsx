@@ -4,6 +4,7 @@ import { CommunityEvent, EventCategory, EventParticipantEntry } from '../types/a
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { EventParticipantsModal } from '../components/ui/EventParticipantsModal';
+import { EvidencePreview } from '../components/ui/EvidencePreview';
 import { Avatar } from '../components/ui/Badge';
 import { useToast } from '../context/ToastContext';
 
@@ -326,6 +327,7 @@ function ConfirmAttendanceModal({ event, onClose, onConfirmed }: { event: Commun
   const { showToast } = useToast();
   const [participants, setParticipants] = useState<EventParticipantEntry[] | null>(null);
   const [attended, setAttended] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -343,6 +345,15 @@ function ConfirmAttendanceModal({ event, onClose, onConfirmed }: { event: Commun
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
       else next.add(userId);
+      return next;
+    });
+  }
+
+  function toggleExpanded(participantId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(participantId)) next.delete(participantId);
+      else next.add(participantId);
       return next;
     });
   }
@@ -379,18 +390,34 @@ function ConfirmAttendanceModal({ event, onClose, onConfirmed }: { event: Commun
           ) : (
             <ul className="ranking-list">
               {participants.map((p) => (
-                <li key={p.id} className="ranking-row" style={{ gridTemplateColumns: 'auto auto 1fr auto' }}>
-                  <input
-                    type="checkbox"
-                    checked={attended.has(p.user.id)}
-                    onChange={() => toggle(p.user.id)}
-                    aria-label={`Confirmar presença de ${p.user.name}`}
-                  />
-                  <Avatar name={p.user.name} avatarType={p.user.avatarType} avatarUrl={p.user.avatarUrl} userId={p.user.id} />
-                  <div className="ranking-row__info">
-                    <span className="ranking-row__name">{p.user.name}</span>
-                    {p.user.department && <span className="ranking-row__department">{p.user.department.name}</span>}
+                <li key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="ranking-row" style={{ gridTemplateColumns: 'auto auto 1fr auto' }}>
+                    <input
+                      type="checkbox"
+                      checked={attended.has(p.user.id)}
+                      onChange={() => toggle(p.user.id)}
+                      aria-label={`Confirmar presença de ${p.user.name}`}
+                    />
+                    <Avatar name={p.user.name} avatarType={p.user.avatarType} avatarUrl={p.user.avatarUrl} userId={p.user.id} />
+                    <div className="ranking-row__info">
+                      <span className="ranking-row__name">{p.user.name}</span>
+                      {p.user.department && <span className="ranking-row__department">{p.user.department.name}</span>}
+                    </div>
+                    {p.evidences.length > 0 ? (
+                      <button type="button" className="btn btn--small btn--secondary" onClick={() => toggleExpanded(p.id)}>
+                        📷 {p.evidences.length} evidência(s) {expanded.has(p.id) ? '▲' : '▼'}
+                      </button>
+                    ) : (
+                      <span className="ranking-row__department">Sem evidência</span>
+                    )}
                   </div>
+                  {expanded.has(p.id) && p.evidences.length > 0 && (
+                    <div className="evidence-grid" style={{ marginLeft: '32px' }}>
+                      {p.evidences.map((ev) => (
+                        <EvidencePreview key={ev.id} evidence={ev} />
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

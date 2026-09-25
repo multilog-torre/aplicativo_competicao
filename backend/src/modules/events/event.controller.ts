@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
+import { AppError } from '../../shared/errors/AppError';
 import { sendSuccess } from '../../shared/utils/apiResponse';
+import { EventEvidenceService } from './event-evidence.service';
 import { EventService } from './event.service';
 import {
   ApproveEventDTO,
@@ -80,7 +82,7 @@ export class EventController {
 
   public static async listParticipants(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
-    const participants = await EventService.listParticipants(id);
+    const participants = await EventService.listParticipants(id, req.user?.id ?? null, isAdminRequest(req));
     return sendSuccess(res, participants, 200, { total: participants.length });
   }
 
@@ -89,5 +91,45 @@ export class EventController {
     const data = req.body as ConfirmAttendanceDTO;
     const event = await EventService.confirmAttendance(id, data, req.user!.id);
     return sendSuccess(res, event, 200);
+  }
+
+  /** POST /events/:id/evidence — Envia evidência (multipart/form-data, campo "file") de que esteve no evento */
+  public static async uploadEvidence(req: Request, res: Response): Promise<Response> {
+    const { id: eventId } = req.params;
+
+    if (!req.file) {
+      throw new AppError('Nenhum arquivo foi enviado. Utilize o campo "file".', 422, 'FILE_REQUIRED');
+    }
+
+    const evidence = await EventEvidenceService.upload(eventId, req.user!.id, {
+      buffer: req.file.buffer,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+    });
+
+    return sendSuccess(res, evidence, 201);
+  }
+
+  /** GET /events/:id/evidence — Lista as evidências que EU (usuário logado) enviei pra este evento */
+  public static async listMyEvidence(req: Request, res: Response): Promise<Response> {
+    const { id: eventId } = req.params;
+    const evidences = await EventEvidenceService.listMine(eventId, req.user!.id);
+    return sendSuccess(res, evidences, 200, { total: evidences.length });
+  }
+
+  /** GET /events/:id/evidence/:evidenceId/download — Download autorizado do arquivo */
+  public static async downloadEvidence(req: Request, res: Response): Promise<Response> {
+    const { id: eventId, evidenceId } = req.params;
+    const { buffer, fileName, fileType } = await EventEvidenceService.getFileForDownload(
+      eventId,
+      evidenceId,
+      req.user!.id,
+      isAdminRequest(req),
+    );
+
+    res.setHeader('Content-Type', fileType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+    return res.send(buffer);
   }
 }

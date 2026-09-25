@@ -34,11 +34,21 @@ Permitida pelo criador **ou** por um admin, só enquanto o evento ainda não aco
 
 - `join`: só em evento `APPROVED` e cuja data ainda não passou. Não pode se inscrever duas vezes.
 - `leave`: pode sair a qualquer momento, mesmo depois do evento já ter acontecido — nunca desfaz um bônus já creditado (o ledger é imutável), só remove a inscrição e, com ela, o acesso ao grupo de discussão daquele evento no Mural. Sair antes do admin confirmar presença equivale a não ter comparecido.
-- A lista de participantes de um evento é **pública a qualquer autenticado** (decisão deliberada: "quero que fique visível quem está participando"), não restrita a admins.
+- A lista de participantes de um evento é **pública a qualquer autenticado** (decisão deliberada: "quero que fique visível quem está participando"), não restrita a admins — **exceto** a evidência de presença de cada um, que continua privada (ver seção abaixo).
 
 ## Confirmação de presença e crédito do bônus
 
 Só possível para um evento `APPROVED`, com `bonusPoints` definido, e **depois** que a data do evento já passou. O admin informa a lista de quem compareceu; todos os demais inscritos viram `NO_SHOW` automaticamente. Isso trava o evento em `COMPLETED` (nunca reprocessável) **antes** de qualquer crédito de ponto — se o crédito falhar pela metade, o evento não fica em estado ambíguo. Só quem tem status `ATTENDED` recebe a transação `EVENT_BONUS` no ledger e a notificação correspondente.
+
+## Evidência de presença (`EventParticipantEvidence`)
+
+Cada inscrito pode enviar uma foto/comprovante (`POST /events/:id/evidence`, mesmo mecanismo de armazenamento do `ActivityEvidence` — nunca exposto por URL pública direta) como prova de que esteve no evento, pra ajudar o admin a decidir quem marcar como presente na hora de confirmar.
+
+- **Janela de envio**: só depois que a data do evento já passou e enquanto o evento ainda está `APPROVED` (ou seja, até o admin confirmar presença — uma vez `COMPLETED`, não aceita mais nada). Só o próprio inscrito envia a própria evidência.
+- **Nunca obrigatória**: é só um apoio à decisão do admin — ele continua podendo marcar `ATTENDED` sem nenhuma evidência anexada, exatamente como já funcionava (decisão de negócio explícita, pra não excluir quem esteve lá mas esqueceu de enviar).
+- **Visibilidade**: só quem enviou e admins veem — mesmo padrão de privacidade do `ActivityEvidence`, nunca pública entre colegas participantes do mesmo evento. Isso é resolvido no `GET /events/:id/participants` (a mesma lista pública de inscritos): cada entrada só traz o array `evidences` preenchido quando quem pediu é admin ou é o próprio dono daquela inscrição — pra qualquer outro colega, vem sempre `[]`. Evita uma segunda ida ao servidor por participante (N+1) na tela de confirmação de presença do admin.
+- `GET /events/:id/evidence`: lista só as evidências que o **próprio** usuário logado enviou pra aquele evento (usado pela tela do participante pra mostrar o que já foi enviado).
+- `GET /events/:id/evidence/:evidenceId/download`: download autorizado (dono ou admin), nunca link público.
 
 ## Cancelamento
 

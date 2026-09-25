@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { CommunityEvent, EventCategory } from '../types/api';
+import { CommunityEvent, EventCategory, EvidenceItem } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { EventParticipantsModal } from '../components/ui/EventParticipantsModal';
+import { EvidencePreview } from '../components/ui/EvidencePreview';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -45,6 +46,7 @@ export function EventsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CommunityEvent | null>(null);
   const [viewingParticipantsOf, setViewingParticipantsOf] = useState<CommunityEvent | null>(null);
+  const [sendingEvidenceFor, setSendingEvidenceFor] = useState<CommunityEvent | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -175,6 +177,7 @@ export function EventsPage() {
                     onLeave={() => handleLeave(e.id)}
                     onEdit={() => setEditing(e)}
                     onViewParticipants={() => setViewingParticipantsOf(e)}
+                    onSendEvidence={() => setSendingEvidenceFor(e)}
                   />
                 ))}
               </div>
@@ -244,6 +247,13 @@ export function EventsPage() {
         />
       )}
 
+      {sendingEvidenceFor && (
+        <EventEvidenceModal
+          event={sendingEvidenceFor}
+          onClose={() => setSendingEvidenceFor(null)}
+        />
+      )}
+
       {deletingId && (
         <ConfirmModal
           title="Excluir evento"
@@ -267,6 +277,7 @@ function EventCard({
   onLeave,
   onEdit,
   onViewParticipants,
+  onSendEvidence,
 }: {
   event: CommunityEvent;
   busy: boolean;
@@ -275,7 +286,13 @@ function EventCard({
   onLeave: () => void;
   onEdit: () => void;
   onViewParticipants: () => void;
+  onSendEvidence: () => void;
 }) {
+  // Janela de envio de evidência: evento já aconteceu, ainda está aberto
+  // (admin não confirmou presença ainda — isso viraria COMPLETED) e a
+  // pessoa está inscrita. Ver event-evidence.service.ts.
+  const canSendEvidence = event.isPast && event.myParticipationStatus === 'REGISTERED';
+
   return (
     <div className="event-card">
       <div className="event-card__header">
@@ -301,12 +318,100 @@ function EventCard({
           {busy ? 'Aguarde…' : 'Participar'}
         </button>
       )}
+      {canSendEvidence && (
+        <button type="button" className="btn btn--secondary btn--block" onClick={onSendEvidence}>
+          📷 Enviar evidência de presença
+        </button>
+      )}
       {canEdit && (
         <button type="button" className="btn btn--ghost btn--small btn--block" onClick={onEdit}>
           ✏️ Editar evento
         </button>
       )}
     </div>
+  );
+}
+
+function EventEvidenceModal({ event, onClose }: { event: CommunityEvent; onClose: () => void }) {
+  const { showToast } = useToast();
+  const [evidences, setEvidences] = useState<EvidenceItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    setLoading(true);
+    api
+      .get<EvidenceItem[]>(`/events/${event.id}/evidence`)
+      .then(({ data }) => setEvidences(data))
+      .catch(() => setError('Não foi possível carregar suas evidências enviadas.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, [event.id]);
+
+  async function handleUpload() {
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post(`/events/${event.id}/evidence`, formData, true);
+      setFile(null);
+      showToast('Evidência enviada com sucesso!', 'success');
+      load();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível enviar a evidência.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Modal title={`Evidência de presença — ${event.title}`} onClose={onClose}>
+      <div className="form">
+        <p className="steps-list__description" style={{ marginTop: 0 }}>
+          Envie uma foto ou comprovante de que você esteve no evento — isso ajuda o administrador a confirmar sua
+          presença, mas não é obrigatório: ele ainda pode confirmar mesmo sem evidência enviada.
+        </p>
+
+        {error && <div className="alert alert--error">{error}</div>}
+
+        {loading ? (
+          <LoadingState label="Carregando…" />
+        ) : evidences && evidences.length > 0 ? (
+          <div className="evidence-grid">
+            {evidences.map((e) => (
+              <EvidencePreview key={e.id} evidence={e} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState icon="📷" title="Você ainda não enviou nenhuma evidência" />
+        )}
+
+        <label className="field">
+          <span className="field__label">Adicionar novo arquivo (foto ou PDF)</span>
+          <input
+            type="file"
+            accept=".jpg,.jpeg,.png,.pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            Fechar
+          </button>
+          <button type="button" className="btn btn--primary" disabled={!file || uploading} onClick={handleUpload}>
+            {uploading ? 'Enviando…' : 'Enviar evidência'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

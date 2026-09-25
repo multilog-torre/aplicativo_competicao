@@ -370,6 +370,10 @@ export interface EventParticipantEntry {
   status: EventParticipantStatus;
   registeredAt: string;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null; department: { name: string } | null };
+  // Evidência de presença enviada por esse participante — só vem preenchida
+  // quando quem pediu a lista é admin, ou é o próprio participante (ver
+  // event.service.ts). Pra qualquer outro colega, vem sempre [].
+  evidences: EvidenceItem[];
 }
 
 export interface SystemSettings {

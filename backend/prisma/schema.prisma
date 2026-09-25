@@ -436,8 +436,34 @@ model EventParticipant {
   user        User   @relation("EventParticipations", fields: [userId], references: [id], onDelete: Cascade)
   confirmedBy User?  @relation("EventParticipantsConfirmed", fields: [confirmedById], references: [id])
 
+  evidences EventParticipantEvidence[]
+
   @@unique([eventId, userId])
   @@map("event_participants")
+}
+
+// Evidência (foto/comprovante) de que um participante esteve presente no
+// evento — enviada só depois que o evento aconteceu, enquanto ainda não foi
+// confirmado (event.status = APPROVED, ver event-evidence.service.ts).
+// Apoio à decisão do admin na hora de marcar presença, nunca obrigatório
+// (decisão de negócio combinada com o usuário) — mesmo padrão de
+// visibilidade do ActivityEvidence: só o próprio participante e admins veem.
+model EventParticipantEvidence {
+  id                 String   @id @default(uuid())
+  eventParticipantId String   @map("event_participant_id")
+  fileName           String   @map("file_name")
+  fileType           String   @map("file_type")
+  fileSize           Int      @map("file_size")
+  storageProvider    String   @default("local") @map("storage_provider")
+  storagePath        String   @map("storage_path")
+  storageUrl         String?  @map("storage_url")
+  uploadedBy         String   @map("uploaded_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  eventParticipant EventParticipant @relation(fields: [eventParticipantId], references: [id], onDelete: Cascade)
+
+  @@index([eventParticipantId])
+  @@map("event_participant_evidence")
 }
 
 // -------------------------------------------------------------

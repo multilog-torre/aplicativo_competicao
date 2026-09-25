@@ -310,15 +310,42 @@ export class EventService {
    * autenticado (a pedido do usuário: "quero que fique visível quem está
    * participando", não só pro admin). Usada tanto pela visão geral quanto
    * pela tela de confirmação de presença do admin.
+   *
+   * As evidências de presença (event-evidence.service.ts) vêm embutidas
+   * aqui pra evitar N+1 requisições na tela de confirmação do admin — mas
+   * só pra quem tem permissão de ver: um admin vê a evidência de todo
+   * mundo; um participante comum só vê a própria (mesma regra de
+   * privacidade do ActivityEvidence — nunca pública entre colegas).
    */
-  public static async listParticipants(id: string) {
+  public static async listParticipants(id: string, requestingUserId: string | null, isAdmin: boolean) {
     const event = await prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundError(`Evento com ID '${id}' não foi encontrado.`);
 
-    return prisma.eventParticipant.findMany({
+    const participants = await prisma.eventParticipant.findMany({
       where: { eventId: id },
       orderBy: { registeredAt: 'asc' },
-      include: { user: { select: { id: true, name: true, avatarType: true, avatarUrl: true, department: { select: { name: true } } } } },
+      include: {
+        user: { select: { id: true, name: true, avatarType: true, avatarUrl: true, department: { select: { name: true } } } },
+        evidences: true,
+      },
+    });
+
+    return participants.map((p) => {
+      const canSeeEvidence = isAdmin || (requestingUserId !== null && p.userId === requestingUserId);
+      const { evidences, ...rest } = p;
+      return {
+        ...rest,
+        evidences: canSeeEvidence
+          ? evidences.map((e) => ({
+              id: e.id,
+              fileName: e.fileName,
+              fileType: e.fileType,
+              fileSize: e.fileSize,
+              createdAt: e.createdAt,
+              downloadUrl: `/api/v1/events/${id}/evidence/${e.id}/download`,
+            }))
+          : [],
+      };
     });
   }
 

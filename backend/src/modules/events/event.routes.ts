@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { attachUserIfPresent, ensureAuthenticated, requireRoles } from '../../shared/middlewares/authMiddleware';
+import { uploadSingleFile } from '../../shared/middlewares/uploadMiddleware';
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { EventController } from './event.controller';
@@ -29,8 +30,16 @@ router.delete('/:id', ensureAuthenticated, asyncHandler(EventController.delete))
 router.post('/:id/join', ensureAuthenticated, asyncHandler(EventController.join));
 router.post('/:id/leave', ensureAuthenticated, asyncHandler(EventController.leave));
 // Lista de participantes — qualquer autenticado pode ver quem está inscrito
-// (a pedido do usuário, não é mais restrito a admin).
+// (a pedido do usuário, não é mais restrito a admin). Embute evidência de
+// presença de cada um, mas só quem tem permissão de ver (checado no service).
 router.get('/:id/participants', ensureAuthenticated, asyncHandler(EventController.listParticipants));
+
+// Evidência de presença — envio (self), listagem (self) e download (self ou
+// admin, checado no service). Só o próprio inscrito envia a própria
+// evidência; ver event-evidence.service.ts pra janela de tempo permitida.
+router.post('/:id/evidence', ensureAuthenticated, uploadSingleFile, asyncHandler(EventController.uploadEvidence));
+router.get('/:id/evidence', ensureAuthenticated, asyncHandler(EventController.listMyEvidence));
+router.get('/:id/evidence/:evidenceId/download', ensureAuthenticated, asyncHandler(EventController.downloadEvidence));
 
 // 4. Moderação e confirmação de presença — restrito a ADMIN/ADMIN_MASTER.
 router.post(

@@ -2,6 +2,18 @@ import http from 'http';
 import { app } from './app';
 import { prisma } from './config/database';
 
+async function uploadEventEvidence(baseUrl: string, eventId: string, token: string) {
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from('fake-jpg-bytes')], { type: 'image/jpeg' }), 'presenca.jpg');
+  const res = await fetch(`${baseUrl}/events/${eventId}/evidence`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const data = (await res.json().catch(() => ({}))) as { data?: { id: string; downloadUrl: string } };
+  return { status: res.status, data };
+}
+
 async function runEventTests() {
   console.log('====================================================');
   console.log('🧪 INICIANDO TESTES DE EVENTOS COMUNITÁRIOS');
@@ -164,6 +176,12 @@ async function runEventTests() {
     if (duplicateJoinRes.status !== 409) throw new Error('Inscrição duplicada não foi bloqueada!');
     console.log('   ✅ Bloqueio de inscrição duplicada validado com sucesso.\n');
 
+    // 8.2 Evidência de presença não pode ser enviada ANTES do evento acontecer
+    console.log('8️⃣.2️⃣ Testando bloqueio de evidência de presença antes do evento acontecer (422)...');
+    const tooEarlyEvidenceRes = await uploadEventEvidence(baseUrl, eventId, carlosToken);
+    if (tooEarlyEvidenceRes.status !== 422) throw new Error('Envio de evidência antes do evento acontecer não foi bloqueado!');
+    console.log('   ✅ Bloqueio de evidência antecipada validado com sucesso.\n');
+
     // 9. Qualquer autenticado pode ver a lista de participantes — a pedido do
     // usuário, deixou de ser exclusivo do admin (era 403 antes desta feature).
     console.log('9️⃣ Testando visibilidade da lista de participantes por um usuário comum...');
@@ -183,6 +201,67 @@ async function runEventTests() {
 
     // 11. Simula o evento já ter acontecido (ajuste direto no banco, só para o teste)
     await prisma.event.update({ where: { id: eventId }, data: { eventDate: new Date(Date.now() - 60_000) } });
+
+    // 11.1 Quem não está inscrito não pode enviar evidência (403) — Renan é o
+    // criador do evento, mas nunca se inscreveu como participante.
+    console.log('1️⃣0️⃣.1️⃣ Testando bloqueio de evidência de quem não está inscrito (403)...');
+    const notRegisteredEvidenceRes = await uploadEventEvidence(baseUrl, eventId, renanToken);
+    if (notRegisteredEvidenceRes.status !== 403) throw new Error('Evidência de quem não está inscrito não foi bloqueada!');
+    console.log('   ✅ Bloqueio de evidência de não-inscrito validado com sucesso.\n');
+
+    // 11.2 Carlos envia evidência de presença, agora que o evento já aconteceu
+    console.log('1️⃣0️⃣.2️⃣ Testando envio de evidência de presença por Carlos (201)...');
+    const evidenceUploadRes = await uploadEventEvidence(baseUrl, eventId, carlosToken);
+    if (evidenceUploadRes.status !== 201 || !evidenceUploadRes.data.data?.id) {
+      throw new Error('Envio de evidência de presença falhou!');
+    }
+    console.log('   ✅ Envio de evidência de presença validado com sucesso.\n');
+
+    // 11.3 Carlos vê a própria evidência enviada
+    const myEvidenceRes = await fetch(`${baseUrl}/events/${eventId}/evidence`, { headers: { Authorization: `Bearer ${carlosToken}` } });
+    const myEvidenceBody = (await myEvidenceRes.json()) as { data: Array<{ id: string }> };
+    if (myEvidenceRes.status !== 200 || myEvidenceBody.data.length !== 1) {
+      throw new Error('Carlos não conseguiu ver a própria evidência enviada!');
+    }
+    console.log('   ✅ Listagem da própria evidência validada com sucesso.\n');
+
+    // 11.4 Admin vê a evidência de Carlos embutida na lista de participantes
+    console.log('1️⃣0️⃣.4️⃣ Testando visibilidade da evidência pro admin na lista de participantes...');
+    const adminParticipantsRes = await fetch(`${baseUrl}/events/${eventId}/participants`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    const adminParticipantsBody = (await adminParticipantsRes.json()) as {
+      data: Array<{ user: { id: string }; evidences: Array<{ id: string; downloadUrl: string }> }>;
+    };
+    const carlosEntryForAdmin = adminParticipantsBody.data.find((p) => p.user.id === carlosId);
+    if (!carlosEntryForAdmin || carlosEntryForAdmin.evidences.length !== 1) {
+      throw new Error('Admin não viu a evidência de Carlos na lista de participantes!');
+    }
+    console.log('   ✅ Visibilidade da evidência pro admin validada com sucesso.\n');
+
+    // 11.5 Um colega comum (não-admin, não o dono) NÃO vê a evidência de Carlos
+    // na mesma listagem — privacidade combinada com o usuário: só quem
+    // enviou + admins.
+    console.log('1️⃣0️⃣.5️⃣ Testando que um colega comum NÃO vê a evidência de outro participante...');
+    const renanParticipantsRes = await fetch(`${baseUrl}/events/${eventId}/participants`, { headers: { Authorization: `Bearer ${renanToken}` } });
+    const renanParticipantsBody = (await renanParticipantsRes.json()) as {
+      data: Array<{ user: { id: string }; evidences: Array<{ id: string }> }>;
+    };
+    const carlosEntryForRenan = renanParticipantsBody.data.find((p) => p.user.id === carlosId);
+    if (!carlosEntryForRenan || carlosEntryForRenan.evidences.length !== 0) {
+      throw new Error('Colega comum conseguiu ver a evidência de outro participante — vazamento de privacidade!');
+    }
+    console.log('   ✅ Privacidade da evidência entre colegas validada com sucesso.\n');
+
+    // 11.6 Download autorizado: dono (200), admin (200), terceiro (403)
+    console.log('1️⃣0️⃣.6️⃣ Testando autorização de download da evidência (dono/admin liberado, terceiro bloqueado)...');
+    const evidenceId = evidenceUploadRes.data.data!.id;
+    const downloadUrl = `${baseUrl}/events/${eventId}/evidence/${evidenceId}/download`;
+    const ownerDownloadRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${carlosToken}` } });
+    const adminDownloadRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${adminToken}` } });
+    const thirdPartyDownloadRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${renanToken}` } });
+    if (ownerDownloadRes.status !== 200) throw new Error('Dono da evidência não conseguiu baixar o próprio arquivo!');
+    if (adminDownloadRes.status !== 200) throw new Error('Admin não conseguiu baixar a evidência!');
+    if (thirdPartyDownloadRes.status !== 403) throw new Error('Terceiro conseguiu baixar evidência alheia — vazamento!');
+    console.log('   ✅ Autorização de download validada com sucesso.\n');
 
     // 12. Confirma presença — só Carlos compareceu — e credita o bônus
     console.log('1️⃣1️⃣ Testando confirmação de presença e crédito do bônus (só Carlos compareceu)...');
@@ -232,6 +311,12 @@ async function runEventTests() {
     });
     if (doubleConfirmRes.status !== 422) throw new Error('Reconfirmação de evento já concluído não foi bloqueada — risco de crédito duplicado!');
     console.log('   ✅ Bloqueio de reconfirmação validado com sucesso (sem crédito duplicado).\n');
+
+    // 13.1 Evento já COMPLETED não aceita mais evidência nova
+    console.log('1️⃣2️⃣.1️⃣ Testando bloqueio de evidência num evento já COMPLETED (422)...');
+    const postCompletionEvidenceRes = await uploadEventEvidence(baseUrl, eventId, carlosToken);
+    if (postCompletionEvidenceRes.status !== 422) throw new Error('Evidência num evento já concluído não foi bloqueada!');
+    console.log('   ✅ Bloqueio de evidência pós-conclusão validado com sucesso.\n');
 
     // 14. Fluxo de rejeição — outro evento, criado e rejeitado
     console.log('1️⃣3️⃣ Testando rejeição de um segundo evento pelo admin...');
