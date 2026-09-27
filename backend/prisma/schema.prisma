@@ -26,7 +26,15 @@ model User {
   avatarType    String   @default("INITIALS") @map("avatar_type")
   avatarUrl     String?  @map("avatar_url")
   status        String   @default("ACTIVE")
+  // "Placar de competição" — só soma quando há um ciclo de premiação ACTIVE
+  // no momento do crédito (ver points-application.util.ts e ciclos.md). Zera
+  // a cada fechamento de ciclo (CYCLE_RESET), igual sempre foi.
   totalPoints   Int      @default(0) @map("total_points")
+  // Contador vitalício, nunca afetado por ciclo nem por CYCLE_RESET — existe
+  // só pra sustentar as conquistas TOTAL_POINTS (Centena/Clube dos 1.000/
+  // Milionário de Pontos) como marcos de vida toda, independente da
+  // competição por ciclos. Ver points-application.util.ts.
+  lifetimePoints Int     @default(0) @map("lifetime_points")
   levelId       String?  @map("level_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -211,6 +219,12 @@ model PointsTransaction {
   referenceId     String?  @map("reference_id")
   createdBy       String?  @map("created_by")
   createdAt       DateTime @default(now()) @map("created_at")
+  // Ciclo de premiação ACTIVE no momento do crédito, ou nulo se não havia
+  // nenhum rolando (antes do 1º ciclo, ou no intervalo entre dois) — usado
+  // pra decidir se esse lançamento soma em User.totalPoints (ver
+  // points-application.util.ts e ciclos.md). Nunca apaga/edita o
+  // lançamento em si — a transação sempre existe, isso só marca o contexto.
+  cycleId         String?  @map("cycle_id")
 
   user        User          @relation("UserPoints", fields: [userId], references: [id])
   activity    UserActivity? @relation(fields: [activityId], references: [id])
@@ -218,11 +232,13 @@ model PointsTransaction {
   achievement Achievement?  @relation(fields: [achievementId], references: [id])
   reward      Reward?       @relation(fields: [rewardId], references: [id])
   creator     User?         @relation("CreatedTransactions", fields: [createdBy], references: [id])
+  cycle       AwardCycle?   @relation(fields: [cycleId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])
   @@index([activityId])
   @@index([transactionType])
+  @@index([cycleId])
   @@map("points_transactions")
 }
 
@@ -347,8 +363,9 @@ model AwardCycle {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  prizes  CyclePrize[]
-  winners CycleWinner[]
+  prizes       CyclePrize[]
+  winners      CycleWinner[]
+  transactions PointsTransaction[]
 
   @@index([status])
   @@index([startDate])

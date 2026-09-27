@@ -15,7 +15,7 @@ Cada um exige um formato específico de `ruleValue` (JSON) e é avaliado por um 
 | `ruleType` | `ruleValue` esperado | Critério |
 |---|---|---|
 | `ACTIVITY_COUNT` | `{ count }` | Nº de atividades aprovadas (qualquer modalidade) ≥ `count` |
-| `TOTAL_POINTS` | `{ minPoints }` | `totalPoints` atual ≥ `minPoints` |
+| `TOTAL_POINTS` | `{ minPoints }` | `lifetimePoints` (vitalício — **não** `totalPoints`) ≥ `minPoints`. Deliberadamente imune à regra "sem ciclo ativo, não conta" (ver [ciclos.md](./ciclos.md)) e a `CYCLE_RESET`: essas 3 conquistas (Centena/Clube dos 1.000/Milionário de Pontos) são marcos de vida toda, não do ciclo atual |
 | `STREAK_DAYS` | `{ days }` | Maior sequência de dias consecutivos com pelo menos 1 atividade aprovada ≥ `days` |
 | `SPECIFIC_MODALITY` | `{ activityTypeId, count? }` | Nº de atividades aprovadas **daquela modalidade** ≥ `count` (padrão 1) |
 | `CUMULATIVE_QUANTITY` | `{ activityTypeId, targetQuantity }` | Soma da `quantity` de atividades aprovadas daquela modalidade ≥ `targetQuantity` |

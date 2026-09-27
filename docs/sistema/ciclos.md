@@ -4,7 +4,21 @@
 
 Uma competição periódica com data de início/fim e um pódio (1º/2º/3º) ao final — pense em "temporada" ou "trimestre da competição". Cadastro administrável (`AwardCycle`): nome, `startDate`/`endDate`, e opcionalmente até 3 prêmios (`CyclePrize`, um por posição do pódio — só descritivo/texto, a entrega física é externa ao sistema).
 
-Ciclos **não podem se sobrepor no tempo** (exceto os já cancelados) — evita ambiguidade sobre qual competição vale numa data.
+Ciclos **não podem se sobrepor no tempo** (exceto os já cancelados) — evita ambiguidade sobre qual competição vale numa data. Cancelados não contam pra sobreposição; **encerrados (`CLOSED`) contam** — um ciclo já fechado ainda "ocupa calendário" pra sempre nas datas em que rodou.
+
+## Pontuação só conta com um ciclo ativo (decisão de negócio a pedido do usuário)
+
+Todo lançamento de pontos positivo (atividade aprovada, bônus manual, recompensa de conquista/desafio, bônus de evento) só entra no **placar de competição** (`User.totalPoints` — o número que Ranking, Nível, Dashboard e Perfil mostram) se **havia um ciclo `ACTIVE` no exato momento em que o ponto foi gerado**. Sem nenhum ciclo ativo — antes do primeiro ciclo existir, ou no intervalo entre um ciclo fechado e o próximo começar — o ganho de pontos **não conta pra nada competitivo**, mesmo que a atividade tenha sido aprovada normalmente.
+
+- **O lançamento sempre existe no ledger** (Regra de Ouro — nunca se descarta um evento), só não é somado no placar. Fica marcado com `PointsTransaction.cycleId = null`.
+- **Débitos e correções sempre aplicam**, com ou sem ciclo ativo: resgate de prêmio, `PENALTY`, e qualquer `REVERSAL` (mesmo uma reversão que devolva pontos, ex.: desfazer uma penalidade). Do contrário, um resgate feito bem no intervalo entre dois ciclos "sumiria" sem debitar de fato o saldo — uma brecha de pontos grátis. Só o GANHO NOVO (positivo, que não seja reversão) é que depende de ciclo ativo.
+- **Ranking** (qualquer período — geral, semana, mês, ano) segue a mesma regra: só soma transações com `cycleId` preenchido.
+- **Conquistas do tipo `TOTAL_POINTS`** (Centena, Clube dos 1.000, Milionário de Pontos) são a única exceção deliberada — ver `lifetimePoints` abaixo.
+- Ver [pontuacao.md](./pontuacao.md) pro detalhe de implementação (`points-application.util.ts`).
+
+### `lifetimePoints` — o contador que nunca some
+
+Existe um segundo contador no usuário, `User.lifetimePoints`, que soma **todo** ganho/perda de pontos (positivo ou negativo) **sempre**, com ou sem ciclo ativo — a única transação que ele ignora é o próprio `CYCLE_RESET` (é só uma zeragem administrativa de placar, não uma perda real). Ele existe **só** pra sustentar as 3 conquistas `TOTAL_POINTS`, que são vitalícias por design e não deveriam depender de estar ou não dentro de um ciclo. Não aparece em nenhuma tela — é puramente um mecanismo interno (exceto no ranking, onde é a fonte do campo `totalPointsAllTime`, que hoje não tem nenhum lugar na tela que o exiba).
 
 ## Status efetivo
 

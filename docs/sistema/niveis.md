@@ -8,6 +8,8 @@ Cadastro administrável: `levelNumber` (único, define a ordem), `name`, `minPoi
 
 Como `totalPoints` zera a cada fechamento de ciclo de premiação (`CYCLE_RESET`, ver [ciclos.md](./ciclos.md)) e os ciclos hoje duram 3 meses, as faixas do seed foram pensadas pra esse período, não pra um ano inteiro: **Iniciante 0 / Explorador 700 / Competidor 1.800 / Destaque 3.200 / Campeão 5.500**. O nível máximo (Campeão) foi calibrado pra ser alcançável só perto do fim do ciclo por alguém muito engajado (atividade quase diária, em várias modalidades — ver [atividades.md](./atividades.md) pros valores de pontuação por modalidade que sustentam essa conta), não nas primeiras semanas.
 
+Desde a pontuação por ciclo (ver [ciclos.md](./ciclos.md)), o nível depende de um ciclo estar **ativo** em dois momentos, não só um: além de zerar no fechamento (já valia antes), agora só sobe se os pontos que a pessoa ganhou tiverem sido gerados **com algum ciclo `ACTIVE` rolando** — atividade aprovada sem nenhum ciclo ativo não empurra ninguém pra cima de nível, mesmo que a atividade em si tenha sido aprovada normalmente.
+
 ## Como a reclassificação funciona
 
 O nível de um usuário nunca é escolhido manualmente — é sempre recalculado a partir do `totalPoints` atual, escolhendo **o nível de maior `minPoints` que ainda seja ≤ ao total do usuário**. Se o total for tão baixo (ou negativo, após uma penalidade) que nenhum nível se encaixe, o usuário fica no nível de menor `minPoints` cadastrado como piso — nunca fica "sem nível" enquanto existir ao menos um configurado.

@@ -477,6 +477,29 @@ async function main() {
   });
   console.log('✅ Configuração de aprovação automática de atividades criada (ATIVADA por padrão)');
 
+  // 6.3 Ciclo padrão de conveniência — SÓ para ambiente local/testes. Pontos
+  // ganhos sem nenhum ciclo ACTIVE não contam pra ranking/nível/dashboard/
+  // perfil (decisão de negócio a pedido do usuário — ver ciclos.md e
+  // points-application.util.ts); sem isso, todo teste automatizado que
+  // registra e aprova atividade precisaria criar seu próprio ciclo. Span
+  // longo e óbvio-de-substituir — um admin real deve cancelar isso e criar
+  // os ciclos de verdade (ex.: trimestrais) pela tela normal. NUNCA é
+  // sincronizado em produção (o seed não roda de novo em deploys já
+  // existentes) — é por isso que, hoje, produção não tem ciclo nenhum
+  // ativo, exatamente o cenário que motivou esta feature.
+  await prisma.awardCycle.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Ciclo Padrão (ambiente de teste — substitua pelo ciclo real)',
+      startDate: new Date('2020-01-01T00:00:00.000Z'),
+      endDate: new Date('2035-12-31T23:59:59.000Z'),
+      status: 'ACTIVE',
+    },
+  });
+  console.log('✅ Ciclo padrão de conveniência criado (só ambiente local/testes)');
+
   // 7. Catálogo de Premiações
   const rewards = [
     {
@@ -566,12 +589,21 @@ async function main() {
             referenceType: 'SEED_BALANCE',
             referenceId: 'seed',
             createdBy,
+            // Contado como "dentro" do Ciclo Padrão de conveniência criado
+            // acima (mesmo id fixo) — do contrário ficaria fora do placar de
+            // ranking (que só soma transações com cycleId, ver
+            // ranking.service.ts) enquanto totalPoints (abaixo) já inclui.
+            cycleId: '00000000-0000-0000-0000-000000000001',
           },
         });
       }
     }
 
-    // Recalcula o agregado a partir da fonte oficial (o ledger)
+    // Recalcula os dois agregados a partir da fonte oficial (o ledger) —
+    // totalPoints (placar de competição) e lifetimePoints (vitalício, base
+    // das conquistas TOTAL_POINTS) começam iguais aqui porque, na criação
+    // do seed, ainda não existe nenhum CYCLE_RESET (a única transação que
+    // os dois NÃO têm em comum — ver points-application.util.ts).
     const ledger = await prisma.pointsTransaction.aggregate({
       where: { userId },
       _sum: { points: true },
@@ -579,7 +611,7 @@ async function main() {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { totalPoints: ledger._sum.points ?? 0 },
+      data: { totalPoints: ledger._sum.points ?? 0, lifetimePoints: ledger._sum.points ?? 0 },
     });
   }
 

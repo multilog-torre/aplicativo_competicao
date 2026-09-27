@@ -48,15 +48,24 @@ export interface LeaderboardEntryLite {
 
 export class RankingService {
   /**
-   * Leaderboard GERAL (vitalício, sem filtros) já ordenado — mesma regra de
-   * empate usada em `list()` (pontos desc, nome asc). Base compartilhada por
-   * `getGeneralPosition` (Fase 16 — "subida no ranking") e pelo Dashboard
-   * (Fase 17 — posição atual e mensagem motivacional), evitando duplicar a
-   * mesma agregação em múltiplos lugares.
+   * Leaderboard GERAL (placar de competição, sem filtro de período) já
+   * ordenado — mesma regra de empate usada em `list()` (pontos desc, nome
+   * asc). Base compartilhada por `getGeneralPosition` (Fase 16 — "subida no
+   * ranking") e pelo Dashboard (Fase 17 — posição atual e mensagem
+   * motivacional), evitando duplicar a mesma agregação em múltiplos lugares.
+   *
+   * Só soma transações com `cycleId` preenchido — pontos ganhos sem nenhum
+   * ciclo de premiação ativo (antes do 1º ciclo, ou no intervalo entre
+   * dois) não contam pro placar de competição, mesma regra de
+   * `User.totalPoints` (ver points-application.util.ts e ciclos.md).
    */
   public static async getGeneralLeaderboard(externalTx?: TransactionClient): Promise<LeaderboardEntryLite[]> {
     const client = externalTx ?? prisma;
-    const sums = await client.pointsTransaction.groupBy({ by: ['userId'], _sum: { points: true } });
+    const sums = await client.pointsTransaction.groupBy({
+      by: ['userId'],
+      where: { cycleId: { not: null } },
+      _sum: { points: true },
+    });
     const sumByUser = new Map(sums.map((s) => [s.userId, s._sum.points ?? 0]));
 
     const users = await client.user.findMany({
@@ -105,7 +114,10 @@ export class RankingService {
 
     const periodStart = getPeriodStart(query.period, new Date());
 
-    const transactionWhere: Record<string, unknown> = {};
+    // cycleId != null em qualquer período: pontos ganhos sem ciclo de
+    // premiação ativo não contam pro ranking, nem no geral nem em nenhum
+    // recorte de tempo (ver points-application.util.ts e ciclos.md).
+    const transactionWhere: Record<string, unknown> = { cycleId: { not: null } };
     if (periodStart) transactionWhere.createdAt = { gte: periodStart };
     if (query.activityTypeId) transactionWhere.activity = { activityTypeId: query.activityTypeId };
 
@@ -129,7 +141,7 @@ export class RankingService {
         name: true,
         avatarType: true,
         avatarUrl: true,
-        totalPoints: true,
+        lifetimePoints: true,
         department: { select: { id: true, name: true } },
       },
     });
@@ -142,7 +154,7 @@ export class RankingService {
         avatarUrl: user.avatarUrl,
         department: user.department,
         points: sumByUser.get(user.id) ?? 0,
-        totalPointsAllTime: user.totalPoints,
+        totalPointsAllTime: user.lifetimePoints,
       }))
       // Empate: quem tem mais pontos vem primeiro; em caso de igualdade, ordem alfabética pelo nome.
       .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name, 'pt-BR'));

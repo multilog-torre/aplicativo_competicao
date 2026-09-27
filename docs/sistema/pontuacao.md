@@ -2,9 +2,24 @@
 
 ## A regra de ouro: um ledger imutável
 
-Não existe um número "solto" de pontos em lugar nenhum. `User.totalPoints` é sempre a soma de todas as linhas da tabela `PointsTransaction` daquele usuário — nunca editado por um `UPDATE` direto. Toda entrada/saída de pontos, de qualquer origem, é uma linha nova nessa tabela (`ScoringService.creditPoints`, o único método que grava nela). Corrigir algo nunca apaga uma linha — cria uma nova que a compensa (`REVERSAL`, `CYCLE_RESET`).
+Não existe um número "solto" de pontos em lugar nenhum. Toda entrada/saída de pontos, de qualquer origem, é uma linha nova na tabela `PointsTransaction` — nunca um `UPDATE` direto em qualquer contador. Corrigir algo nunca apaga uma linha — cria uma nova que a compensa (`REVERSAL`, `CYCLE_RESET`).
 
 Isso garante que, a qualquer momento, dá pra reconstruir exatamente de onde veio cada ponto que alguém tem — é a base da tela "Histórico" e do detalhe de cada transação (`GET /scoring/transactions/:id`, que resolve a "origem" de forma diferente por tipo).
+
+## Dois contadores, dois propósitos (desde a pontuação por ciclo)
+
+O `User` guarda **dois** agregados, cada um com uma regra de soma diferente (`points-application.util.ts`, chamado por todo lugar que credita/debita pontos):
+
+| Campo | O que é | Quando soma |
+|---|---|---|
+| `totalPoints` | O "placar de competição" — o que Ranking, Nível, Dashboard e Perfil mostram | Só ganhos NOVOS (positivos) gerados com um ciclo de premiação `ACTIVE` no momento; débitos/correções (`REVERSAL`, valores negativos) sempre somam; `CYCLE_RESET` sempre zera |
+| `lifetimePoints` | Marco vitalício, nunca afetado por ciclo | Sempre, com ou sem ciclo ativo — exceto o próprio `CYCLE_RESET` |
+
+**Por quê**: decisão de negócio a pedido do usuário — pontos ganhos sem nenhum ciclo de premiação rolando (antes do primeiro ciclo, ou no intervalo entre um ciclo fechado e o próximo começar) não devem contar pra competição, mas o histórico completo (ledger + `lifetimePoints`) nunca perde nada. Ver [ciclos.md](./ciclos.md) para o detalhe completo dessa regra, incluindo por que débitos sempre aplicam (evita uma brecha de "resgate grátis" no intervalo entre ciclos).
+
+`lifetimePoints` tem uma única finalidade hoje: sustentar as conquistas `TOTAL_POINTS` (Centena, Clube dos 1.000, Milionário de Pontos) como marcos vitalícios de verdade, imunes tanto a `CYCLE_RESET` quanto a essa nova regra de "sem ciclo, não conta".
+
+Cada `PointsTransaction` também carrega um `cycleId` (nulo se não havia ciclo ativo no momento) — é o que permite ao Ranking recalcular a soma "oficial" direto do ledger (sem confiar só na coluna `totalPoints`) já respeitando a mesma regra.
 
 ## Fórmula de cálculo (`ScoringService.calculatePoints`)
 
@@ -28,8 +43,8 @@ Conferido diretamente no fluxo de cadastro: `register()`/`AdminUserService.creat
 | Tipo | Quem/o que dispara | Sinal | Onde no código |
 |---|---|---|---|
 | `ACTIVITY` | Admin aprova uma atividade registrada | positivo, pela fórmula acima | `admin-activity.service.ts` (`approve`) |
-| `ACHIEVEMENT` | Motor de conquistas desbloqueia uma badge automaticamente | positivo, = `pointsReward` da conquista (pode ser 0) | `achievement.service.ts` (`checkAndUnlock`) |
-| `CHALLENGE` | Participante completa um desafio (bate a meta) | positivo, = `rewardPoints` do desafio | `challenge.service.ts` (`awardCompletion`) |
+| `ACHIEVEMENT` | Motor de conquistas desbloqueia uma badge automaticamente | positivo, = `pointsReward` da conquista (pode ser 0) | `achievement.service.ts` (`checkAndUnlock`) — não passa por `creditPoints`, mas aplica a mesma regra de ciclo via `points-application.util.ts` diretamente |
+| `CHALLENGE` | Participante completa um desafio (bate a meta) | positivo, = `rewardPoints` do desafio | `challenge.service.ts` (`awardCompletion`) — idem, mesma regra aplicada diretamente |
 | `EVENT_BONUS` | Admin confirma presença do participante num evento | positivo, = `bonusPoints` do evento | `event.service.ts` (`confirmAttendance`) |
 | `REWARD` | Participante resgata um prêmio do catálogo | **negativo** (débito), = `-pointsCost` | `reward.service.ts` (`redeem`) |
 | `REVERSAL` | Admin desfaz uma transação anterior (erro, fraude, cancelamento de resgate) | inverte exatamente o sinal da transação original | `scoring.service.ts` (`reverseTransaction`) |
@@ -44,12 +59,13 @@ Conferido diretamente no fluxo de cadastro: `register()`/`AdminUserService.creat
 
 Toda vez que pontos entram ou saem (qualquer um dos 10 tipos acima), o mesmo método central roda estes passos, nesta ordem:
 
-1. Cria a linha imutável em `points_transactions`.
-2. Incrementa `User.totalPoints` (soma, positiva ou negativa).
-3. Reclassifica o nível do usuário ([niveis.md](./niveis.md)).
-4. Verifica e desbloqueia conquistas — **exceto** quando `transactionType = CYCLE_RESET** (ver nota abaixo).
-5. Se for `ACTIVITY` com `activityId`: atualiza o progresso de desafios ativos.
-6. Se for `ACTIVITY` com pontos positivos: verifica se a pessoa subiu no ranking geral e notifica (`RANKING_UP`).
+1. Descobre se há um ciclo de premiação `ACTIVE` agora (`getActiveCycleId`) e grava esse `cycleId` (ou `null`) na própria transação.
+2. Cria a linha imutável em `points_transactions`.
+3. Aplica o valor em `User.totalPoints`/`User.lifetimePoints` conforme a regra da seção acima (`applyPointsToUser`).
+4. Reclassifica o nível do usuário ([niveis.md](./niveis.md)) — sempre com base no `totalPoints` já atualizado, então também respeita a regra de ciclo automaticamente.
+5. Verifica e desbloqueia conquistas — **exceto** quando `transactionType = CYCLE_RESET** (ver nota abaixo).
+6. Se for `ACTIVITY` com `activityId`: atualiza o progresso de desafios ativos.
+7. Se for `ACTIVITY` com pontos positivos: verifica se a pessoa subiu no ranking geral e notifica (`RANKING_UP`).
 
 > **Por que `CYCLE_RESET` não roda o motor de conquistas**: o reset de um ciclo passa por todos os usuários um a um, zerando cada um. No meio desse laço, alguém ainda não resetado pode aparecer transitoriamente em 1º lugar geral e desbloquear uma conquista de `RANKING_POSITION` — creditando pontos de volta bem na hora em que o saldo deveria ir a zero. Rodar o motor aqui foi avaliado como bug em potencial e desativado deliberadamente para esse tipo.
 

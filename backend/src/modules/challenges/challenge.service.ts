@@ -4,6 +4,7 @@ import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { TransactionClient } from '../../shared/types/prisma';
 import { LevelService } from '../levels/level.service';
 import { NotificationService } from '../notifications/notification.service';
+import { applyPointsToUser, getActiveCycleId } from '../scoring/points-application.util';
 import { CreateChallengeDTO, ListChallengesQueryDTO, UpdateChallengeDTO } from './challenge.dto';
 
 export type EffectiveStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
@@ -217,7 +218,8 @@ export class ChallengeService {
       });
 
       if (completed) {
-        await this.awardCompletion(tx, userId, challenge);
+        const cycleId = await getActiveCycleId(tx);
+        await this.awardCompletion(tx, userId, challenge, cycleId);
       }
 
       return participant;
@@ -225,7 +227,12 @@ export class ChallengeService {
   }
 
   /** Concede a recompensa de conclusão do desafio (ledger + reclassificação de nível). */
-  private static async awardCompletion(tx: TransactionClient, userId: string, challenge: Challenge): Promise<void> {
+  private static async awardCompletion(
+    tx: TransactionClient,
+    userId: string,
+    challenge: Challenge,
+    cycleId: string | null,
+  ): Promise<void> {
     await NotificationService.create(
       {
         userId,
@@ -249,14 +256,13 @@ export class ChallengeService {
         transactionType: 'CHALLENGE',
         points: challenge.rewardPoints,
         description: `Desafio concluído: ${challenge.title}`,
+        cycleId,
       },
     });
 
-    const updatedUser = await tx.user.update({
-      where: { id: userId },
-      data: { totalPoints: { increment: challenge.rewardPoints } },
-      select: { totalPoints: true },
-    });
+    // Mesma regra de todo crédito: só soma em totalPoints se havia ciclo
+    // ativo; lifetimePoints soma sempre (ver points-application.util.ts).
+    const updatedUser = await applyPointsToUser(tx, userId, challenge.rewardPoints, { cycleId, isCycleReset: false });
 
     await LevelService.recalculateForUser(userId, updatedUser.totalPoints, tx);
   }
@@ -265,8 +271,15 @@ export class ChallengeService {
    * Atualiza o progresso de todos os desafios ativos do usuário que casam com a
    * modalidade da atividade recém-aprovada. Chamado automaticamente de dentro de
    * ScoringService.creditPoints, na MESMA transação atômica do crédito de pontos.
+   * `cycleId` vem do MESMO crédito que disparou isso (evita uma query
+   * redundante e garante consistência dentro da mesma transação atômica).
    */
-  public static async updateProgressForActivity(userId: string, activityId: string, tx: TransactionClient): Promise<void> {
+  public static async updateProgressForActivity(
+    userId: string,
+    activityId: string,
+    tx: TransactionClient,
+    cycleId: string | null,
+  ): Promise<void> {
     const activity = await tx.userActivity.findUnique({ where: { id: activityId } });
     if (!activity || activity.userId !== userId) return;
 
@@ -294,7 +307,7 @@ export class ChallengeService {
       });
 
       if (completed) {
-        await this.awardCompletion(tx, userId, participant.challenge);
+        await this.awardCompletion(tx, userId, participant.challenge, cycleId);
       }
     }
   }

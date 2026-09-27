@@ -7,6 +7,7 @@ import { LevelService } from '../levels/level.service';
 import { NotificationService } from '../notifications/notification.service';
 import { RankingService } from '../ranking/ranking.service';
 import { ListTransactionsQueryDTO, ManualTransactionDTO, ReversalDTO, SimulateScoreDTO } from './scoring.dto';
+import { applyPointsToUser, getActiveCycleId } from './points-application.util';
 
 // ─── Tipos internos ───────────────────────────────────────────────────────────
 export interface ScoreCalculationResult {
@@ -263,6 +264,21 @@ export class ScoringService {
       const shouldCheckRankingChange = params.transactionType === 'ACTIVITY' && params.points > 0;
       const positionBefore = shouldCheckRankingChange ? await RankingService.getGeneralPosition(params.userId, tx) : null;
 
+      // Ciclo ACTIVE agora (ou null se não há nenhum rolando) — decide se
+      // este crédito conta pro "placar de competição" (totalPoints) ou só
+      // fica registrado no ledger sem afetar ranking/nível/dashboard/perfil
+      // (ver points-application.util.ts e ciclos.md). CYCLE_RESET é o
+      // próprio mecanismo de zeragem, sempre afeta totalPoints independente
+      // disso.
+      const isCycleReset = params.transactionType === 'CYCLE_RESET';
+      const cycleId = isCycleReset ? null : await getActiveCycleId(tx);
+      // Débitos/correções (resgate de prêmio, penalidade, reversão) sempre
+      // afetam totalPoints, com ou sem ciclo ativo — só um GANHO NOVO é que
+      // fica condicionado a ter ciclo rolando. Sem isso, um resgate feito
+      // bem no intervalo entre dois ciclos "sumiria" sem debitar de fato o
+      // saldo (brecha de pontos grátis) — ver points-application.util.ts.
+      const bypassCycleGateForTotal = params.transactionType === 'REVERSAL' || params.points < 0;
+
       // 1. Cria a transação imutável no ledger
       const transaction = await tx.pointsTransaction.create({
         data: {
@@ -277,14 +293,17 @@ export class ScoringService {
           rewardId: params.rewardId ?? null,
           referenceType: params.referenceType ?? null,
           referenceId: params.referenceId ?? null,
+          cycleId,
         },
       });
 
-      // 2. Atualiza o total agregado do usuário (pode ser positivo ou negativo)
-      const updatedUser = await tx.user.update({
-        where: { id: params.userId },
-        data: { totalPoints: { increment: params.points } },
-        select: { id: true, totalPoints: true },
+      // 2. Atualiza os contadores agregados do usuário (pode ser positivo ou
+      // negativo) — totalPoints só soma se havia ciclo ativo (ou é reset);
+      // lifetimePoints soma sempre, exceto no próprio reset.
+      const updatedUser = await applyPointsToUser(tx, params.userId, params.points, {
+        cycleId,
+        isCycleReset,
+        bypassCycleGateForTotal,
       });
 
       // 3. Reclassifica o nível do usuário com base no novo total (Fase 11) —
@@ -299,14 +318,14 @@ export class ScoringService {
       // alguém ainda não resetado pode aparecer transitoriamente em 1º lugar e
       // desbloquear "Líder Absoluto"/"No Pódio", creditando pontos de volta bem na
       // hora em que o saldo deveria ir a zero.
-      if (params.transactionType !== 'CYCLE_RESET') {
-        await AchievementService.checkAndUnlock(params.userId, tx);
+      if (!isCycleReset) {
+        await AchievementService.checkAndUnlock(params.userId, tx, cycleId);
       }
 
       // 5. Atualiza o progresso de desafios ativos (Fase 13) — apenas para créditos
       // originados de uma atividade aprovada (transactionType=ACTIVITY com activityId).
       if (params.transactionType === 'ACTIVITY' && params.activityId) {
-        await ChallengeService.updateProgressForActivity(params.userId, params.activityId, tx);
+        await ChallengeService.updateProgressForActivity(params.userId, params.activityId, tx, cycleId);
       }
 
       // 6. Notifica subida no ranking geral, se aplicável (Fase 16).

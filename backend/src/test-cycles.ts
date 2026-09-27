@@ -105,6 +105,41 @@ async function main() {
   const renanId = (participantLogin.data as LoginBody)?.data?.user?.id ?? '';
   assert('Tokens obtidos com sucesso', !!masterToken && !!participantToken && !!gestorId && !!beatrizId && !!carlosId);
 
+  const now = new Date();
+
+  // O seed cria um "Ciclo Padrão" de conveniência (2020-2035, ACTIVE) só pra
+  // manter TODO OUTRO teste do sistema funcionando sem precisar criar o
+  // próprio ciclo (ver seed.ts e ciclos.md) — mas ESTE arquivo testa a
+  // mecânica de ciclos de verdade (sobreposição, encerramento, pódio), então
+  // precisa cancelar esse ciclo (e qualquer outro "de substituição" que
+  // outra suíte tenha criado antes desta, na mesma execução em cadeia —
+  // não dá pra confiar num ID fixo, por isso cancela TODO ciclo ACTIVE
+  // encontrado, não só o original) primeiro, pra liberar o calendário.
+  // Restaura um equivalente no final, pra quem rodar DEPOIS na cadeia
+  // (test:events, test:auto-approve) continuar tendo um ciclo ativo.
+  const preExistingRes = await reqJson('GET', '/cycles');
+  const preExistingCycles = (preExistingRes.data as ListBody)?.data ?? [];
+  for (const c of preExistingCycles) {
+    if (c.effectiveStatus === 'ACTIVE') {
+      await reqJson('POST', `/cycles/${c.id}/cancel`, undefined, masterToken);
+    }
+  }
+
+  // Ciclo de "trabalho" (janela curta em torno de agora) — pontuação só
+  // conta pro placar com um ciclo ACTIVE no momento do crédito (ver
+  // points-application.util.ts), então os vários /scoring/manual usados
+  // neste arquivo (passos 8/9) precisam de algum ciclo ativo cobrindo
+  // "agora". Não conflita com os ciclos A/B/C deste arquivo (datas bem
+  // distantes de agora) — só é cancelado mais adiante, exatamente antes do
+  // ciclo E (passo 10), que precisa da janela "agora" livre pra ele mesmo.
+  const workingCycleRes = await reqJson(
+    'POST',
+    '/cycles',
+    { name: 'Ciclo de trabalho (test:cycles)', startDate: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), endDate: new Date(now.getTime() + 60 * 60 * 1000).toISOString() },
+    masterToken,
+  );
+  const workingCycleId = (workingCycleRes.data as CycleBody)?.data?.id ?? '';
+
   // ── PASSO 1 ────────────────────────────────────────────────────────────────────
   console.log('\n1️⃣ Testando listagem pública de ciclos...');
   const emptyListRes = await reqJson('GET', '/cycles');
@@ -122,7 +157,6 @@ async function main() {
 
   // ── PASSO 3: ciclo A — já no passado, pra testar o encerramento automático ─────
   console.log('\n3️⃣ Testando criação de ciclo com prêmios...');
-  const now = new Date();
   const cycleAStart = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
   const cycleAEnd = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const createARes = await reqJson(
@@ -293,6 +327,9 @@ async function main() {
 
   // ── PASSO 10: desempate por quem chegou primeiro, nunca por nome ─────────────────
   console.log('\n🔟 Testando desempate do pódio por quem chegou primeiro (não por nome)...');
+  // Libera a janela "agora" pro ciclo E (abaixo), cancelando o ciclo de
+  // trabalho que cobria essa mesma janela desde o passo 0.
+  await reqJson('POST', `/cycles/${workingCycleId}/cancel`, undefined, masterToken);
   // Carlos e Beatriz estão ambos a 0 (resetados no passo 8). Dá a mesma
   // pontuação pros dois, em momentos diferentes — Carlos primeiro. Se o
   // desempate fosse por nome, Beatriz ("B") venceria Carlos ("C"); pelo
@@ -302,13 +339,15 @@ async function main() {
   // Renan (1100) fica em 3º, e Gestor (ganha só 5, abaixo de todo mundo)
   // fica de fora do pódio, sobrando como alguém não-vencedor mas com pontos
   // != 0 pra testar a notificação de reset com a menção ao pódio.
-  await reqJson('POST', '/scoring/manual', { userId: carlosId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Carlos primeiro.' }, masterToken);
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await reqJson('POST', '/scoring/manual', { userId: beatrizId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Beatriz depois.' }, masterToken);
-  await reqJson('POST', '/scoring/manual', { userId: gestorId, transactionType: 'BONUS', points: 5, description: 'Pontos mínimos de teste, fora do pódio.' }, masterToken);
-
+  // Cycle E precisa existir e estar ACTIVE ANTES dos lançamentos de bônus —
+  // desde que pontuação passou a só contar pro placar com um ciclo ACTIVE
+  // no momento do crédito (ver points-application.util.ts), não basta mais
+  // criar o ciclo com datas retroativas depois de já ter os pontos. endDate
+  // fica um pouco no futuro (buffer curto) só pra cobrir os 3 lançamentos
+  // manuais; a espera depois disso garante que já passou quando consultamos
+  // (dispara o encerramento automático).
   const cycleEStart = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
-  const cycleEEnd = new Date(now.getTime() - 1000).toISOString();
+  const cycleEEnd = new Date(Date.now() + 3000).toISOString();
   const createERes = await reqJson(
     'POST',
     '/cycles',
@@ -317,6 +356,14 @@ async function main() {
   );
   const cycleEId = (createERes.data as CycleBody)?.data?.id ?? '';
 
+  await reqJson('POST', '/scoring/manual', { userId: carlosId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Carlos primeiro.' }, masterToken);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await reqJson('POST', '/scoring/manual', { userId: beatrizId, transactionType: 'BONUS', points: 2500, description: 'Empate de teste — Beatriz depois.' }, masterToken);
+  await reqJson('POST', '/scoring/manual', { userId: gestorId, transactionType: 'BONUS', points: 5, description: 'Pontos mínimos de teste, fora do pódio.' }, masterToken);
+
+  // Espera o ciclo E realmente terminar (endDate no futuro próximo) antes de
+  // consultar — a consulta é o que dispara o encerramento automático.
+  await new Promise((resolve) => setTimeout(resolve, 3200));
   const cycleEDetailRes = await reqJson('GET', `/cycles/${cycleEId}`);
   const cycleEWinners = (cycleEDetailRes.data as CycleBody)?.data?.winners ?? [];
   const cycleEWinnerByPosition = new Map(cycleEWinners.map((w) => [w.position, w]));
@@ -360,6 +407,23 @@ async function main() {
   const cycleDId = (createDRes.data as CycleBody)?.data?.id ?? '';
   const deleteNotStartedRes = await reqJson('DELETE', `/cycles/${cycleDId}`, undefined, masterToken);
   assert('Exclusão de ciclo que ainda não começou funciona (200)', deleteNotStartedRes.status === 200);
+
+  // Restaura um ciclo ativo de longa duração pra quem rodar DEPOIS na
+  // cadeia (test:events, test:auto-approve) — este arquivo cancelou o
+  // "Ciclo Padrão" do seed no passo 0 e não deixou nenhum outro ativo.
+  // Não pode reaproveitar a janela 2020-2035: ciclos CLOSED (não só os
+  // ACTIVE) também bloqueiam sobreposição, e os ciclos A/C/E deste arquivo
+  // ficaram CLOSED com datas dentro de 2020-2035 — mas todas essas datas
+  // já passaram (são relativas ao "now" capturado no início do arquivo).
+  // Usar o instante REAL de agora (não a variável `now`, que já é "velha"
+  // a essa altura) como início garante que fica depois de A/C/E e o ciclo
+  // já nasce ACTIVE, cobrindo o momento presente.
+  await reqJson(
+    'POST',
+    '/cycles',
+    { name: 'Ciclo Padrão (restaurado após test:cycles)', startDate: new Date().toISOString(), endDate: '2035-12-31T23:59:59.000Z' },
+    masterToken,
+  );
 
   server.close();
 

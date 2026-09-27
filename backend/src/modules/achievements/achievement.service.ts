@@ -8,6 +8,7 @@ import { LevelService } from '../levels/level.service';
 import { NotificationService } from '../notifications/notification.service';
 import { RankingService } from '../ranking/ranking.service';
 import { getStorageProvider } from '../storage/storage.factory';
+import { applyPointsToUser } from '../scoring/points-application.util';
 import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
 
 const ALLOWED_ICON_EXTENSIONS = ['png', 'svg', 'jpg', 'jpeg'];
@@ -365,7 +366,7 @@ export class AchievementService {
     // conquistado).
     const [unlockedRows, user, approvedActivities] = await Promise.all([
       prisma.userAchievement.findMany({ where: { userId } }),
-      prisma.user.findUnique({ where: { id: userId }, select: { totalPoints: true, createdAt: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { totalPoints: true, lifetimePoints: true, createdAt: true } }),
       prisma.userActivity.findMany({
         where: { userId, status: 'APPROVED' },
         select: { activityTypeId: true, activityDate: true, quantity: true },
@@ -427,7 +428,7 @@ export class AchievementService {
           target = rule.count as number;
           break;
         case 'TOTAL_POINTS':
-          current = user.totalPoints;
+          current = user.lifetimePoints;
           target = rule.minPoints as number;
           break;
         case 'STREAK_DAYS':
@@ -489,7 +490,7 @@ export class AchievementService {
    * detectado na PRÓXIMA transação de pontos do usuário — decisão deliberada para
    * manter a lógica simples, previsível e livre de recursão.
    */
-  public static async checkAndUnlock(userId: string, tx: TransactionClient): Promise<void> {
+  public static async checkAndUnlock(userId: string, tx: TransactionClient, cycleId: string | null): Promise<void> {
     const alreadyUnlocked = await tx.userAchievement.findMany({ where: { userId }, select: { achievementId: true } });
     const unlockedIds = new Set(alreadyUnlocked.map((u) => u.achievementId));
 
@@ -498,7 +499,7 @@ export class AchievementService {
     });
     if (candidates.length === 0) return;
 
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { totalPoints: true, createdAt: true } });
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { totalPoints: true, lifetimePoints: true, createdAt: true } });
     if (!user) return;
 
     // Dados usados por múltiplas regras — computados uma única vez por chamada.
@@ -527,7 +528,10 @@ export class AchievementService {
           break;
 
         case 'TOTAL_POINTS':
-          satisfied = user.totalPoints + pointsAwarded >= (rule.minPoints as number);
+          // Vitalício de propósito (decisão combinada com o usuário): usa
+          // lifetimePoints, não totalPoints — essa conquista não deve
+          // "resetar" a cada ciclo nem sumir enquanto não há ciclo ativo.
+          satisfied = user.lifetimePoints + pointsAwarded >= (rule.minPoints as number);
           break;
 
         case 'SPECIFIC_MODALITY': {
@@ -602,6 +606,7 @@ export class AchievementService {
             transactionType: 'ACHIEVEMENT',
             points: achievement.pointsReward,
             description: `Conquista desbloqueada: ${achievement.name}`,
+            cycleId,
           },
         });
         pointsAwarded += achievement.pointsReward;
@@ -609,11 +614,9 @@ export class AchievementService {
     }
 
     if (pointsAwarded > 0) {
-      const updatedUser = await tx.user.update({
-        where: { id: userId },
-        data: { totalPoints: { increment: pointsAwarded } },
-        select: { totalPoints: true },
-      });
+      // Mesma regra de todo crédito: só soma em totalPoints se havia ciclo
+      // ativo; lifetimePoints soma sempre (ver points-application.util.ts).
+      const updatedUser = await applyPointsToUser(tx, userId, pointsAwarded, { cycleId, isCycleReset: false });
       // Os pontos de recompensa também podem cruzar um novo patamar de nível.
       await LevelService.recalculateForUser(userId, updatedUser.totalPoints, tx);
     }

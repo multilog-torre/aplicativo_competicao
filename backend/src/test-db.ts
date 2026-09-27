@@ -2,6 +2,11 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ID fixo do "Ciclo Padrão" de conveniência criado pelo seed (ver seed.ts) —
+// existe só em ambiente local/testes, pra pontuação continuar contando pro
+// placar sem precisar criar um ciclo de verdade em cada suíte.
+const DEFAULT_CYCLE_ID = '00000000-0000-0000-0000-000000000001';
+
 async function runDatabaseTests() {
   console.log('====================================================');
   console.log('🧪 INICIANDO TESTES DA FASE 1 — BANCO DE DADOS');
@@ -107,7 +112,9 @@ async function runDatabaseTests() {
         },
       });
 
-      // 4.2 Cria transação imutável no ledger de pontos
+      // 4.2 Cria transação imutável no ledger de pontos — cycleId aponta pro
+      // "Ciclo Padrão" do seed (só existe pra manter a pontuação contando
+      // em ambiente de teste, ver seed.ts), já que ele está ACTIVE agora.
       const pointTx = await tx.pointsTransaction.create({
         data: {
           userId: testUser.id,
@@ -118,13 +125,18 @@ async function runDatabaseTests() {
           referenceType: 'user_activities',
           referenceId: approvedActivity.id,
           createdBy: adminUser.id,
+          cycleId: DEFAULT_CYCLE_ID,
         },
       });
 
-      // 4.3 Atualiza total de pontos do usuário
+      // 4.3 Atualiza total de pontos do usuário (e o contador vitalício em
+      // paralelo — este teste simula manualmente o que
+      // ScoringService.creditPoints faria, então precisa manter os dois
+      // contadores em sincronia, senão os deixa desalinhados pra qualquer
+      // teste que rodar depois no mesmo banco, numa execução em cadeia)
       await tx.user.update({
         where: { id: testUser.id },
-        data: { totalPoints: { increment: pointsToAdd } },
+        data: { totalPoints: { increment: pointsToAdd }, lifetimePoints: { increment: pointsToAdd } },
       });
 
       // 4.4 Cria notificação para o usuário
@@ -168,11 +180,12 @@ async function runDatabaseTests() {
         points: 100,
         description: 'Bônus por participação no Desafio de Integração',
         createdBy: adminUser.id,
+        cycleId: DEFAULT_CYCLE_ID,
       },
     });
     await prisma.user.update({
       where: { id: testUser.id },
-      data: { totalPoints: { increment: 100 } },
+      data: { totalPoints: { increment: 100 }, lifetimePoints: { increment: 100 } },
     });
     console.log(`   - Transação de BÔNUS criada: +100 pontos (ID: ${bonusTx.id})`);
 
@@ -186,11 +199,12 @@ async function runDatabaseTests() {
         referenceType: 'points_transactions',
         referenceId: bonusTx.id,
         createdBy: adminUser.id,
+        cycleId: DEFAULT_CYCLE_ID,
       },
     });
     await prisma.user.update({
       where: { id: testUser.id },
-      data: { totalPoints: { increment: -30 } },
+      data: { totalPoints: { increment: -30 }, lifetimePoints: { increment: -30 } },
     });
     console.log(`   - Transação de REVERSÃO criada: -30 pontos (ID: ${reversalTx.id})`);
 

@@ -350,6 +350,22 @@ async function main() {
 
   // ── PASSO 20: Filtro por cycleId ────────────────────────────────────────────────
   console.log('\n1️⃣5️⃣ Testando filtro por cycleId...');
+  // O seed cria um "Ciclo Padrão" de longa duração (2020-2035) só pra manter
+  // a pontuação contando em todo o resto da suíte (ver seed.ts) — precisa
+  // ser cancelado antes de criar o ciclo curto deste teste (qualquer data
+  // próxima de agora cairia dentro dessa janela e daria 409 de sobreposição).
+  // Cancela QUALQUER ciclo ACTIVE encontrado, não só o ID original — outra
+  // suíte que rodou antes desta (ex.: test:dashboard) pode ter restaurado
+  // um substituto com ID diferente. Restaura um novo no final, pra quem
+  // rodar depois na cadeia continuar tendo um ciclo ativo.
+  type ListCycleBody = { data?: Array<{ id: string; effectiveStatus: string }> };
+  const preExistingRes = await reqJson('GET', '/cycles');
+  const preExistingCycles = (preExistingRes.data as ListCycleBody)?.data ?? [];
+  for (const c of preExistingCycles) {
+    if (c.effectiveStatus === 'ACTIVE') {
+      await reqJson('POST', `/cycles/${c.id}/cancel`, undefined, masterToken);
+    }
+  }
   const cycleStart = new Date(now.getTime() - 2 * 86400000);
   const cycleEnd = new Date(now.getTime() + 5 * 86400000);
   const cycleRes = await reqJson('POST', '/cycles', { name: 'Ciclo de Teste do Painel', startDate: cycleStart.toISOString(), endDate: cycleEnd.toISOString(), prizes: [] }, masterToken);
@@ -372,6 +388,15 @@ async function main() {
   // outras suítes (ex.: test:cycles) criam depois, numa mesma execução
   // sequencial sem reset de banco entre arquivos.
   await reqJson('POST', `/cycles/${cycleId}/cancel`, undefined, masterToken);
+
+  // Restaura um ciclo ativo de longa duração pra quem rodar DEPOIS na
+  // cadeia continuar tendo pontuação contando normalmente.
+  await reqJson(
+    'POST',
+    '/cycles',
+    { name: 'Ciclo Padrão (restaurado após test:admin-dashboard)', startDate: '2020-01-01T00:00:00.000Z', endDate: '2035-12-31T23:59:59.000Z' },
+    masterToken,
+  );
 
   // ── PASSO 21: Filtros não afetam os indicadores do topo ────────────────────────
   console.log('\n1️⃣6️⃣ Testando que filtros não afetam os indicadores (cards "ao vivo")...');
