@@ -80,10 +80,10 @@ export class AdminDashboardService {
       modalityHighlights,
     ] = await Promise.all([
       prisma.user.count(),
-      prisma.user.count({ where: { status: 'ACTIVE' } }),
-      this.getActivityCountsByStatus(),
+      this.getActiveUsersCount(filters),
+      this.getActivityCountsByStatus(filters),
       prisma.userReward.count({ where: { status: 'REQUESTED' } }),
-      this.getPointsTotals(),
+      this.getPointsTotals(filters),
       this.getActivitiesByModality(),
       this.getChallengeCounts(),
       prisma.reward.count({ where: { status: { not: 'INACTIVE' } } }),
@@ -158,28 +158,68 @@ export class AdminDashboardService {
     };
   }
 
-  private static async getActivityCountsByStatus() {
+  /**
+   * `total`/`rejected`/`cancelled` continuam AO VIVO, sem filtro (decisão
+   * original preservada pra esses três — não fazia parte do pedido do
+   * usuário). `pending` e `approvedToday` agora RESPEITAM os filtros do
+   * painel (data/ciclo/usuário/departamento/modalidade) — a pedido
+   * explícito do usuário, revertendo a decisão anterior só pra esses dois:
+   * - `pending` filtra por `createdAt` (data em que entrou na fila — uma
+   *   pendente não tem data de aprovação ainda, então não há como usar
+   *   `validatedAt` como os outros).
+   * - `approvedToday` deixa de ser literalmente "hoje" quando há filtro
+   *   ativo — passa a contar aprovadas DENTRO do período filtrado (o
+   *   frontend já sabe se há filtro ativo e troca o rótulo do cartão de
+   *   "Aprovadas hoje" pra "Aprovadas no período" nesse caso).
+   */
+  private static async getActivityCountsByStatus(filters: ResolvedFilters) {
     const grouped = await prisma.userActivity.groupBy({ by: ['status'], _count: { _all: true } });
     const byStatus = new Map(grouped.map((g) => [g.status, g._count._all]));
     const total = grouped.reduce((sum, g) => sum + g._count._all, 0);
 
-    // "Aprovadas hoje" é um indicador AO VIVO (não filtrado) — antes vinha do
-    // último ponto de charts.activitiesOverTime, mas esse gráfico passou a
-    // respeitar os filtros do painel; se ficasse lá, um filtro de data
-    // mudaria "hoje" pra "o último dia da janela filtrada", o que quebraria
-    // a regra combinada com o usuário (indicadores nunca são filtrados).
-    const now = new Date();
-    const todayShifted = toBrazilShifted(now).toISOString().slice(0, 10);
-    // Inverte o deslocamento pra achar o instante UTC real da meia-noite de
-    // Brasília (que é 03:00 UTC, já que BRAZIL_OFFSET_MS é -3h).
-    const todayStartUtc = new Date(new Date(`${todayShifted}T00:00:00.000Z`).getTime() - BRAZIL_OFFSET_MS);
-    const approvedToday = await prisma.userActivity.count({
-      where: { status: 'APPROVED', validatedAt: { gte: todayStartUtc } },
-    });
+    const hasFilter = !!(filters.dateFrom || filters.dateTo || filters.userId || filters.departmentId || filters.activityTypeId);
+
+    let pending: number;
+    if (hasFilter) {
+      pending = await prisma.userActivity.count({
+        where: {
+          status: 'PENDING',
+          ...(filters.dateFrom || filters.dateTo ? { createdAt: { gte: filters.dateFrom, lte: filters.dateTo } } : {}),
+          ...(filters.userId ? { userId: filters.userId } : {}),
+          ...(filters.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
+          ...(filters.activityTypeId ? { activityTypeId: filters.activityTypeId } : {}),
+        },
+      });
+    } else {
+      pending = byStatus.get('PENDING') ?? 0;
+    }
+
+    let approvedToday: number;
+    if (hasFilter) {
+      approvedToday = await prisma.userActivity.count({
+        where: {
+          status: 'APPROVED',
+          ...(filters.dateFrom || filters.dateTo ? { validatedAt: { gte: filters.dateFrom, lte: filters.dateTo } } : {}),
+          ...(filters.userId ? { userId: filters.userId } : {}),
+          ...(filters.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
+          ...(filters.activityTypeId ? { activityTypeId: filters.activityTypeId } : {}),
+        },
+      });
+    } else {
+      // Indicador AO VIVO de sempre: literalmente "hoje", sem filtro.
+      const now = new Date();
+      const todayShifted = toBrazilShifted(now).toISOString().slice(0, 10);
+      // Inverte o deslocamento pra achar o instante UTC real da meia-noite
+      // de Brasília (que é 03:00 UTC, já que BRAZIL_OFFSET_MS é -3h).
+      const todayStartUtc = new Date(new Date(`${todayShifted}T00:00:00.000Z`).getTime() - BRAZIL_OFFSET_MS);
+      approvedToday = await prisma.userActivity.count({
+        where: { status: 'APPROVED', validatedAt: { gte: todayStartUtc } },
+      });
+    }
 
     return {
       total,
-      pending: byStatus.get('PENDING') ?? 0,
+      pending,
       approved: byStatus.get('APPROVED') ?? 0,
       rejected: byStatus.get('REJECTED') ?? 0,
       cancelled: byStatus.get('CANCELLED') ?? 0,
@@ -187,14 +227,58 @@ export class AdminDashboardService {
     };
   }
 
-  private static async getPointsTotals() {
+  /**
+   * "Colaboradores" — sem filtro, é o headcount ativo de sempre. Com
+   * qualquer filtro do painel aplicado, passa a significar "quantos
+   * colaboradores tiveram ao menos 1 atividade aprovada dentro desse
+   * recorte" (decisão a pedido do usuário) — não o headcount total, que
+   * não tem uma relação natural com "período/ciclo".
+   */
+  private static async getActiveUsersCount(filters: ResolvedFilters): Promise<number> {
+    const hasFilter = !!(filters.dateFrom || filters.dateTo || filters.userId || filters.departmentId || filters.activityTypeId);
+    if (!hasFilter) {
+      return prisma.user.count({ where: { status: 'ACTIVE' } });
+    }
+
+    const participants = await prisma.userActivity.findMany({
+      where: {
+        status: 'APPROVED',
+        ...(filters.dateFrom || filters.dateTo ? { validatedAt: { gte: filters.dateFrom, lte: filters.dateTo } } : {}),
+        ...(filters.userId ? { userId: filters.userId } : {}),
+        ...(filters.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
+        ...(filters.activityTypeId ? { activityTypeId: filters.activityTypeId } : {}),
+      },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+    return participants.length;
+  }
+
+  /**
+   * "Pontos distribuídos" — sem filtro, soma tudo que já foi concedido
+   * desde sempre (comportamento original preservado). Com filtro do
+   * painel ativo, passa a somar só dentro do recorte escolhido (a pedido
+   * do usuário). `netCirculating` (usado só no texto do banner motivacional,
+   * não é um dos cartões pedidos) continua sempre geral, de propósito.
+   */
+  private static async getPointsTotals(filters: ResolvedFilters) {
+    const hasFilter = !!(filters.dateFrom || filters.dateTo || filters.userId || filters.departmentId || filters.activityTypeId);
+
+    const distributedWhere = {
+      points: { gt: 0 },
+      ...(hasFilter && (filters.dateFrom || filters.dateTo) ? { createdAt: { gte: filters.dateFrom, lte: filters.dateTo } } : {}),
+      ...(hasFilter && filters.userId ? { userId: filters.userId } : {}),
+      ...(hasFilter && filters.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
+      ...(hasFilter && filters.activityTypeId ? { activity: { activityTypeId: filters.activityTypeId } } : {}),
+    };
+
     const [distributedAgg, netAgg] = await Promise.all([
-      prisma.pointsTransaction.aggregate({ where: { points: { gt: 0 } }, _sum: { points: true } }),
+      prisma.pointsTransaction.aggregate({ where: distributedWhere, _sum: { points: true } }),
       prisma.pointsTransaction.aggregate({ _sum: { points: true } }),
     ]);
     return {
-      totalDistributed: distributedAgg._sum.points ?? 0, // soma bruta de tudo que já foi concedido
-      netCirculating: netAgg._sum.points ?? 0, // saldo líquido após penalidades/estornos/resgates
+      totalDistributed: distributedAgg._sum.points ?? 0, // soma bruta do que foi concedido (geral, ou no recorte filtrado)
+      netCirculating: netAgg._sum.points ?? 0, // saldo líquido após penalidades/estornos/resgates — sempre geral
     };
   }
 

@@ -26,13 +26,14 @@ Ao adicionar uma seção nova ao sistema, crie um arquivo novo aqui e adicione-o
 | [mural.md](./mural.md) | Mural social (posts, comentários, curtidas) e grupos de evento |
 | [auditoria.md](./auditoria.md) | Trilha de auditoria administrativa |
 | [perfil.md](./perfil.md) | Meu Perfil, avatar, dados pessoais, e o perfil visto por colegas |
+| [painel-administrativo.md](./painel-administrativo.md) | Painel Geral: indicadores, gráficos e o filtro de data/ciclo/usuário/departamento/modalidade |
 
 ## Conceitos transversais (valem para o sistema inteiro)
 
 Estes princípios aparecem repetidos em quase todo arquivo acima porque são regras de arquitetura, não de uma seção isolada:
 
 1. **O backend é a única fonte da verdade.** O frontend nunca calcula pontos, decide aprovações, ou resolve rankings — ele só envia a intenção (`activityTypeId` + `quantity`, por exemplo) e mostra o que o backend devolve.
-2. **O ledger de pontos (`points_transactions`) é imutável.** Nenhuma linha é jamais alterada ou apagada. Toda correção é um novo lançamento (`REVERSAL`, `ADJUSTMENT`, `CYCLE_RESET`...) que aponta pra quem ele corrige. `User.totalPoints` é sempre a soma dessas linhas — nunca editado direto.
+2. **O ledger de pontos (`points_transactions`) é imutável.** Nenhuma linha é jamais alterada ou apagada. Toda correção é um novo lançamento (`REVERSAL`, `ADJUSTMENT`, `CYCLE_RESET`...) que aponta pra quem ele corrige. `User.totalPoints`/`User.lifetimePoints` nunca são editados por `UPDATE` direto — só incrementados/decrementados a partir de uma linha nova no ledger (desde a pontuação por ciclo, `totalPoints` nem sempre soma TODA linha — ver [pontuacao.md](./pontuacao.md) e [ciclos.md](./ciclos.md)).
 3. **Nada com histórico é excluído de verdade.** Conquista, desafio, prêmio ou departamento já usados/concedidos nunca somem do banco — são desativados/cancelados (status muda), preservando a integridade do que já aconteceu. Só é possível excluir de fato algo que nunca teve uso.
 4. **Fluxos multi-etapa rodam em uma única transação de banco (ACID).** Aprovar uma atividade, por exemplo, muda o status, credita pontos, reavalia nível, verifica conquistas, atualiza desafios e notifica — tudo ou nada, nunca pela metade.
 5. **"Quem decide" nunca é "quem se beneficia".** Um usuário nunca aprova a própria atividade, define a própria pontuação de bônus de evento, ou aprova o próprio cadastro — sempre exige um administrador.

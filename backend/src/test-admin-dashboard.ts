@@ -25,7 +25,11 @@
  * 18. Filtro por userId restringe pointsHistory/topUsersEvolution a 1 usuário
  * 19. Filtro por dateFrom/dateTo muda o tamanho das séries de acordo
  * 20. Filtro por cycleId usa o período exato do ciclo (e 404 se não existir)
- * 21. Filtros não afetam os indicadores do topo (cards "ao vivo")
+ * 21. Filtro do painel: totalUsers/netCirculating continuam sempre gerais
+ *     (nunca filtrados), mas activeUsers/pending/approvedToday/
+ *     totalDistributed passam a refletir o filtro ativo (a pedido do
+ *     usuário — reverte parcialmente a decisão original de "cards nunca
+ *     filtram")
  */
 
 import http from 'http';
@@ -398,19 +402,49 @@ async function main() {
     masterToken,
   );
 
-  // ── PASSO 21: Filtros não afetam os indicadores do topo ────────────────────────
-  console.log('\n1️⃣6️⃣ Testando que filtros não afetam os indicadores (cards "ao vivo")...');
+  // ── PASSO 21: totalUsers/netCirculating nunca filtram; os outros 4 cards agora filtram ──
+  console.log('\n1️⃣6️⃣ Testando quais indicadores respeitam o filtro do painel...');
   assert(
-    'indicators.totalUsers é igual com e sem filtro (cards não são filtrados)',
+    'indicators.totalUsers é igual com e sem filtro (nunca filtra, de propósito)',
     byUserDashboard?.indicators?.totalUsers === dashboard?.indicators?.totalUsers,
   );
   assert(
-    'indicators.points.netCirculating é igual com e sem filtro',
+    'indicators.points.netCirculating é igual com e sem filtro (nunca filtra, de propósito)',
     byUserDashboard?.indicators?.points?.netCirculating === dashboard?.indicators?.points?.netCirculating,
   );
+
+  // Com ?userId=, os outros 4 passam a refletir SÓ aquele usuário — nada de
+  // filtro de data aqui, então "approvedToday"/"pending" ficam sem
+  // restrição de data (só de userId), e o "real" pra comparar é o total
+  // histórico daquela pessoa, não literalmente "hoje".
+  const realParticipantApprovedTotal = await prisma.userActivity.count({ where: { status: 'APPROVED', userId: participantId } });
+  const realParticipantPendingTotal = await prisma.userActivity.count({ where: { status: 'PENDING', userId: participantId } });
+  const realParticipantDistributedTotal =
+    (await prisma.pointsTransaction.aggregate({ where: { userId: participantId, points: { gt: 0 } }, _sum: { points: true } }))._sum
+      .points ?? 0;
+
   assert(
-    'indicators.activities.approvedToday é igual com e sem filtro',
-    byUserDashboard?.indicators?.activities?.approvedToday === dashboard?.indicators?.activities?.approvedToday,
+    `indicators.activities.approvedToday, com filtro userId, conta o total do participante (${realParticipantApprovedTotal}), não "hoje"`,
+    byUserDashboard?.indicators?.activities?.approvedToday === realParticipantApprovedTotal,
+  );
+  assert(
+    `indicators.activities.pending, com filtro userId, conta só as pendentes do participante (${realParticipantPendingTotal})`,
+    byUserDashboard?.indicators?.activities?.pending === realParticipantPendingTotal,
+  );
+  assert(
+    `indicators.points.totalDistributed, com filtro userId, soma só os pontos do participante (${realParticipantDistributedTotal})`,
+    byUserDashboard?.indicators?.points?.totalDistributed === realParticipantDistributedTotal,
+  );
+  assert(
+    'indicators.activeUsers, com filtro userId, vira 0 ou 1 (participante teve atividade aprovada?)',
+    byUserDashboard?.indicators?.activeUsers === (realParticipantApprovedTotal > 0 ? 1 : 0),
+  );
+
+  // Sem filtro nenhum, os 4 continuam sendo o retrato geral de sempre —
+  // "approvedToday" literalmente hoje, "activeUsers" o headcount total.
+  assert(
+    'Sem filtro, indicators.activeUsers continua sendo o headcount ativo total (não a contagem de participantes)',
+    dashboard?.indicators?.activeUsers === realActiveUsers,
   );
 
   server.close();

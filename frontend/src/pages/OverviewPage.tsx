@@ -277,6 +277,11 @@ export function OverviewPage() {
   }
 
   const activeUserName = appliedFilters.userId ? users.find((u) => u.userId === appliedFilters.userId)?.name : undefined;
+  // Alguns cartões de indicador mudam de significado quando há filtro ativo
+  // (ex.: "Colaboradores" passa a ser "quem participou no período", não o
+  // headcount total — ver admin-dashboard.service.ts) — o rótulo precisa
+  // deixar isso claro.
+  const isFiltered = hasAnyFilter(appliedFilters);
 
   if (loading && !dashboard) return <LoadingState label="Carregando painel geral…" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
@@ -312,7 +317,7 @@ export function OverviewPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
-          <span className="stat-card__label">Colaboradores</span>
+          <span className="stat-card__label">{isFiltered ? 'Colaboradores no período' : 'Colaboradores'}</span>
           <span className="stat-card__value">{indicators.activeUsers}</span>
         </div>
         <div className="stat-card">
@@ -324,7 +329,7 @@ export function OverviewPage() {
           <span className="stat-card__value">{indicators.activities.pending}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-card__label">Aprovadas hoje</span>
+          <span className="stat-card__label">{isFiltered ? 'Aprovadas no período' : 'Aprovadas hoje'}</span>
           <span className="stat-card__value">{indicators.activities.approvedToday}</span>
         </div>
       </div>
