@@ -80,7 +80,7 @@ export class AdminDashboardService {
       modalityHighlights,
     ] = await Promise.all([
       prisma.user.count(),
-      this.getActiveUsersCount(filters),
+      this.getActiveUsersCount(),
       this.getActivityCountsByStatus(filters),
       prisma.userReward.count({ where: { status: 'REQUESTED' } }),
       this.getPointsTotals(filters),
@@ -228,30 +228,14 @@ export class AdminDashboardService {
   }
 
   /**
-   * "Colaboradores" — sem filtro, é o headcount ativo de sempre. Com
-   * qualquer filtro do painel aplicado, passa a significar "quantos
-   * colaboradores tiveram ao menos 1 atividade aprovada dentro desse
-   * recorte" (decisão a pedido do usuário) — não o headcount total, que
-   * não tem uma relação natural com "período/ciclo".
+   * "Colaboradores" — SEMPRE o headcount ativo total da empresa, nunca
+   * filtrado (decisão explícita a pedido do usuário: revertida a versão
+   * anterior que trocava pra "quantos participaram do período" quando
+   * havia filtro — mesmo grupo de totalUsers/netCirculating, que também
+   * nunca filtram).
    */
-  private static async getActiveUsersCount(filters: ResolvedFilters): Promise<number> {
-    const hasFilter = !!(filters.dateFrom || filters.dateTo || filters.userId || filters.departmentId || filters.activityTypeId);
-    if (!hasFilter) {
-      return prisma.user.count({ where: { status: 'ACTIVE' } });
-    }
-
-    const participants = await prisma.userActivity.findMany({
-      where: {
-        status: 'APPROVED',
-        ...(filters.dateFrom || filters.dateTo ? { validatedAt: { gte: filters.dateFrom, lte: filters.dateTo } } : {}),
-        ...(filters.userId ? { userId: filters.userId } : {}),
-        ...(filters.departmentId ? { user: { departmentId: filters.departmentId } } : {}),
-        ...(filters.activityTypeId ? { activityTypeId: filters.activityTypeId } : {}),
-      },
-      select: { userId: true },
-      distinct: ['userId'],
-    });
-    return participants.length;
+  private static async getActiveUsersCount(): Promise<number> {
+    return prisma.user.count({ where: { status: 'ACTIVE' } });
   }
 
   /**

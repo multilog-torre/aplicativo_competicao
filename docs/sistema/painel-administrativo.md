@@ -13,14 +13,14 @@ A tela tem um filtro (data, ciclo de premiação, usuário, departamento, modali
 A maioria é sempre **"ao vivo"**, sem filtro nenhum — retrato geral e atual da empresa, independente do que estiver selecionado na gaveta:
 
 - `totalUsers` — nunca filtra.
+- `activeUsers` ("Colaboradores") — nunca filtra, sempre o headcount total de usuários `ACTIVE` da empresa, independente de ciclo/data/departamento/etc. (decisão explícita do usuário — uma versão anterior desta mudança fazia esse cartão virar "quem participou no período" quando filtrado; foi revertido de propósito, pra esse número nunca depender do filtro escolhido).
 - `points.netCirculating` (saldo líquido em circulação, usado no texto do banner motivacional) — nunca filtra.
 - `topModality`, `challenges`, `rewardsCatalogCount`, `totalRedemptions`, `pendingRedemptions` — nunca filtram.
 
-**Quatro cartões são exceção** (a pedido explícito do usuário, revertendo parcialmente a decisão original de "cartões nunca filtram") — **passam a refletir o filtro quando ele está ativo**:
+**Três cartões são exceção** (a pedido explícito do usuário, revertendo parcialmente a decisão original de "cartões nunca filtram") — **passam a refletir o filtro quando ele está ativo**:
 
 | Cartão | Sem filtro | Com filtro ativo |
 |---|---|---|
-| **Colaboradores** (`activeUsers`) | Headcount total de usuários `ACTIVE` | Quantos colaboradores tiveram **pelo menos 1 atividade aprovada** dentro do recorte filtrado (`distinct userId`) — não é mais headcount |
 | **Pontos distribuídos** (`points.totalDistributed`) | Soma de todo ponto positivo já concedido, desde sempre | Soma só dentro do recorte filtrado |
 | **Atividades pendentes** (`activities.pending`) | Toda atividade `PENDING` que existe | Só as `PENDING` cujo **`createdAt`** (data de registro — não têm `validatedAt` ainda) cai dentro do recorte |
 | **Aprovadas hoje** (`activities.approvedToday`) | Literalmente "hoje" (aprovadas desde a meia-noite de Brasília) | Aprovadas dentro do recorte filtrado (deixa de ser "hoje" de verdade) — **o rótulo do cartão muda pra "Aprovadas no período"** nesse caso, calculado no frontend a partir de "algum filtro está ativo?", não um campo novo da API |
