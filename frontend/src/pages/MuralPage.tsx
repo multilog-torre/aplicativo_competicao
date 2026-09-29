@@ -217,7 +217,11 @@ const MODERATION_STATUS_LABELS: Record<string, string> = {
 function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   const { user, isAdmin } = useAuth();
   const { showToast } = useToast();
-  const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? post.imageDownloadUrl : null);
+  // post.imageDownloadUrl já vem com o prefixo "/api/v1" embutido (post.service.ts),
+  // enquanto API_URL/useAuthedImage já incluem esse mesmo prefixo — removê-lo aqui
+  // evita duplicar "/api/v1/api/v1/..." na requisição (mesmo padrão de ActivitiesPage.tsx).
+  const postImageRelativePath = post.imageDownloadUrl?.replace(/^\/api\/v1/, '') ?? null;
+  const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? postImageRelativePath : null);
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [reactionsSummary, setReactionsSummary] = useState(post.reactionsSummary);
   const [commentsOpen, setCommentsOpen] = useState(false);
