@@ -2516,6 +2516,14 @@ textarea {
   font-size: 0.9rem;
   color: var(--color-text);
   font-family: inherit;
+  /* Sem isso, o <img> (elemento substituído) força a célula a crescer além
+     do tamanho da grade pra caber seu tamanho natural — o clássico
+     "blowout" de grid/flex com imagem. min-width/height:0 trava a célula
+     no tamanho que a grade já calculou; overflow:hidden é o cinto de
+     segurança caso algum conteúdo ainda tente vazar. */
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .activity-calendar__day-number {
