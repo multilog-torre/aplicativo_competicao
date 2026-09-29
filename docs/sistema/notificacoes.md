@@ -2,11 +2,11 @@
 
 ## O modelo
 
-Cada notificação é uma linha em `Notification`: `title`, `message`, `type` (um de 17 valores fixos), `isRead`, `referenceId` (aponta para a entidade que a originou), sempre vinculada a **um único usuário** — não existe notificação em massa "para todo mundo" de uma vez (mesmo quando o gatilho afeta várias pessoas, como um fechamento de ciclo, cada pessoa recebe sua própria linha).
+Cada notificação é uma linha em `Notification`: `title`, `message`, `type` (um de 18 valores fixos), `isRead`, `referenceId` (aponta para a entidade que a originou), sempre vinculada a **um único usuário** — não existe notificação em massa "para todo mundo" de uma vez (mesmo quando o gatilho afeta várias pessoas, como um fechamento de ciclo, cada pessoa recebe sua própria linha).
 
 Sem WebSocket/SSE no projeto — "tempo real" aqui significa **polling**: o frontend pergunta periodicamente se há algo novo (a cada 20s, tanto para o contador do sino quanto para o toast de conquista).
 
-## Os 17 tipos e o que dispara cada um
+## Os 18 tipos e o que dispara cada um
 
 | Tipo | O que dispara | Vai para |
 |---|---|---|
@@ -25,6 +25,7 @@ Sem WebSocket/SSE no projeto — "tempo real" aqui significa **polling**: o fron
 | `EVENT_BONUS_CREDITED` | Admin confirma presença e credita o bônus | Quem compareceu |
 | `POST_REACTION` | Alguém reage a um post pela primeira vez (trocar de emoji depois não notifica de novo) | Dono do post |
 | `POST_COMMENT` | Alguém comenta em um post | Dono do post |
+| `PASSWORD_RESET_REQUESTED` | Alguém pede "esqueci minha senha" (só quando `PASSWORD_RESET_MODE=ADMIN_NOTIFICATION`, ver [usuarios-e-acesso.md](./usuarios-e-acesso.md)) | Todo `ADMIN_MASTER` |
 | `INFO` | Valor padrão do schema | Nenhum fluxo atual usa este tipo |
 
 `POST_REACTION` e `POST_COMMENT` nunca disparam quando a própria pessoa reage/comenta na sua publicação, e nunca viram notificação em massa — mesmo o post automático de atividade aprovada (ver [mural.md](./mural.md)) não notifica ninguém além de quem interage com ele depois.

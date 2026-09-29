@@ -20,6 +20,7 @@ export type NotificationType =
   | 'EVENT_BONUS_CREDITED'
   | 'POST_REACTION'
   | 'POST_COMMENT'
+  | 'PASSWORD_RESET_REQUESTED'
   | 'INFO';
 
 export class NotificationService {

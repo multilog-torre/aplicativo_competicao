@@ -50,12 +50,14 @@ Um usuário `INACTIVE` (por desativação manual ou por uma tentativa de exclus�
 
 Dois caminhos, com efeitos diferentes sobre `User.mustChangePassword`:
 
-### 1. "Esqueci minha senha" (self-service, link na tela de login)
-- `POST /auth/forgot-password` — **sempre** responde com a mesma mensagem genérica de sucesso, exista ou não o e-mail, e mesmo que a conta esteja inativa/pendente. Isso evita que alguém descubra quais e-mails estão cadastrados testando um por um. O e-mail com o link só é enviado de fato quando a conta existe e está `ACTIVE`.
-- O token é aleatório (32 bytes), de uso único e expira em 1 hora (`PasswordResetToken`). Só o **hash SHA-256** do token fica salvo no banco — o token puro só existe no link do e-mail, nunca persistido (mesma lógica de nunca guardar senha em texto puro).
-- `POST /auth/reset-password` (`{ token, newPassword }`) — valida que o token existe, não foi usado e não expirou; troca a senha e marca o token como usado. Audita `RESET_PASSWORD`.
-- Envio de e-mail via **Resend** (`EmailService`, `backend/src/modules/email/`). Sem `RESEND_API_KEY` configurada (dev local), o link é só logado no console em vez de enviado — nunca deve acontecer em produção.
-- **Não liga `mustChangePassword`** — a pessoa já escolheu a própria senha nova ali mesmo, não faz sentido forçar troca de novo no próximo login.
+### 1. "Esqueci minha senha" (link na tela de login)
+
+`POST /auth/forgot-password` — **sempre** responde com a mesma mensagem genérica de sucesso, exista ou não o e-mail, e mesmo que a conta esteja inativa/pendente (evita que alguém descubra quais e-mails estão cadastrados testando um por um). O que acontece nos bastidores depende de `PASSWORD_RESET_MODE` (`env.ts`):
+
+- **`ADMIN_NOTIFICATION` (padrão, ativo hoje em produção)** — a pedido do usuário, enquanto nenhum domínio de e-mail está verificado no Resend (o domínio de teste `onboarding@resend.dev` só entrega pro próprio dono da conta Resend — tentativa real em produção confirmou o bloqueio, ver commit). Quando a conta existe e está `ACTIVE`, todo `ADMIN_MASTER` recebe uma notificação in-app (`PASSWORD_RESET_REQUESTED`, mesmo padrão de `NEW_USER_PENDING`) com o nome/e-mail da pessoa — nunca a senha. O admin reseta manualmente pela tela (ver item 2 abaixo). **Não liga `mustChangePassword`** sozinho — só o reset em si, feito pelo admin, liga.
+- **`EMAIL`** — gera um token aleatório (32 bytes) de uso único, expira em 1 hora (`PasswordResetToken`); só o **hash SHA-256** fica salvo no banco, o token puro só existe no link do e-mail, nunca persistido (mesma lógica de nunca guardar senha em texto puro). `POST /auth/reset-password` (`{ token, newPassword }`) valida que o token existe, não foi usado e não expirou, troca a senha e marca o token como usado (audita `RESET_PASSWORD`). Envio via **Resend** (`EmailService`, `backend/src/modules/email/`) — sem `RESEND_API_KEY` configurada, o link só é logado no console em vez de enviado. Nesse modo **não liga `mustChangePassword`** — a pessoa já escolheu a própria senha nova ali mesmo.
+
+**Trocar de modo é só mudar a variável `PASSWORD_RESET_MODE` no Render e salvar** (redeploy automático) — nenhum código muda; os dois modos já estão implementados e testados (`test-password-reset.ts`). Pra reativar `EMAIL`: verificar um domínio (ou subdomínio) no Resend, trocar `EMAIL_FROM` pra usar esse domínio, e então mudar `PASSWORD_RESET_MODE=EMAIL`.
 
 ### 2. Reset administrativo (`ADMIN_MASTER`, Admin > Usuários → "Resetar senha")
 - `POST /admin/users/:id/reset-password` (`{ newPassword }`) — o admin escolhe a senha (mín. 6 caracteres) e repassa pra pessoa por um canal seguro fora do sistema (telefone, presencial etc. — nunca e-mail/chat sem criptografia).
@@ -63,7 +65,7 @@ Dois caminhos, com efeitos diferentes sobre `User.mustChangePassword`:
 - Audita `RESET_PASSWORD_ADMIN` — nunca registra a senha em texto/hash na auditoria (mesmo padrão de `CREATE_USER`/`CHANGE_PASSWORD`).
 
 ### Troca obrigatória (`mustChangePassword`)
-- Vale só pro reset administrativo — o self-service nunca liga a flag (ver acima).
+- Vale só pro reset administrativo — nenhum dos dois modos de "esqueci minha senha" liga a flag sozinho (ver acima).
 - `POST /auth/login` e `GET /auth/me` sempre incluem `mustChangePassword` na resposta.
 - No frontend, `ProtectedRoute` intercepta: se `mustChangePassword === true`, renderiza `ForcedPasswordChangePage` no lugar de QUALQUER rota protegida (inclusive as administrativas) até a pessoa trocar a senha — reaproveita o mesmo endpoint de troca de senha do perfil (`PATCH /profile/password`, exige a senha atual, que é a que o admin acabou de definir).
 - Trocar a senha por qualquer via (`PATCH /profile/password`) sempre desliga a flag, mesmo que ela já estivesse `false`.

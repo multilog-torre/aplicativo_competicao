@@ -356,16 +356,46 @@ export class AuthService {
    * "Esqueci minha senha" — SEMPRE responde com sucesso genérico, exista ou
    * não o e-mail, e mesmo que a conta esteja inativa/pendente (evita que
    * alguém descubra quais e-mails estão cadastrados testando um por um).
-   * O e-mail com o link só é enviado quando a conta existe e está ACTIVE.
+   *
+   * Dois modos (PASSWORD_RESET_MODE, ver env.ts):
+   * - EMAIL: gera um token de uso único e manda o link por e-mail (exige
+   *   domínio verificado no Resend).
+   * - ADMIN_NOTIFICATION (padrão enquanto nenhum domínio está verificado, a
+   *   pedido do usuário): avisa todo ADMIN_MASTER, que reseta manualmente
+   *   pela tela Admin > Usuários. Nenhuma das duas ramificações revela ao
+   *   solicitante se a conta existe — a diferença só afeta o que acontece
+   *   nos bastidores.
    */
   public static async forgotPassword(dto: ForgotPasswordDTO): Promise<{ message: string }> {
     const genericResponse = {
-      message: 'Se houver uma conta cadastrada com este e-mail, enviamos um link de redefinição de senha para ela.',
+      message:
+        env.PASSWORD_RESET_MODE === 'EMAIL'
+          ? 'Se houver uma conta cadastrada com este e-mail, enviamos um link de redefinição de senha para ela.'
+          : 'Se houver uma conta cadastrada com este e-mail, um administrador foi avisado e vai entrar em contato para redefinir sua senha.',
     };
 
     const email = dto.email.toLowerCase().trim();
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || user.status !== 'ACTIVE') {
+      return genericResponse;
+    }
+
+    if (env.PASSWORD_RESET_MODE === 'ADMIN_NOTIFICATION') {
+      const admins = await prisma.user.findMany({
+        where: { userRoles: { some: { role: { name: 'ADMIN_MASTER' } } } },
+        select: { id: true },
+      });
+      await Promise.all(
+        admins.map((admin) =>
+          NotificationService.create({
+            userId: admin.id,
+            title: 'Pedido de redefinição de senha 🔑',
+            message: `${user.name} (${user.email}) esqueceu a senha e pediu redefinição. Reset a senha dele(a) em Admin > Usuários.`,
+            type: 'PASSWORD_RESET_REQUESTED',
+            referenceId: user.id,
+          }),
+        ),
+      );
       return genericResponse;
     }
 

@@ -31,12 +31,23 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().default(''),
   CLOUDINARY_API_KEY: z.string().default(''),
   CLOUDINARY_API_SECRET: z.string().default(''),
-  // E-mail transacional (Resend) — usado só por "esqueci minha senha"
-  // (envio do link de redefinição). Sem RESEND_API_KEY configurada, o
-  // EmailService loga o link no console em vez de falhar — útil em
-  // desenvolvimento local, mas em produção a variável precisa estar setada.
+  // E-mail transacional (Resend) — usado só por "esqueci minha senha", e só
+  // quando PASSWORD_RESET_MODE=EMAIL (ver abaixo). Sem RESEND_API_KEY
+  // configurada, o EmailService loga o link no console em vez de falhar —
+  // útil em desenvolvimento local, mas em produção a variável precisa estar
+  // setada quando o modo EMAIL estiver ativo.
   RESEND_API_KEY: z.string().default(''),
   EMAIL_FROM: z.string().default('Torre <onboarding@resend.dev>'),
+  // "esqueci minha senha" (tela de login) — dois modos:
+  // EMAIL: manda link de redefinição por e-mail (exige domínio verificado no
+  //   Resend — o domínio de teste onboarding@resend.dev só entrega pro
+  //   próprio dono da conta Resend, não serve pra usuários reais).
+  // ADMIN_NOTIFICATION (padrão, enquanto nenhum domínio está verificado):
+  //   avisa todo ADMIN_MASTER (notificação in-app, mesmo padrão de
+  //   NEW_USER_PENDING) e a pessoa reseta a senha manualmente em Admin >
+  //   Usuários. Trocar pra EMAIL depois é só mudar esta variável — nenhum
+  //   deploy de código é necessário, a lógica dos dois modos já existe.
+  PASSWORD_RESET_MODE: z.enum(['EMAIL', 'ADMIN_NOTIFICATION']).default('ADMIN_NOTIFICATION'),
 });
 
 const parsed = envSchema.safeParse(process.env);
