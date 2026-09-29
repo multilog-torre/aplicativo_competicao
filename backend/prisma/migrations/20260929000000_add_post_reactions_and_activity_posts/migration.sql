@@ -11,7 +11,11 @@ ALTER TABLE "posts" ADD CONSTRAINT "posts_activity_id_fkey" FOREIGN KEY ("activi
 -- como registros de post_reactions (backfill abaixo como THUMBS_UP, o "curtir" de sempre)
 ALTER TABLE "post_likes" RENAME TO "post_reactions";
 ALTER TABLE "post_reactions" RENAME CONSTRAINT "post_likes_pkey" TO "post_reactions_pkey";
-ALTER TABLE "post_reactions" RENAME CONSTRAINT "post_likes_post_id_user_id_key" TO "post_reactions_post_id_user_id_key";
+-- O @@unique([postId, userId]) do Prisma vira um ÍNDICE no Postgres (CREATE UNIQUE
+-- INDEX na migration de origem), não uma constraint de tabela — só PK/FK são
+-- constraints reais em pg_constraint. Por isso é ALTER INDEX aqui, não RENAME
+-- CONSTRAINT (que só funciona pras duas linhas abaixo, PK e FKs de verdade).
+ALTER INDEX "post_likes_post_id_user_id_key" RENAME TO "post_reactions_post_id_user_id_key";
 ALTER TABLE "post_reactions" RENAME CONSTRAINT "post_likes_post_id_fkey" TO "post_reactions_post_id_fkey";
 ALTER TABLE "post_reactions" RENAME CONSTRAINT "post_likes_user_id_fkey" TO "post_reactions_user_id_fkey";
 
