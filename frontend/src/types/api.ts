@@ -11,6 +11,7 @@ export interface User {
   level: { id: string; number?: number; levelNumber?: number; name: string; badgeIcon: string } | null;
   roles: string[];
   permissions: string[];
+  mustChangePassword: boolean;
 }
 
 export interface Department {

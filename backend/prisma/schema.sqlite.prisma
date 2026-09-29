@@ -27,6 +27,12 @@ model User {
   avatarType    String   @default("INITIALS") @map("avatar_type")
   avatarUrl     String?  @map("avatar_url")
   status        String   @default("ACTIVE")
+  // true só quando um ADMIN reseta a senha de alguém (o admin passa a
+  // conhecer a senha) — força a pessoa a trocar no próximo login antes de
+  // usar o resto do sistema. O fluxo de "esqueci minha senha" por e-mail
+  // nunca liga essa flag, porque a pessoa já escolhe a própria senha nova
+  // ali mesmo. Ver usuarios-e-acesso.md.
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   // "Placar de competição" — só soma quando há um ciclo de premiação ACTIVE
   // no momento do crédito (ver points-application.util.ts e ciclos.md). Zera
   // a cada fechamento de ciclo (CYCLE_RESET), igual sempre foi.
@@ -60,6 +66,7 @@ model User {
   postReactions       PostReaction[]
   notifications       Notification[]
   auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([corporateId])
@@ -584,6 +591,28 @@ model PostReaction {
   // 1 reação por pessoa/post — trocar de emoji é um update, não um novo registro.
   @@unique([postId, userId])
   @@map("post_reactions")
+}
+
+// -------------------------------------------------------------
+// 6.1 RECUPERAÇÃO DE SENHA ("esqueci minha senha")
+// -------------------------------------------------------------
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  // Só o hash SHA-256 do token fica salvo — o token puro só existe no link
+  // enviado por e-mail, nunca no banco (mesma lógica de nunca guardar senha
+  // em texto puro). Uso único: usedAt marca consumo, expiresAt é curto (1h).
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
 }
 
 // -------------------------------------------------------------

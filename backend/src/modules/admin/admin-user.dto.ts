@@ -51,3 +51,9 @@ export const ListUsersQuerySchema = z.object({
 });
 
 export type ListUsersQueryDTO = z.infer<typeof ListUsersQuerySchema>;
+
+export const ResetUserPasswordSchema = z.object({
+  newPassword: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres.'),
+});
+
+export type ResetUserPasswordDTO = z.infer<typeof ResetUserPasswordSchema>;

@@ -39,6 +39,7 @@ export function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [managingRoles, setManagingRoles] = useState<AdminUser | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
@@ -147,6 +148,9 @@ export function AdminUsersPage() {
                     <button type="button" className="btn btn--small btn--secondary" onClick={() => setManagingRoles(u)}>
                       Papéis
                     </button>
+                    <button type="button" className="btn btn--small btn--secondary" onClick={() => setResettingPassword(u)}>
+                      Resetar senha
+                    </button>
                     {u.id !== currentUser?.id && (
                       <button type="button" className="btn btn--small btn--danger" onClick={() => setDeleting(u)}>
                         Excluir
@@ -197,6 +201,17 @@ export function AdminUsersPage() {
             setManagingRoles(null);
             showToast('Papéis atualizados com sucesso!', 'success');
             load();
+          }}
+        />
+      )}
+
+      {resettingPassword && (
+        <ResetPasswordModal
+          user={resettingPassword}
+          onClose={() => setResettingPassword(null)}
+          onReset={() => {
+            setResettingPassword(null);
+            showToast('Senha redefinida! A pessoa será obrigada a trocá-la no próximo login.', 'success');
           }}
         />
       )}
@@ -467,6 +482,72 @@ function EditUserModal({
           </button>
           <button type="submit" className="btn btn--primary" disabled={submitting}>
             {submitting ? 'Salvando…' : 'Salvar alterações'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ResetPasswordModal({
+  user,
+  onClose,
+  onReset,
+}: {
+  user: AdminUser;
+  onClose: () => void;
+  onReset: () => void;
+}) {
+  const { showToast } = useToast();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword !== confirmPassword) {
+      setError('A confirmação não corresponde à nova senha.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post(`/admin/users/${user.id}/reset-password`, { newPassword });
+      onReset();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível resetar a senha.';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Resetar senha — ${user.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="form">
+        {error && <div className="alert alert--error">{error}</div>}
+        <p className="steps-list__description" style={{ marginTop: 0 }}>
+          Defina uma senha nova e repasse pra <strong>{user.name}</strong> por um canal seguro (telefone, presencial etc.) — nunca por e-mail/chat sem criptografia. A pessoa será obrigada a trocar essa senha assim que fizer login.
+        </p>
+
+        <label className="field">
+          <span className="field__label">Senha nova (mín. 6 caracteres)</span>
+          <input type="password" required minLength={6} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span className="field__label">Confirmar senha nova</span>
+          <input type="password" required minLength={6} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+        </label>
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={submitting}>
+            {submitting ? 'Resetando…' : 'Resetar senha'}
           </button>
         </div>
       </form>

@@ -1,10 +1,14 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { AppError, NotFoundError, UnauthorizedError } from '../../shared/errors/AppError';
+import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notifications/notification.service';
-import { LoginDTO, RegisterDTO } from './auth.dto';
+import { ForgotPasswordDTO, LoginDTO, RegisterDTO, ResetPasswordDTO } from './auth.dto';
+
+const PASSWORD_RESET_TOKEN_TTL_MINUTES = 60;
 
 interface TokenPayload {
   sub: string;
@@ -109,6 +113,7 @@ export class AuthService {
         level: user.level ? { id: user.level.id, number: user.level.levelNumber, name: user.level.name, badgeIcon: user.level.badgeIcon } : null,
         roles,
         permissions,
+        mustChangePassword: user.mustChangePassword,
       },
       tokens: {
         accessToken,
@@ -194,6 +199,7 @@ export class AuthService {
         : null,
       roles,
       permissions,
+      mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
     };
   }
@@ -344,5 +350,75 @@ export class AuthService {
       email: created.email,
       status: created.status,
     };
+  }
+
+  /**
+   * "Esqueci minha senha" — SEMPRE responde com sucesso genérico, exista ou
+   * não o e-mail, e mesmo que a conta esteja inativa/pendente (evita que
+   * alguém descubra quais e-mails estão cadastrados testando um por um).
+   * O e-mail com o link só é enviado quando a conta existe e está ACTIVE.
+   */
+  public static async forgotPassword(dto: ForgotPasswordDTO): Promise<{ message: string }> {
+    const genericResponse = {
+      message: 'Se houver uma conta cadastrada com este e-mail, enviamos um link de redefinição de senha para ela.',
+    };
+
+    const email = dto.email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.status !== 'ACTIVE') {
+      return genericResponse;
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+
+    await prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const resetUrl = `${env.FRONTEND_URL}/redefinir-senha?token=${rawToken}`;
+    await EmailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
+
+    return genericResponse;
+  }
+
+  /** Consome o token de "esqueci minha senha" — uso único, expira em 1h. */
+  public static async resetPassword(dto: ResetPasswordDTO): Promise<{ message: string }> {
+    const tokenHash = crypto.createHash('sha256').update(dto.token).digest('hex');
+
+    const resetToken = await prisma.passwordResetToken.findFirst({
+      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+    });
+
+    if (!resetToken) {
+      throw new AppError('Este link de redefinição de senha é inválido ou já expirou. Peça um novo.', 422, 'INVALID_RESET_TOKEN');
+    }
+
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        // A pessoa já escolheu a própria senha nova aqui — não faz sentido
+        // forçar troca de novo no próximo login (mustChangePassword continua false).
+        data: { passwordHash: newPasswordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: resetToken.userId,
+          action: 'RESET_PASSWORD',
+          entity: 'User',
+          entityId: resetToken.userId,
+          newValues: JSON.stringify({ resetAt: new Date(), via: 'forgot-password' }),
+        },
+      }),
+    ]);
+
+    return { message: 'Senha redefinida com sucesso. Você já pode entrar com a senha nova.' };
   }
 }

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../config/database';
 import { sendSuccess } from '../../shared/utils/apiResponse';
 import { env } from '../../config/env';
-import { LoginDTO, RefreshTokenDTO, RegisterDTO } from './auth.dto';
+import { ForgotPasswordDTO, LoginDTO, RefreshTokenDTO, RegisterDTO, ResetPasswordDTO } from './auth.dto';
 import { AuthService } from './auth.service';
 
 export class AuthController {
@@ -36,6 +36,18 @@ export class AuthController {
     const { refreshToken } = req.body as RefreshTokenDTO;
     const tokens = await AuthService.refreshToken(refreshToken);
     return sendSuccess(res, tokens, 200);
+  }
+
+  public static async forgotPassword(req: Request, res: Response): Promise<Response> {
+    const data = req.body as ForgotPasswordDTO;
+    const result = await AuthService.forgotPassword(data);
+    return sendSuccess(res, result, 200);
+  }
+
+  public static async resetPassword(req: Request, res: Response): Promise<Response> {
+    const data = req.body as ResetPasswordDTO;
+    const result = await AuthService.resetPassword(data);
+    return sendSuccess(res, result, 200);
   }
 
   public static async logout(req: Request, res: Response): Promise<Response> {

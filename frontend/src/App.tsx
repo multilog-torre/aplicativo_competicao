@@ -6,6 +6,8 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute, AdminRoute, MasterRoute } from './routes/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { RankingPage } from './pages/RankingPage';
@@ -36,6 +38,8 @@ export function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/cadastro" element={<RegisterPage />} />
+              <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
+              <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>

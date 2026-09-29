@@ -3,7 +3,7 @@ import { ensureAuthenticated, requireRoles } from '../../shared/middlewares/auth
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { AdminUserController } from './admin-user.controller';
-import { CreateUserSchema, ListUsersQuerySchema, SetUserRolesSchema, UpdateUserSchema } from './admin-user.dto';
+import { CreateUserSchema, ListUsersQuerySchema, ResetUserPasswordSchema, SetUserRolesSchema, UpdateUserSchema } from './admin-user.dto';
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.get('/:id', asyncHandler(AdminUserController.getById));
 router.post('/', validateRequest({ body: CreateUserSchema }), asyncHandler(AdminUserController.create));
 router.patch('/:id', validateRequest({ body: UpdateUserSchema }), asyncHandler(AdminUserController.update));
 router.patch('/:id/roles', validateRequest({ body: SetUserRolesSchema }), asyncHandler(AdminUserController.setRoles));
+router.post('/:id/reset-password', validateRequest({ body: ResetUserPasswordSchema }), asyncHandler(AdminUserController.resetPassword));
 router.delete('/:id', asyncHandler(AdminUserController.delete));
 
 export { router as adminUserRoutes };

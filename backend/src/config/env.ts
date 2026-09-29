@@ -31,6 +31,12 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().default(''),
   CLOUDINARY_API_KEY: z.string().default(''),
   CLOUDINARY_API_SECRET: z.string().default(''),
+  // E-mail transacional (Resend) — usado só por "esqueci minha senha"
+  // (envio do link de redefinição). Sem RESEND_API_KEY configurada, o
+  // EmailService loga o link no console em vez de falhar — útil em
+  // desenvolvimento local, mas em produção a variável precisa estar setada.
+  RESEND_API_KEY: z.string().default(''),
+  EMAIL_FROM: z.string().default('Torre <onboarding@resend.dev>'),
 });
 
 const parsed = envSchema.safeParse(process.env);

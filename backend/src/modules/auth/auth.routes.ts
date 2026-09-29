@@ -3,7 +3,7 @@ import { ensureAuthenticated, requireRoles } from '../../shared/middlewares/auth
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { AuthController } from './auth.controller';
-import { loginSchema, refreshTokenSchema, registerSchema } from './auth.dto';
+import { forgotPasswordSchema, loginSchema, refreshTokenSchema, registerSchema, resetPasswordSchema } from './auth.dto';
 
 const router = Router();
 
@@ -11,6 +11,8 @@ const router = Router();
 router.post('/login', validateRequest({ body: loginSchema }), asyncHandler(AuthController.login));
 router.post('/refresh', validateRequest({ body: refreshTokenSchema }), asyncHandler(AuthController.refreshToken));
 router.post('/register', validateRequest({ body: registerSchema }), asyncHandler(AuthController.register));
+router.post('/forgot-password', validateRequest({ body: forgotPasswordSchema }), asyncHandler(AuthController.forgotPassword));
+router.post('/reset-password', validateRequest({ body: resetPasswordSchema }), asyncHandler(AuthController.resetPassword));
 
 // Rotas Protegidas por Autenticação JWT
 router.post('/logout', ensureAuthenticated, asyncHandler(AuthController.logout));

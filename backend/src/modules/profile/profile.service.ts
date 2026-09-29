@@ -200,7 +200,9 @@ export class ProfileService {
     }
 
     const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
-    await prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash } });
+    // Trocar a senha (por qualquer motivo) sempre desliga a obrigatoriedade
+    // de troca — é exatamente o efeito que essa flag existe pra provocar.
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash, mustChangePassword: false } });
 
     await prisma.auditLog.create({
       data: {

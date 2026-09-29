@@ -46,6 +46,28 @@ Um usuário `INACTIVE` (por desativação manual ou por uma tentativa de exclus�
 - Toda rota autenticada (`ensureAuthenticated`) revalida o usuário no banco a cada requisição (não confia cegamente no payload do JWT) — um usuário desativado no meio de uma sessão perde o acesso imediatamente, mesmo com um token ainda "válido" pela expiração.
 - `attachUserIfPresent`: variante usada em rotas públicas que preenche `req.user` quando há token, mas nunca bloqueia (ex.: `GET /game-rules` mostra passos inativos só pra quem está logado como admin).
 
+## Recuperação de senha
+
+Dois caminhos, com efeitos diferentes sobre `User.mustChangePassword`:
+
+### 1. "Esqueci minha senha" (self-service, link na tela de login)
+- `POST /auth/forgot-password` — **sempre** responde com a mesma mensagem genérica de sucesso, exista ou não o e-mail, e mesmo que a conta esteja inativa/pendente. Isso evita que alguém descubra quais e-mails estão cadastrados testando um por um. O e-mail com o link só é enviado de fato quando a conta existe e está `ACTIVE`.
+- O token é aleatório (32 bytes), de uso único e expira em 1 hora (`PasswordResetToken`). Só o **hash SHA-256** do token fica salvo no banco — o token puro só existe no link do e-mail, nunca persistido (mesma lógica de nunca guardar senha em texto puro).
+- `POST /auth/reset-password` (`{ token, newPassword }`) — valida que o token existe, não foi usado e não expirou; troca a senha e marca o token como usado. Audita `RESET_PASSWORD`.
+- Envio de e-mail via **Resend** (`EmailService`, `backend/src/modules/email/`). Sem `RESEND_API_KEY` configurada (dev local), o link é só logado no console em vez de enviado — nunca deve acontecer em produção.
+- **Não liga `mustChangePassword`** — a pessoa já escolheu a própria senha nova ali mesmo, não faz sentido forçar troca de novo no próximo login.
+
+### 2. Reset administrativo (`ADMIN_MASTER`, Admin > Usuários → "Resetar senha")
+- `POST /admin/users/:id/reset-password` (`{ newPassword }`) — o admin escolhe a senha (mín. 6 caracteres) e repassa pra pessoa por um canal seguro fora do sistema (telefone, presencial etc. — nunca e-mail/chat sem criptografia).
+- **Liga `mustChangePassword = true`** — como o admin passa a conhecer a senha, a pessoa é obrigada a trocá-la antes de usar qualquer outra tela.
+- Audita `RESET_PASSWORD_ADMIN` — nunca registra a senha em texto/hash na auditoria (mesmo padrão de `CREATE_USER`/`CHANGE_PASSWORD`).
+
+### Troca obrigatória (`mustChangePassword`)
+- Vale só pro reset administrativo — o self-service nunca liga a flag (ver acima).
+- `POST /auth/login` e `GET /auth/me` sempre incluem `mustChangePassword` na resposta.
+- No frontend, `ProtectedRoute` intercepta: se `mustChangePassword === true`, renderiza `ForcedPasswordChangePage` no lugar de QUALQUER rota protegida (inclusive as administrativas) até a pessoa trocar a senha — reaproveita o mesmo endpoint de troca de senha do perfil (`PATCH /profile/password`, exige a senha atual, que é a que o admin acabou de definir).
+- Trocar a senha por qualquer via (`PATCH /profile/password`) sempre desliga a flag, mesmo que ela já estivesse `false`.
+
 ## Dados de um usuário
 
 Campos do cadastro: nome, e-mail (único), matrícula/`corporateId` (único, opcional), cargo (`position`), departamento, data de nascimento, sexo, avatar. Ver [perfil.md](./perfil.md) para como esses dados são editados e o que fica visível a colegas.
@@ -59,9 +81,10 @@ Catálogo simples (`Department`): nome (único), descrição, status `ACTIVE`/`I
 - **Listar/buscar**: por nome, e-mail, papel ou status, paginado.
 - **Editar**: nome, cargo, departamento, nascimento, sexo, status. Toda edição é auditada com valores antes/depois.
 - **Conceder/revogar papéis**: substitui o conjunto de papéis do usuário pelo informado (não é incremental) — protegido pelas duas regras de auto-exclusão descritas acima.
+- **Resetar senha**: ver "Recuperação de senha" acima — liga `mustChangePassword`, obrigando a pessoa a trocar no próximo login.
 - **Excluir** (`DELETE /admin/users/:id`): mesma Regra de Ouro aplicada a conquistas/desafios/recompensas/departamentos — nada com histórico é apagado de verdade.
   - Bloqueado: excluir a própria conta (422 `CANNOT_DELETE_SELF`); excluir o último `ADMIN_MASTER` do sistema (422 `LAST_ADMIN_MASTER`, mesma regra de `setRoles`).
-  - Antes de excluir, o backend verifica **qualquer** histórico do usuário: atividades registradas ou validadas, transações de pontos (como dono ou como quem lançou), conquistas, desafios, pódios de ciclo, eventos criados/aprovados/confirmados, resgates, posts/comentários/curtidas, notificações e entradas de auditoria — praticamente qualquer conta que já logou uma vez já tem histórico, porque o próprio login já grava uma entrada de auditoria.
+  - Antes de excluir, o backend verifica **qualquer** histórico do usuário: atividades registradas ou validadas, transações de pontos (como dono ou como quem lançou), conquistas, desafios, pódios de ciclo, eventos criados/aprovados/confirmados, resgates, posts/comentários/reações, notificações e entradas de auditoria — praticamente qualquer conta que já logou uma vez já tem histórico, porque o próprio login já grava uma entrada de auditoria.
   - **Sem nenhum histórico** (conta criada por engano, nunca logou, nunca usada) → excluída de verdade (`status: 'DELETED'` na resposta).
   - **Com qualquer histórico** → a conta é apenas desativada (`status` do usuário vira `INACTIVE`, resposta `status: 'DEACTIVATED'`) — mesmo efeito de editar o status manualmente, só que disparado pelo botão "Excluir".
   - Ambos os casos geram auditoria (`DELETE` ou `DEACTIVATE`, entidade `User`).

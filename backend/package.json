@@ -45,7 +45,8 @@
     "test:departments": "tsx src/test-departments.ts",
     "test:events": "tsx src/test-events.ts",
     "test:event-groups": "tsx src/test-event-groups.ts",
-    "test:auto-approve": "tsx src/test-auto-approve.ts"
+    "test:auto-approve": "tsx src/test-auto-approve.ts",
+    "test:password-reset": "tsx src/test-password-reset.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -56,6 +57,7 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "resend": "^6.30.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.0.3",
     "zod": "^3.24.1"

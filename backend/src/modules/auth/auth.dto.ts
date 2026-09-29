@@ -33,3 +33,16 @@ export const registerSchema = z.object({
 });
 
 export type RegisterDTO = z.infer<typeof registerSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('E-mail corporativo inválido'),
+});
+
+export type ForgotPasswordDTO = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'O token de redefinição é obrigatório'),
+  newPassword: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
+});
+
+export type ResetPasswordDTO = z.infer<typeof resetPasswordSchema>;

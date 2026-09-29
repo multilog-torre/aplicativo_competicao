@@ -341,4 +341,36 @@ export class AdminUserService {
 
     return { status: 'DELETED' as const, message: 'Usuário excluído com sucesso.' };
   }
+
+  /**
+   * Reset administrativo de senha — o ADMIN_MASTER escolhe a senha nova e
+   * repassa pra pessoa por fora do sistema (telefone, presencial etc.).
+   * Como o admin passa a conhecer a senha, liga mustChangePassword: a
+   * pessoa é obrigada a trocar no próximo login antes de usar o resto do
+   * sistema (ver AuthContext.tsx no frontend).
+   */
+  public static async resetPassword(id: string, newPassword: string, adminId: string) {
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError(`Usuário com ID '${id}' não foi encontrado.`);
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'RESET_PASSWORD_ADMIN',
+        entity: 'User',
+        entityId: id,
+        // Nunca registrar senha em texto/hash na auditoria.
+        newValues: JSON.stringify({ resetAt: new Date(), targetEmail: existing.email }),
+      },
+    });
+
+    return { message: 'Senha redefinida com sucesso. Repasse a nova senha para a pessoa por um canal seguro.' };
+  }
 }

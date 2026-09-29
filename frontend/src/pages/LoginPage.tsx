@@ -66,6 +66,9 @@ export function LoginPage() {
           {submitting ? 'Entrando…' : 'Entrar'}
         </button>
 
+        <Link to="/esqueci-senha" className="auth-card__link">
+          Esqueci minha senha
+        </Link>
         <Link to="/cadastro" className="auth-card__link">
           Ainda não tenho conta — criar conta
         </Link>

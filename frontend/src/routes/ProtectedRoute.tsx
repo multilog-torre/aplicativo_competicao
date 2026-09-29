@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState } from '../components/ui/States';
+import { ForcedPasswordChangePage } from '../pages/ForcedPasswordChangePage';
 
 export function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -14,6 +15,9 @@ export function ProtectedRoute() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  // Um admin resetou a senha dessa pessoa — bloqueia TODO o resto do
+  // sistema (inclusive as áreas admin, se for o caso) até ela trocar.
+  if (user.mustChangePassword) return <ForcedPasswordChangePage />;
 
   return <Outlet />;
 }
