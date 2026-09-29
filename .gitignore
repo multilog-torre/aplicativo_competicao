@@ -24,6 +24,7 @@ yarn-debug.log*
 
 # Banco de Dados Local
 postgres_data/
+backend/prisma/dev.db
 
 # IDEs e Sistema Operacional
 .vscode/
