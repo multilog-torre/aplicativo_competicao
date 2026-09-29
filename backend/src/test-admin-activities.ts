@@ -18,6 +18,8 @@
  * 14. Participante não pode aprovar/rejeitar (403)
  * 15. Aprovação de atividade inexistente retorna 404
  * 16. Integridade do ledger: soma das transações == total_points do usuário
+ * 17. Aprovação cria automaticamente um post no Mural vinculado à atividade
+ * 18. Aprovação com evidência de imagem anexa a mesma foto ao post automático
  *
  * ⚠️ Este teste depende de limites diários configurados nas modalidades (Fase 4/5)
  * e por isso assume um banco recém-semeado. Execute `npm run db:setup:sqlite`
@@ -165,6 +167,17 @@ async function main() {
   assert('Persistido no banco: status APPROVED', dbActivity?.status === 'APPROVED');
   assert('Persistido no banco: points_transaction criada com activityId vinculado', !!dbTransaction);
 
+  const dbAutoPost = await prisma.post.findFirst({ where: { activityId } });
+  assert('Aprovação cria automaticamente um post no Mural vinculado à atividade', !!dbAutoPost);
+  assert('Post automático é PUBLISHED', dbAutoPost?.status === 'PUBLISHED');
+  assert('Post automático não tem foto (atividade sem evidência)', dbAutoPost?.imageUrl === null);
+
+  const autoPostFeedRes = await reqJson('GET', '/posts', undefined, participantToken);
+  type FeedBody = { data?: Array<{ id: string; activity?: { modality?: string; points?: number } | null }> };
+  const autoPostInFeed = ((autoPostFeedRes.data as FeedBody)?.data ?? []).find((p) => p.id === dbAutoPost?.id);
+  assert('Post automático aparece no feed do Mural geral', !!autoPostInFeed);
+  assert('Post automático expõe modalidade e pontos da atividade', autoPostInFeed?.activity?.points === activity?.calculatedPoints);
+
   // ── PASSO 7: Aprovar novamente é bloqueado ────────────────────────────────────
   console.log('\n4️⃣ Testando bloqueio de dupla aprovação...');
   const doubleApproveRes = await reqJson('POST', `/admin/activities/${activityId}/approve`, undefined, adminToken);
@@ -197,6 +210,9 @@ async function main() {
     adminToken,
   );
   assert('Aprovação com evidência anexada funciona (200)', approveWithEvidenceRes.status === 200);
+
+  const dbAutoPostWithImage = await prisma.post.findFirst({ where: { activityId: runningActivityId } });
+  assert('Post automático da atividade com evidência de imagem tem foto', !!dbAutoPostWithImage?.imageUrl);
 
   // ── PASSO 10-13: Rejeição ─────────────────────────────────────────────────────
   console.log('\n7️⃣ Testando rejeição (motivo obrigatório)...');

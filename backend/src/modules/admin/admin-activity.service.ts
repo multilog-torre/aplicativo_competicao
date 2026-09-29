@@ -1,8 +1,14 @@
 import { prisma } from '../../config/database';
 import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { NotificationService } from '../notifications/notification.service';
+import { PostService } from '../posts/post.service';
 import { ScoringService } from '../scoring/scoring.service';
+import { getStorageProvider } from '../storage/storage.factory';
 import { ListPendingActivitiesQueryDTO, RejectActivityDTO } from './admin-activity.dto';
+
+// Mesmo conjunto aceito como foto de post manual (post.service.ts) — evidências em
+// outros formatos (PDF, vídeo etc.) não viram foto no card do Mural, só o post em si.
+const IMAGE_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
 export class AdminActivityService {
   /**
@@ -139,6 +145,31 @@ export class AdminActivityService {
             : `Sua atividade de ${activity.activityType.name} (${quantityLabel}) foi aprovada automaticamente e você ganhou ${activity.calculatedPoints} pontos.`,
           type: 'ACTIVITY_APPROVED',
           referenceId: activity.id,
+        },
+        tx,
+      );
+
+      // Publica automaticamente no Mural geral — todo colaborador vê no feed
+      // (a pedido do usuário). Se houver evidência em formato de imagem, ela é
+      // copiada pro storage do próprio post (ver PostService.createFromActivity).
+      const imageEvidence = await tx.activityEvidence.findFirst({
+        where: { activityId: activity.id, fileType: { in: IMAGE_EVIDENCE_MIME_TYPES } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      let imageSource: { buffer: Buffer; fileName: string; mimeType: string } | undefined;
+      if (imageEvidence) {
+        const storage = getStorageProvider();
+        const buffer = await storage.read(imageEvidence.storagePath);
+        imageSource = { buffer, fileName: imageEvidence.fileName, mimeType: imageEvidence.fileType };
+      }
+
+      await PostService.createFromActivity(
+        {
+          userId: activity.userId,
+          activityId: activity.id,
+          content: `Registrou uma atividade de ${activity.activityType.name} (${quantityLabel}) e ganhou ${activity.calculatedPoints} pontos! 🎉`,
+          imageSource,
         },
         tx,
       );

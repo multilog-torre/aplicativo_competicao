@@ -1,12 +1,22 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import { useAuthedImage } from '../api/useAuthedImage';
-import { Comment, CommunityEvent, Post } from '../types/api';
+import { Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
-import { Avatar } from '../components/ui/Badge';
+import { Avatar, emojiForIcon } from '../components/ui/Badge';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+
+// Mesmo conjunto fixo aceito pelo backend (post.dto.ts) — 1 reação por
+// pessoa/post, trocável. A ordem aqui é a ordem de exibição na barra do post.
+const REACTION_OPTIONS: { code: ReactionEmojiCode; emoji: string; label: string }[] = [
+  { code: 'THUMBS_UP', emoji: '👍', label: 'Curtir' },
+  { code: 'HEART', emoji: '❤️', label: 'Amei' },
+  { code: 'CLAP', emoji: '👏', label: 'Aplaudir' },
+  { code: 'FIRE', emoji: '🔥', label: 'Mandou bem' },
+  { code: 'PARTY', emoji: '🎉', label: 'Comemorar' },
+];
 
 /**
  * Mural — feed geral da empresa, mais uma aba por evento em que o usuário
@@ -199,8 +209,8 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   const { user, isAdmin } = useAuth();
   const { showToast } = useToast();
   const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? post.imageDownloadUrl : null);
-  const [liked, setLiked] = useState(post.likedByMe);
-  const [likesCount, setLikesCount] = useState(post.likesCount);
+  const [myReaction, setMyReaction] = useState(post.myReaction);
+  const [reactionsSummary, setReactionsSummary] = useState(post.reactionsSummary);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -210,17 +220,31 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
 
   const isOwner = post.user.id === user?.id;
 
-  async function toggleLike() {
-    const next = !liked;
-    setLiked(next);
-    setLikesCount((c) => c + (next ? 1 : -1));
+  async function handleReact(code: ReactionEmojiCode) {
+    const previousReaction = myReaction;
+    const previousSummary = reactionsSummary;
+    const isRemoving = myReaction === code;
+
+    let nextSummary = previousSummary.map((r) => ({ ...r }));
+    if (previousReaction) {
+      nextSummary = nextSummary.map((r) => (r.emoji === previousReaction ? { ...r, count: r.count - 1 } : r)).filter((r) => r.count > 0);
+    }
+    if (!isRemoving) {
+      const existing = nextSummary.find((r) => r.emoji === code);
+      if (existing) existing.count += 1;
+      else nextSummary.push({ emoji: code, count: 1 });
+    }
+
+    setMyReaction(isRemoving ? null : code);
+    setReactionsSummary(nextSummary);
+
     try {
-      if (next) await api.post(`/posts/${post.id}/like`);
-      else await api.delete(`/posts/${post.id}/like`);
+      if (isRemoving) await api.delete(`/posts/${post.id}/reactions`);
+      else await api.post(`/posts/${post.id}/reactions`, { emoji: code });
     } catch {
-      setLiked(!next);
-      setLikesCount((c) => c + (next ? -1 : 1));
-      showToast('Não foi possível registrar sua curtida.', 'error');
+      setMyReaction(previousReaction);
+      setReactionsSummary(previousSummary);
+      showToast('Não foi possível registrar sua reação.', 'error');
     }
   }
 
@@ -287,6 +311,21 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
         </div>
       </header>
 
+      {post.activity && (
+        <div className="post-card__activity">
+          <span className="post-card__activity-badge">✅ Atividade registrada</span>
+          <div className="post-card__activity-details">
+            <span className="post-card__activity-modality">
+              {emojiForIcon(post.activity.icon ?? '')} {post.activity.modality}
+              {' · '}
+              {post.activity.quantity}
+              {post.activity.unit ? ` ${post.activity.unit}` : ''}
+            </span>
+            <span className="post-card__activity-points">+{post.activity.points} pontos</span>
+          </div>
+        </div>
+      )}
+
       <p className="post-card__content">{post.content}</p>
 
       {post.hasImage && (
@@ -296,9 +335,26 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
       )}
 
       <footer className="post-card__footer">
-        <button type="button" className={`post-card__action ${liked ? 'post-card__action--active' : ''}`} onClick={toggleLike}>
-          {liked ? '❤️' : '🤍'} {likesCount}
-        </button>
+        <div className="post-card__reactions">
+          {REACTION_OPTIONS.map(({ code, emoji, label }) => {
+            const count = reactionsSummary.find((r) => r.emoji === code)?.count ?? 0;
+            const active = myReaction === code;
+            return (
+              <button
+                key={code}
+                type="button"
+                className={`post-card__reaction ${active ? 'post-card__reaction--active' : ''}`}
+                title={label}
+                aria-label={label}
+                aria-pressed={active}
+                onClick={() => handleReact(code)}
+              >
+                <span aria-hidden="true">{emoji}</span>
+                {count > 0 && <span className="post-card__reaction-count">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
         <button type="button" className="post-card__action" onClick={() => setCommentsOpen((v) => !v)}>
           💬 {post.commentsCount}
         </button>

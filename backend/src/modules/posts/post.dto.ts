@@ -39,3 +39,22 @@ export const DeletePostSchema = z.object({
 });
 
 export type DeletePostDTO = z.infer<typeof DeletePostSchema>;
+
+// Conjunto fixo de reações (não é emoji livre) — mantém a contagem/agrupamento
+// por tipo previsível na UI. Um por pessoa/post, trocável (ver PostReaction no schema).
+export const REACTION_EMOJIS = ['THUMBS_UP', 'HEART', 'CLAP', 'FIRE', 'PARTY'] as const;
+export type ReactionEmojiCode = (typeof REACTION_EMOJIS)[number];
+
+export const REACTION_EMOJI_DISPLAY: Record<ReactionEmojiCode, string> = {
+  THUMBS_UP: '👍',
+  HEART: '❤️',
+  CLAP: '👏',
+  FIRE: '🔥',
+  PARTY: '🎉',
+};
+
+export const SetReactionSchema = z.object({
+  emoji: z.enum(REACTION_EMOJIS),
+});
+
+export type SetReactionDTO = z.infer<typeof SetReactionSchema>;

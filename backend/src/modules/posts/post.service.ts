@@ -1,11 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { TransactionClient } from '../../shared/types/prisma';
 import { UploadedFile } from '../../shared/types/upload';
 import { assertAllowedFile } from '../../shared/utils/fileValidation';
 import { assertEventGroupAccess } from '../events/event-access.util';
+import { NotificationService } from '../notifications/notification.service';
 import { getStorageProvider } from '../storage/storage.factory';
-import { ListPostsQueryDTO, ModeratePostDTO } from './post.dto';
+import { ListPostsQueryDTO, ModeratePostDTO, ReactionEmojiCode, REACTION_EMOJI_DISPLAY } from './post.dto';
 
 const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png'];
 
@@ -22,10 +24,32 @@ type PostRow = {
   imageUrl: string | null;
   status: string;
   eventId: string | null;
+  activityId: string | null;
   createdAt: Date;
   updatedAt: Date;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
-  _count: { comments: number; likes: number };
+  activity: {
+    quantity: number;
+    unit: string | null;
+    calculatedPoints: number;
+    activityType: { name: string; icon: string | null };
+  } | null;
+  _count: { comments: number; reactions: number };
+};
+
+type ReactionInfo = { summary: { emoji: ReactionEmojiCode; count: number }[]; myReaction: ReactionEmojiCode | null };
+
+const POST_INCLUDE = {
+  user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } } as const,
+  activity: {
+    select: {
+      quantity: true,
+      unit: true,
+      calculatedPoints: true,
+      activityType: { select: { name: true, icon: true } },
+    },
+  } as const,
+  _count: { select: { comments: true, reactions: true } } as const,
 };
 
 export class PostService {
@@ -58,13 +82,55 @@ export class PostService {
 
     const post = await prisma.post.create({
       data: { id: postId, userId, content, imageUrl, status: 'PUBLISHED', eventId: eventId ?? null },
-      include: {
-        user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } },
-        _count: { select: { comments: true, likes: true } },
-      },
+      include: POST_INCLUDE,
     });
 
-    return this.toPublicShape(post, userId, false);
+    return this.toPublicShape(post, { summary: [], myReaction: null });
+  }
+
+  /**
+   * Cria automaticamente o post de "atividade aprovada" no Mural geral,
+   * dentro da MESMA transação atômica de `AdminActivityService.approve()`.
+   * Se a atividade tiver uma evidência em formato de imagem, ela é copiada
+   * para o storage do próprio post (mesma pasta/mecanismo de uma foto
+   * manual) — assim a foto passa a valer as regras de acesso do Post
+   * (público a qualquer autenticado quando PUBLISHED), sem afrouxar o
+   * acesso privado da evidência original em activity_evidence.
+   */
+  public static async createFromActivity(
+    params: {
+      userId: string;
+      activityId: string;
+      content: string;
+      imageSource?: { buffer: Buffer; fileName: string; mimeType: string };
+    },
+    tx: TransactionClient,
+  ) {
+    const postId = uuidv4();
+    let imageUrl: string | null = null;
+
+    if (params.imageSource) {
+      const storage = getStorageProvider();
+      const { storagePath } = await storage.save({
+        buffer: params.imageSource.buffer,
+        originalName: params.imageSource.fileName,
+        mimeType: params.imageSource.mimeType,
+        folder: `mural/${postId}`,
+      });
+      imageUrl = storagePath;
+    }
+
+    return tx.post.create({
+      data: {
+        id: postId,
+        userId: params.userId,
+        content: params.content,
+        imageUrl,
+        status: 'PUBLISHED',
+        eventId: null,
+        activityId: params.activityId,
+      },
+    });
   }
 
   public static async list(query: ListPostsQueryDTO, requestingUserId: string, isAdmin: boolean) {
@@ -93,32 +159,23 @@ export class PostService {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
-        include: {
-          user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } },
-          _count: { select: { comments: true, likes: true } },
-        },
+        include: POST_INCLUDE,
       }),
     ]);
 
-    const likedPostIds = await this.getLikedPostIds(
-      requestingUserId,
+    const reactionsByPost = await this.getReactionsInfo(
       posts.map((p) => p.id),
+      requestingUserId,
     );
 
     return {
-      posts: posts.map((p) => this.toPublicShape(p, requestingUserId, likedPostIds.has(p.id))),
+      posts: posts.map((p) => this.toPublicShape(p, reactionsByPost.get(p.id) ?? { summary: [], myReaction: null })),
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
   public static async getById(id: string, requestingUserId: string, isAdmin: boolean) {
-    const post = await prisma.post.findUnique({
-      where: { id },
-      include: {
-        user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } },
-        _count: { select: { comments: true, likes: true } },
-      },
-    });
+    const post = await prisma.post.findUnique({ where: { id }, include: POST_INCLUDE });
     if (!post) throw new NotFoundError(`Publicação com ID '${id}' não foi encontrada.`);
     await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
@@ -126,8 +183,8 @@ export class PostService {
       throw new ForbiddenError('Esta publicação não está mais disponível.');
     }
 
-    const likedPostIds = await this.getLikedPostIds(requestingUserId, [id]);
-    return this.toPublicShape(post, requestingUserId, likedPostIds.has(id));
+    const reactionsByPost = await this.getReactionsInfo([id], requestingUserId);
+    return this.toPublicShape(post, reactionsByPost.get(id) ?? { summary: [], myReaction: null });
   }
 
   /** Exclusão pelo dono (rotina, sem auditoria) ou moderação administrativa (auditada). */
@@ -141,7 +198,7 @@ export class PostService {
       throw new ForbiddenError('Você não tem permissão para excluir a publicação de outro usuário.');
     }
 
-    await prisma.post.delete({ where: { id } }); // cascade remove comentários/curtidas (schema)
+    await prisma.post.delete({ where: { id } }); // cascade remove comentários/reações (schema)
 
     if (isAdmin && !isOwner) {
       await prisma.auditLog.create({
@@ -196,40 +253,62 @@ export class PostService {
     return { buffer };
   }
 
-  // ─── Curtidas ────────────────────────────────────────────────────────────────
+  // ─── Reações ─────────────────────────────────────────────────────────────────
 
-  public static async like(postId: string, userId: string, isAdmin: boolean) {
+  /** Define (ou troca) a reação do usuário no post — 1 emoji por pessoa/post. */
+  public static async setReaction(postId: string, userId: string, emoji: ReactionEmojiCode, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
     await assertEventGroupAccess(post.eventId, userId, isAdmin);
 
-    const existing = await prisma.postLike.findUnique({ where: { postId_userId: { postId, userId } } });
-    if (existing) throw new AppError('Você já curtiu esta publicação.', 409, 'ALREADY_LIKED');
+    if (post.status !== 'PUBLISHED' && !isAdmin && post.userId !== userId) {
+      throw new AppError('Não é possível reagir a uma publicação que não está mais disponível.', 422, 'POST_NOT_REACTABLE');
+    }
 
-    return prisma.postLike.create({ data: { postId, userId } });
+    const existing = await prisma.postReaction.findUnique({ where: { postId_userId: { postId, userId } } });
+
+    const reaction = await prisma.postReaction.upsert({
+      where: { postId_userId: { postId, userId } },
+      update: { emoji },
+      create: { postId, userId, emoji },
+    });
+
+    // Notifica o dono do post só na primeira reação (não a cada troca de emoji) e nunca por reagir no próprio post.
+    if (!existing && post.userId !== userId) {
+      const reactor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      await NotificationService.create({
+        userId: post.userId,
+        title: 'Nova reação na sua publicação',
+        message: `${reactor?.name ?? 'Alguém'} reagiu ${REACTION_EMOJI_DISPLAY[emoji]} à sua publicação.`,
+        type: 'POST_REACTION',
+        referenceId: postId,
+      });
+    }
+
+    return reaction;
   }
 
-  public static async unlike(postId: string, userId: string, isAdmin: boolean) {
+  public static async removeReaction(postId: string, userId: string, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
     await assertEventGroupAccess(post.eventId, userId, isAdmin);
 
-    const existing = await prisma.postLike.findUnique({ where: { postId_userId: { postId, userId } } });
-    if (!existing) throw new NotFoundError('Você ainda não curtiu esta publicação.');
+    const existing = await prisma.postReaction.findUnique({ where: { postId_userId: { postId, userId } } });
+    if (!existing) throw new NotFoundError('Você ainda não reagiu a esta publicação.');
 
-    await prisma.postLike.delete({ where: { id: existing.id } });
-    return { message: 'Curtida removida com sucesso.' };
+    await prisma.postReaction.delete({ where: { id: existing.id } });
+    return { message: 'Reação removida com sucesso.' };
   }
 
-  public static async listLikes(postId: string, requestingUserId: string, isAdmin: boolean, page: number, limit: number) {
+  public static async listReactions(postId: string, requestingUserId: string, isAdmin: boolean, page: number, limit: number) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundError(`Publicação com ID '${postId}' não foi encontrada.`);
     await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
 
     const skip = (page - 1) * limit;
-    const [total, likes] = await Promise.all([
-      prisma.postLike.count({ where: { postId } }),
-      prisma.postLike.findMany({
+    const [total, reactions] = await Promise.all([
+      prisma.postReaction.count({ where: { postId } }),
+      prisma.postReaction.findMany({
         where: { postId },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -238,21 +317,42 @@ export class PostService {
       }),
     ]);
 
-    return { likes, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return { reactions, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   // ─── Helpers internos ──────────────────────────────────────────────────────────
 
-  private static async getLikedPostIds(userId: string, postIds: string[]): Promise<Set<string>> {
-    if (postIds.length === 0) return new Set();
-    const likes = await prisma.postLike.findMany({
-      where: { userId, postId: { in: postIds } },
-      select: { postId: true },
-    });
-    return new Set(likes.map((l) => l.postId));
+  private static async getReactionsInfo(postIds: string[], requestingUserId: string): Promise<Map<string, ReactionInfo>> {
+    const result = new Map<string, ReactionInfo>();
+    if (postIds.length === 0) return result;
+
+    for (const postId of postIds) result.set(postId, { summary: [], myReaction: null });
+
+    const [grouped, mine] = await Promise.all([
+      prisma.postReaction.groupBy({
+        by: ['postId', 'emoji'],
+        where: { postId: { in: postIds } },
+        _count: { _all: true },
+      }),
+      prisma.postReaction.findMany({
+        where: { userId: requestingUserId, postId: { in: postIds } },
+        select: { postId: true, emoji: true },
+      }),
+    ]);
+
+    for (const row of grouped) {
+      const entry = result.get(row.postId);
+      if (entry) entry.summary.push({ emoji: row.emoji as ReactionEmojiCode, count: row._count._all });
+    }
+    for (const m of mine) {
+      const entry = result.get(m.postId);
+      if (entry) entry.myReaction = m.emoji as ReactionEmojiCode;
+    }
+
+    return result;
   }
 
-  private static toPublicShape(post: PostRow, _requestingUserId: string, likedByMe: boolean) {
+  private static toPublicShape(post: PostRow, reactionInfo: ReactionInfo) {
     return {
       id: post.id,
       user: post.user,
@@ -261,9 +361,19 @@ export class PostService {
       hasImage: !!post.imageUrl,
       imageDownloadUrl: post.imageUrl ? `/api/v1/posts/${post.id}/image` : null,
       status: post.status,
-      likesCount: post._count.likes,
+      activity: post.activity
+        ? {
+            modality: post.activity.activityType.name,
+            icon: post.activity.activityType.icon,
+            quantity: post.activity.quantity,
+            unit: post.activity.unit,
+            points: post.activity.calculatedPoints,
+          }
+        : null,
       commentsCount: post._count.comments,
-      likedByMe,
+      reactionsCount: post._count.reactions,
+      reactionsSummary: reactionInfo.summary,
+      myReaction: reactionInfo.myReaction,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
     };

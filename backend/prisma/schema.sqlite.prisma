@@ -57,7 +57,7 @@ model User {
   userRewards         UserReward[]
   posts               Post[]
   comments            Comment[]
-  postLikes           PostLike[]
+  postReactions       PostReaction[]
   notifications       Notification[]
   auditLogs           AuditLog[]
 
@@ -176,6 +176,7 @@ model UserActivity {
   validator          User?               @relation("ValidatedActivities", fields: [validatedBy], references: [id])
   evidences          ActivityEvidence[]
   pointsTransactions PointsTransaction[]
+  posts              Post[]
 
   @@index([userId])
   @@index([activityTypeId])
@@ -521,7 +522,7 @@ model UserReward {
 }
 
 // -------------------------------------------------------------
-// 6. MURAL SOCIAL (POSTS, COMENTÁRIOS, CURTIDAS)
+// 6. MURAL SOCIAL (POSTS, COMENTÁRIOS, REAÇÕES)
 // -------------------------------------------------------------
 
 model Post {
@@ -535,15 +536,22 @@ model Post {
   // participa daquele evento (ou admin). A pedido do usuário: um grupo de
   // discussão por evento, reaproveitando a mesma estrutura do Mural.
   eventId   String?  @map("event_id")
+  // Preenchido só em posts automáticos, criados quando uma atividade é
+  // aprovada (ver admin-activity.service.ts::approve). Null = post manual
+  // (composto pelo próprio usuário). onDelete: SetNull — excluir a atividade
+  // não some com o post que já circulou no feed.
+  activityId String?  @map("activity_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event    Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  comments Comment[]
-  likes    PostLike[]
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  activity  UserActivity?  @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  comments  Comment[]
+  reactions PostReaction[]
 
   @@index([eventId])
+  @@index([activityId])
   @@map("posts")
 }
 
@@ -561,17 +569,21 @@ model Comment {
   @@map("comments")
 }
 
-model PostLike {
+model PostReaction {
   id        String   @id @default(uuid())
   postId    String   @map("post_id")
   userId    String   @map("user_id")
+  // Conjunto fixo, validado no backend (post.dto.ts) — não é emoji livre, pra
+  // manter a contagem/agrupamento por tipo previsível na UI.
+  emoji     String
   createdAt DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // 1 reação por pessoa/post — trocar de emoji é um update, não um novo registro.
   @@unique([postId, userId])
-  @@map("post_likes")
+  @@map("post_reactions")
 }
 
 // -------------------------------------------------------------

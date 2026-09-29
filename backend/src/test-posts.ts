@@ -6,9 +6,9 @@
  * 2. Criação de publicação de texto simples
  * 3. Criação de publicação com foto (upload via multipart)
  * 4. Feed lista publicações PUBLISHED de todos os usuários
- * 5. Curtir uma publicação incrementa likesCount e likedByMe
- * 6. Curtir duas vezes é bloqueado (409)
- * 7. Remover curtida decrementa likesCount
+ * 5. Reagir a uma publicação incrementa reactionsCount e define myReaction
+ * 6. Trocar de emoji substitui a reação (não duplica — continua 1 por pessoa/post)
+ * 7. Remover reação zera reactionsCount; remover de novo dá 404
  * 8. Comentar em uma publicação funciona e aparece na listagem
  * 9. Comentário vazio é bloqueado (422)
  * 10. Dono exclui a própria publicação (sem necessidade de ser admin)
@@ -123,22 +123,44 @@ async function main() {
   const feed = (feedRes.data as ListBody)?.data ?? [];
   assert('Feed retorna 200 e contém as publicações criadas', feedRes.status === 200 && feed.some((p) => p.id === textPostId));
 
-  // ── PASSO 5-7: Curtidas ────────────────────────────────────────────────────────
-  console.log('\n5️⃣ Testando curtir e descurtir uma publicação...');
-  const likeRes = await reqJson('POST', `/posts/${textPostId}/like`, undefined, otherToken);
-  assert('Curtida registrada (201)', likeRes.status === 201);
+  // ── PASSO 5-7: Reações (emoji) ──────────────────────────────────────────────────
+  console.log('\n5️⃣ Testando reagir, trocar e remover reação de uma publicação...');
+  const reactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: 'THUMBS_UP' }, otherToken);
+  assert('Reação registrada (201)', reactRes.status === 201);
 
-  const afterLikeRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
-  type DetailBody = { data?: { likesCount?: number; likedByMe?: boolean } };
-  assert('likesCount incrementado e likedByMe=true', (afterLikeRes.data as DetailBody)?.data?.likesCount === 1 && (afterLikeRes.data as DetailBody)?.data?.likedByMe === true);
+  const afterReactRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
+  type DetailBody = { data?: { reactionsCount?: number; myReaction?: string | null; reactionsSummary?: Array<{ emoji: string; count: number }> } };
+  assert(
+    'reactionsCount incrementado e myReaction=THUMBS_UP',
+    (afterReactRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterReactRes.data as DetailBody)?.data?.myReaction === 'THUMBS_UP',
+  );
 
-  const doubleLikeRes = await reqJson('POST', `/posts/${textPostId}/like`, undefined, otherToken);
-  assert('Curtir duas vezes é bloqueado (409)', doubleLikeRes.status === 409);
+  const switchReactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: 'HEART' }, otherToken);
+  assert('Trocar de emoji retorna 201 (upsert)', switchReactRes.status === 201);
+  const afterSwitchRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
+  assert(
+    'Trocar de emoji substitui a reação — reactionsCount continua 1, myReaction=HEART',
+    (afterSwitchRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterSwitchRes.data as DetailBody)?.data?.myReaction === 'HEART',
+  );
 
-  const unlikeRes = await reqJson('DELETE', `/posts/${textPostId}/like`, undefined, otherToken);
-  assert('Remoção de curtida funciona (200)', unlikeRes.status === 200);
-  const afterUnlikeRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
-  assert('likesCount voltou a 0', (afterUnlikeRes.data as DetailBody)?.data?.likesCount === 0);
+  const invalidEmojiRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '🤖' }, otherToken);
+  assert('Emoji fora do conjunto permitido é bloqueado (422)', invalidEmojiRes.status === 422);
+
+  const removeReactRes = await reqJson('DELETE', `/posts/${textPostId}/reactions`, undefined, otherToken);
+  assert('Remoção de reação funciona (200)', removeReactRes.status === 200);
+  const afterRemoveRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
+  assert('reactionsCount voltou a 0 e myReaction=null', (afterRemoveRes.data as DetailBody)?.data?.reactionsCount === 0 && (afterRemoveRes.data as DetailBody)?.data?.myReaction === null);
+
+  const doubleRemoveRes = await reqJson('DELETE', `/posts/${textPostId}/reactions`, undefined, otherToken);
+  assert('Remover reação inexistente retorna 404', doubleRemoveRes.status === 404);
+
+  type NotifBody = { data?: Array<{ type: string; referenceId: string | null }> };
+  const notifAfterReactionRes = await reqJson('GET', '/notifications?limit=50', undefined, participantToken);
+  const notifsAfterReaction = (notifAfterReactionRes.data as NotifBody)?.data ?? [];
+  assert(
+    'Dono do post recebe notificação POST_REACTION quando alguém reage (mesmo após a reação ter sido removida depois)',
+    notifsAfterReaction.some((n) => n.type === 'POST_REACTION' && n.referenceId === textPostId),
+  );
 
   // ── PASSO 8-9: Comentários ─────────────────────────────────────────────────────
   console.log('\n6️⃣ Testando comentários...');
@@ -154,6 +176,22 @@ async function main() {
 
   const emptyCommentRes = await reqJson('POST', `/posts/${textPostId}/comments`, { content: '' }, otherToken);
   assert('Comentário vazio é bloqueado (422)', emptyCommentRes.status === 422);
+
+  const notifAfterCommentRes = await reqJson('GET', '/notifications?limit=50', undefined, participantToken);
+  const notifsAfterComment = (notifAfterCommentRes.data as NotifBody)?.data ?? [];
+  assert(
+    'Dono do post recebe notificação POST_COMMENT quando alguém comenta',
+    notifsAfterComment.some((n) => n.type === 'POST_COMMENT' && n.referenceId === textPostId),
+  );
+
+  const selfCommentRes = await reqJson('POST', `/posts/${textPostId}/comments`, { content: 'Comentário do próprio dono' }, participantToken);
+  assert('Dono comenta na própria publicação (201)', selfCommentRes.status === 201);
+  const notifCountBefore = notifsAfterComment.filter((n) => n.type === 'POST_COMMENT' && n.referenceId === textPostId).length;
+  const notifAfterSelfCommentRes = await reqJson('GET', '/notifications?limit=50', undefined, participantToken);
+  const notifsAfterSelfComment = ((notifAfterSelfCommentRes.data as NotifBody)?.data ?? []).filter(
+    (n) => n.type === 'POST_COMMENT' && n.referenceId === textPostId,
+  );
+  assert('Comentar na própria publicação não gera notificação para si mesmo', notifsAfterSelfComment.length === notifCountBefore);
 
   // ── PASSO 10-11: Exclusão de publicação ───────────────────────────────────────
   console.log('\n7️⃣ Testando exclusão de publicação...');

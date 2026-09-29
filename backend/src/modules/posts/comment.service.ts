@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { assertEventGroupAccess } from '../events/event-access.util';
+import { NotificationService } from '../notifications/notification.service';
 
 export class CommentService {
   public static async create(postId: string, userId: string, content: string, isAdmin: boolean) {
@@ -12,10 +13,23 @@ export class CommentService {
       throw new AppError('Não é possível comentar em uma publicação que não está mais disponível.', 422, 'POST_NOT_COMMENTABLE');
     }
 
-    return prisma.comment.create({
+    const comment = await prisma.comment.create({
       data: { postId, userId, content },
       include: { user: { select: { id: true, name: true, avatarType: true, avatarUrl: true } } },
     });
+
+    // Notifica o dono do post, exceto quando ele mesmo comenta na própria publicação.
+    if (post.userId !== userId) {
+      await NotificationService.create({
+        userId: post.userId,
+        title: 'Novo comentário na sua publicação',
+        message: `${comment.user.name} comentou: "${content.length > 80 ? `${content.slice(0, 80)}…` : content}"`,
+        type: 'POST_COMMENT',
+        referenceId: postId,
+      });
+    }
+
+    return comment;
   }
 
   public static async list(postId: string, userId: string, isAdmin: boolean, page: number, limit: number) {

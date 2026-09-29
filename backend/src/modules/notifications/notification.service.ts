@@ -18,6 +18,8 @@ export type NotificationType =
   | 'EVENT_REJECTED'
   | 'EVENT_UPDATED'
   | 'EVENT_BONUS_CREDITED'
+  | 'POST_REACTION'
+  | 'POST_COMMENT'
   | 'INFO';
 
 export class NotificationService {

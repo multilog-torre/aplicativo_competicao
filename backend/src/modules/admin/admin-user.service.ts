@@ -279,7 +279,7 @@ export class AdminUserService {
             userRewards: true,
             posts: true,
             comments: true,
-            postLikes: true,
+            postReactions: true,
             notifications: true,
             auditLogs: true,
           },

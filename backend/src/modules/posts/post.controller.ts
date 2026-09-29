@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../shared/utils/apiResponse';
 import { PostService } from './post.service';
-import { CreatePostDTO, DeletePostDTO, ListPostsQueryDTO, ModeratePostDTO } from './post.dto';
+import { CreatePostDTO, DeletePostDTO, ListPostsQueryDTO, ModeratePostDTO, SetReactionDTO } from './post.dto';
 
 function isAdminRequest(req: Request): boolean {
   return req.user!.roles.some((role) => ['ADMIN', 'ADMIN_MASTER'].includes(role));
@@ -57,26 +57,27 @@ export class PostController {
     return res.send(buffer);
   }
 
-  public static async like(req: Request, res: Response): Promise<Response> {
+  public static async setReaction(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
+    const { emoji } = req.body as SetReactionDTO;
     const userId = req.user!.id;
-    const like = await PostService.like(id, userId, isAdminRequest(req));
-    return sendSuccess(res, like, 201);
+    const reaction = await PostService.setReaction(id, userId, emoji, isAdminRequest(req));
+    return sendSuccess(res, reaction, 201);
   }
 
-  public static async unlike(req: Request, res: Response): Promise<Response> {
+  public static async removeReaction(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
     const userId = req.user!.id;
-    const result = await PostService.unlike(id, userId, isAdminRequest(req));
+    const result = await PostService.removeReaction(id, userId, isAdminRequest(req));
     return sendSuccess(res, result, 200);
   }
 
-  public static async listLikes(req: Request, res: Response): Promise<Response> {
+  public static async listReactions(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
     const userId = req.user!.id;
     const page = parseInt((req.query.page as string) ?? '1', 10) || 1;
     const limit = Math.min(parseInt((req.query.limit as string) ?? '20', 10) || 20, 100);
-    const result = await PostService.listLikes(id, userId, isAdminRequest(req), page, limit);
-    return sendSuccess(res, result.likes, 200, result.pagination);
+    const result = await PostService.listReactions(id, userId, isAdminRequest(req), page, limit);
+    return sendSuccess(res, result.reactions, 200, result.pagination);
   }
 }

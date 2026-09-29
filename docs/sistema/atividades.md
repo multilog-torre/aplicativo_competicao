@@ -83,6 +83,7 @@ Vale igual para aprovação manual (por um admin) e automática (ver seção aci
 5. Atualiza o progresso de qualquer desafio ativo que case com a modalidade ([desafios.md](./desafios.md)).
 6. Notifica o participante (`ACTIVITY_APPROVED`) e, se ele subiu no ranking geral por causa disso, uma segunda notificação (`RANKING_UP`).
 7. Grava entrada de auditoria (`APPROVE_ACTIVITY` se manual, `AUTO_APPROVE_ACTIVITY` se automática).
+8. Publica automaticamente um post no Mural geral, com a modalidade/quantidade/pontos e a foto da evidência (se houver e for imagem) — ver "Feed de atividades" em [mural.md](./mural.md). Ninguém é notificado por causa desse post; só quem reagir/comentar nele depois notifica o dono (ver [notificacoes.md](./notificacoes.md)).
 
 A rejeição só muda o status para `REJECTED`, grava o motivo, audita (`REJECT_ACTIVITY`) e notifica (`ACTIVITY_REJECTED`) — nenhum ponto é tocado.
 

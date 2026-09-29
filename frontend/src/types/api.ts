@@ -212,6 +212,16 @@ export interface DashboardData {
   motivationalMessage: string;
 }
 
+export type ReactionEmojiCode = 'THUMBS_UP' | 'HEART' | 'CLAP' | 'FIRE' | 'PARTY';
+
+export interface PostActivityInfo {
+  modality: string;
+  icon: string | null;
+  quantity: number;
+  unit: string | null;
+  points: number;
+}
+
 export interface Post {
   id: string;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
@@ -220,9 +230,12 @@ export interface Post {
   hasImage: boolean;
   imageDownloadUrl: string | null;
   status: string;
-  likesCount: number;
+  /** Preenchido só em posts automáticos, criados quando uma atividade é aprovada. */
+  activity: PostActivityInfo | null;
   commentsCount: number;
-  likedByMe: boolean;
+  reactionsCount: number;
+  reactionsSummary: { emoji: ReactionEmojiCode; count: number }[];
+  myReaction: ReactionEmojiCode | null;
   createdAt: string;
 }
 

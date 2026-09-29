@@ -6,7 +6,7 @@ import { asyncHandler } from '../../shared/utils/asyncHandler';
 import { CommentController } from './comment.controller';
 import { CreateCommentSchema, ListCommentsQuerySchema } from './comment.dto';
 import { PostController } from './post.controller';
-import { CreatePostSchema, ListPostsQuerySchema, ModeratePostSchema } from './post.dto';
+import { CreatePostSchema, ListPostsQuerySchema, ModeratePostSchema, SetReactionSchema } from './post.dto';
 
 const router = Router();
 
@@ -35,10 +35,14 @@ router.post(
   asyncHandler(PostController.moderate),
 );
 
-// 2. Curtidas
-router.post('/:id/like', asyncHandler(PostController.like));
-router.delete('/:id/like', asyncHandler(PostController.unlike));
-router.get('/:id/likes', asyncHandler(PostController.listLikes));
+// 2. Reações (emoji)
+router.post(
+  '/:id/reactions',
+  validateRequest({ body: SetReactionSchema }),
+  asyncHandler(PostController.setReaction),
+);
+router.delete('/:id/reactions', asyncHandler(PostController.removeReaction));
+router.get('/:id/reactions', asyncHandler(PostController.listReactions));
 
 // 3. Comentários
 router.post(

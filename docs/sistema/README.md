@@ -23,7 +23,7 @@ Ao adicionar uma seção nova ao sistema, crie um arquivo novo aqui e adicione-o
 | [recompensas.md](./recompensas.md) | Catálogo de prêmios, resgate, aprovação/entrega/cancelamento |
 | [ranking-e-participantes.md](./ranking-e-participantes.md) | Ranking dinâmico e a seção "Participantes" (perfil entre colegas) |
 | [notificacoes.md](./notificacoes.md) | Central de notificações — os 15 tipos e onde cada um aparece |
-| [mural.md](./mural.md) | Mural social (posts, comentários, curtidas) e grupos de evento |
+| [mural.md](./mural.md) | Mural social (posts, comentários, reações), feed automático de atividades aprovadas e grupos de evento |
 | [auditoria.md](./auditoria.md) | Trilha de auditoria administrativa |
 | [perfil.md](./perfil.md) | Meu Perfil, avatar, dados pessoais, e o perfil visto por colegas |
 | [painel-administrativo.md](./painel-administrativo.md) | Painel Geral: indicadores, gráficos e o filtro de data/ciclo/usuário/departamento/modalidade |
