@@ -7,7 +7,7 @@ import { assertAllowedFile } from '../../shared/utils/fileValidation';
 import { assertEventGroupAccess } from '../events/event-access.util';
 import { NotificationService } from '../notifications/notification.service';
 import { getStorageProvider } from '../storage/storage.factory';
-import { ListPostsQueryDTO, ModeratePostDTO, ReactionEmojiCode, REACTION_EMOJI_DISPLAY } from './post.dto';
+import { ListPostsQueryDTO, ModeratePostDTO, ReactionEmojiCode } from './post.dto';
 
 const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png'];
 
@@ -131,6 +131,34 @@ export class PostService {
         activityId: params.activityId,
       },
     });
+  }
+
+  /**
+   * Anexa a foto de uma evidência que chegou DEPOIS que o post automático já
+   * tinha sido criado sem foto — cenário comum quando a modalidade não
+   * exige evidência (a auto-aprovação roda no ato de criar a atividade,
+   * antes de qualquer evidência opcional existir) e a pessoa anexa uma foto
+   * mesmo assim logo em seguida (chamado por EvidenceService.upload). Não
+   * faz nada se não houver post vinculado a essa atividade, ou se o post já
+   * tiver uma foto — a primeira evidência de imagem "ganha", não fica
+   * trocando a cada novo anexo.
+   */
+  public static async attachEvidenceImageIfMissing(
+    activityId: string,
+    imageSource: { buffer: Buffer; fileName: string; mimeType: string },
+  ): Promise<void> {
+    const post = await prisma.post.findFirst({ where: { activityId, imageUrl: null } });
+    if (!post) return;
+
+    const storage = getStorageProvider();
+    const { storagePath } = await storage.save({
+      buffer: imageSource.buffer,
+      originalName: imageSource.fileName,
+      mimeType: imageSource.mimeType,
+      folder: `mural/${post.id}`,
+    });
+
+    await prisma.post.update({ where: { id: post.id }, data: { imageUrl: storagePath } });
   }
 
   public static async list(query: ListPostsQueryDTO, requestingUserId: string, isAdmin: boolean) {
@@ -279,7 +307,7 @@ export class PostService {
       await NotificationService.create({
         userId: post.userId,
         title: 'Nova reação na sua publicação',
-        message: `${reactor?.name ?? 'Alguém'} reagiu ${REACTION_EMOJI_DISPLAY[emoji]} à sua publicação.`,
+        message: `${reactor?.name ?? 'Alguém'} reagiu ${emoji} à sua publicação.`,
         type: 'POST_REACTION',
         referenceId: postId,
       });

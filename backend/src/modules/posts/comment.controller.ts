@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { sendSuccess } from '../../shared/utils/apiResponse';
 import { CommentService } from './comment.service';
 import { CreateCommentDTO, ListCommentsQueryDTO } from './comment.dto';
+import { SetReactionDTO } from './post.dto';
 
 function isAdminRequest(req: Request): boolean {
   return req.user!.roles.some((role) => ['ADMIN', 'ADMIN_MASTER'].includes(role));
@@ -29,6 +30,21 @@ export class CommentController {
     const userId = req.user!.id;
     const isAdmin = isAdminRequest(req);
     const result = await CommentService.delete(postId, commentId, userId, isAdmin);
+    return sendSuccess(res, result, 200);
+  }
+
+  public static async setReaction(req: Request, res: Response): Promise<Response> {
+    const { id: postId, commentId } = req.params;
+    const { emoji } = req.body as SetReactionDTO;
+    const userId = req.user!.id;
+    const reaction = await CommentService.setReaction(postId, commentId, userId, emoji, isAdminRequest(req));
+    return sendSuccess(res, reaction, 201);
+  }
+
+  public static async removeReaction(req: Request, res: Response): Promise<Response> {
+    const { id: postId, commentId } = req.params;
+    const userId = req.user!.id;
+    const result = await CommentService.removeReaction(postId, commentId, userId, isAdminRequest(req));
     return sendSuccess(res, result, 200);
   }
 }

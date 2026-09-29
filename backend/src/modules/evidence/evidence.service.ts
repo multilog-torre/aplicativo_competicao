@@ -2,6 +2,8 @@ import { env } from '../../config/env';
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { AdminActivityService } from '../admin/admin-activity.service';
+import { IMAGE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
+import { PostService } from '../posts/post.service';
 import { SettingsService } from '../settings/settings.service';
 import { UploadedFile } from '../../shared/types/upload';
 import { assertAllowedFile } from '../../shared/utils/fileValidation';
@@ -96,6 +98,19 @@ export class EvidenceService {
     // desativada, ou se a atividade já tiver sido avaliada por outro motivo.
     if (activity.status === 'PENDING' && activity.activityType.requiresEvidence && (await SettingsService.isAutoApproveActivitiesEnabled())) {
       await AdminActivityService.approve(activityId, null);
+    }
+
+    // Modalidade que NÃO exige evidência: a auto-aprovação (e o post
+    // automático do Mural) já rodou na criação da atividade, ANTES desta
+    // evidência opcional existir — o post nasceu sem foto. Se essa
+    // evidência é uma imagem, anexa agora, retroativamente, ao post que já
+    // existe (não faz nada se o post já tiver foto ou não existir).
+    if (IMAGE_EVIDENCE_MIME_TYPES.includes(file.mimetype)) {
+      await PostService.attachEvidenceImageIfMissing(activityId, {
+        buffer: file.buffer,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+      });
     }
 
     return this.toPublicShape(evidence, activityId);

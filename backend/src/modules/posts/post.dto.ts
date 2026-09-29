@@ -1,4 +1,14 @@
+import emojiRegexFn from 'emoji-regex';
 import { z } from 'zod';
+
+const EMOJI_REGEX = emojiRegexFn();
+
+/** true só quando a string INTEIRA é exatamente 1 emoji (qualquer um do Unicode, incluindo sequências ZWJ/variação/tom de pele) — nunca texto solto nem múltiplos emojis colados. */
+function isSingleEmoji(value: string): boolean {
+  if (value.length === 0 || value.length > 32) return false;
+  const matches = value.match(EMOJI_REGEX);
+  return !!matches && matches.length === 1 && matches[0] === value;
+}
 
 export const CreatePostSchema = z.object({
   content: z.string().min(1, 'A publicação não pode estar vazia.').max(2000, 'Máximo de 2000 caracteres.'),
@@ -40,21 +50,24 @@ export const DeletePostSchema = z.object({
 
 export type DeletePostDTO = z.infer<typeof DeletePostSchema>;
 
-// Conjunto fixo de reações (não é emoji livre) — mantém a contagem/agrupamento
-// por tipo previsível na UI. Um por pessoa/post, trocável (ver PostReaction no schema).
-export const REACTION_EMOJIS = ['THUMBS_UP', 'HEART', 'CLAP', 'FIRE', 'PARTY'] as const;
-export type ReactionEmojiCode = (typeof REACTION_EMOJIS)[number];
+// Qualquer emoji do Unicode é aceito (a pedido do usuário — antes era um
+// conjunto fixo de 5). Validado com emoji-regex, não é texto livre: o
+// backend rejeita qualquer coisa que não seja exatamente 1 emoji. Continua
+// 1 reação por pessoa/post (ou por pessoa/comentário), trocável — ver
+// PostReaction/CommentReaction no schema.
+export const ReactionEmojiSchema = z
+  .string()
+  .refine(isSingleEmoji, 'Precisa ser um único emoji válido.');
 
-export const REACTION_EMOJI_DISPLAY: Record<ReactionEmojiCode, string> = {
-  THUMBS_UP: '👍',
-  HEART: '❤️',
-  CLAP: '👏',
-  FIRE: '🔥',
-  PARTY: '🎉',
-};
+export type ReactionEmojiCode = string;
 
 export const SetReactionSchema = z.object({
-  emoji: z.enum(REACTION_EMOJIS),
+  emoji: ReactionEmojiSchema,
 });
 
 export type SetReactionDTO = z.infer<typeof SetReactionSchema>;
+
+// Formatos de evidência que viram foto de post (manual ou automático de
+// atividade aprovada) — outros formatos (PDF, vídeo etc.) não têm como
+// virar imagem no card, só o texto do post em si.
+export const IMAGE_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];

@@ -123,28 +123,34 @@ async function main() {
   const feed = (feedRes.data as ListBody)?.data ?? [];
   assert('Feed retorna 200 e contém as publicações criadas', feedRes.status === 200 && feed.some((p) => p.id === textPostId));
 
-  // ── PASSO 5-7: Reações (emoji) ──────────────────────────────────────────────────
+  // ── PASSO 5-7: Reações (qualquer emoji) ───────────────────────────────────────────
   console.log('\n5️⃣ Testando reagir, trocar e remover reação de uma publicação...');
-  const reactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: 'THUMBS_UP' }, otherToken);
+  const reactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '👍' }, otherToken);
   assert('Reação registrada (201)', reactRes.status === 201);
 
   const afterReactRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
   type DetailBody = { data?: { reactionsCount?: number; myReaction?: string | null; reactionsSummary?: Array<{ emoji: string; count: number }> } };
   assert(
-    'reactionsCount incrementado e myReaction=THUMBS_UP',
-    (afterReactRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterReactRes.data as DetailBody)?.data?.myReaction === 'THUMBS_UP',
+    'reactionsCount incrementado e myReaction=👍',
+    (afterReactRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterReactRes.data as DetailBody)?.data?.myReaction === '👍',
   );
 
-  const switchReactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: 'HEART' }, otherToken);
-  assert('Trocar de emoji retorna 201 (upsert)', switchReactRes.status === 201);
+  const switchReactRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '🦄' }, otherToken);
+  assert('Trocar pra um emoji fora do conjunto antigo (fixo) funciona — agora é livre (201)', switchReactRes.status === 201);
   const afterSwitchRes = await reqJson('GET', `/posts/${textPostId}`, undefined, otherToken);
   assert(
-    'Trocar de emoji substitui a reação — reactionsCount continua 1, myReaction=HEART',
-    (afterSwitchRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterSwitchRes.data as DetailBody)?.data?.myReaction === 'HEART',
+    'Trocar de emoji substitui a reação — reactionsCount continua 1, myReaction=🦄',
+    (afterSwitchRes.data as DetailBody)?.data?.reactionsCount === 1 && (afterSwitchRes.data as DetailBody)?.data?.myReaction === '🦄',
   );
 
-  const invalidEmojiRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '🤖' }, otherToken);
-  assert('Emoji fora do conjunto permitido é bloqueado (422)', invalidEmojiRes.status === 422);
+  const invalidEmojiRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: 'abc' }, otherToken);
+  assert('Texto que não é emoji é bloqueado (422)', invalidEmojiRes.status === 422);
+
+  const multipleEmojiRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '👍👍' }, otherToken);
+  assert('Mais de 1 emoji colado é bloqueado (422)', multipleEmojiRes.status === 422);
+
+  const complexEmojiRes = await reqJson('POST', `/posts/${textPostId}/reactions`, { emoji: '👨‍👩‍👧‍👦' }, otherToken);
+  assert('Emoji complexo (sequência ZWJ, família) é aceito como 1 emoji só (201)', complexEmojiRes.status === 201);
 
   const removeReactRes = await reqJson('DELETE', `/posts/${textPostId}/reactions`, undefined, otherToken);
   assert('Remoção de reação funciona (200)', removeReactRes.status === 200);
@@ -192,6 +198,46 @@ async function main() {
     (n) => n.type === 'POST_COMMENT' && n.referenceId === textPostId,
   );
   assert('Comentar na própria publicação não gera notificação para si mesmo', notifsAfterSelfComment.length === notifCountBefore);
+
+  // ── PASSO 9.5: Reações em comentários ───────────────────────────────────────────
+  // commentId é de um comentário da Beatriz (otherToken) no post do Renan
+  // (participantToken) — reagir aqui deve notificar a BEATRIZ (autora do
+  // comentário), não o Renan (dono do post).
+  console.log('\n6️⃣.5 Testando reações em comentários...');
+  const commentReactRes = await reqJson('POST', `/posts/${textPostId}/comments/${commentId}/reactions`, { emoji: '👏' }, participantToken);
+  assert('Reagir a um comentário funciona (201)', commentReactRes.status === 201);
+
+  const commentsAfterReactRes = await reqJson('GET', `/posts/${textPostId}/comments`, undefined, participantToken);
+  type CommentListBody2 = { data?: Array<{ id: string; reactionsCount?: number; myReaction?: string | null; reactionsSummary?: Array<{ emoji: string; count: number }> }> };
+  const reactedComment = ((commentsAfterReactRes.data as CommentListBody2)?.data ?? []).find((c) => c.id === commentId);
+  assert(
+    'Listagem de comentários reflete a reação (reactionsCount=1, myReaction=👏)',
+    reactedComment?.reactionsCount === 1 && reactedComment?.myReaction === '👏',
+  );
+
+  const invalidCommentEmojiRes = await reqJson('POST', `/posts/${textPostId}/comments/${commentId}/reactions`, { emoji: 'não é emoji' }, participantToken);
+  assert('Emoji inválido em comentário é bloqueado (422)', invalidCommentEmojiRes.status === 422);
+
+  const notifAfterCommentReactRes = await reqJson('GET', '/notifications?limit=50', undefined, otherToken);
+  const notifsAfterCommentReact = (notifAfterCommentReactRes.data as NotifBody)?.data ?? [];
+  assert(
+    'Autora do COMENTÁRIO (não o dono do post) recebe a notificação de reação',
+    notifsAfterCommentReact.some((n) => n.type === 'POST_REACTION' && n.referenceId === textPostId),
+  );
+
+  const selfCommentReactRes = await reqJson('POST', `/posts/${textPostId}/comments/${commentId}/reactions`, { emoji: '🔥' }, otherToken);
+  assert('Autora reage no próprio comentário (201)', selfCommentReactRes.status === 201);
+  const notifCountBeforeSelfReact = notifsAfterCommentReact.filter((n) => n.type === 'POST_REACTION' && n.referenceId === textPostId).length;
+  const notifAfterSelfCommentReactRes = await reqJson('GET', '/notifications?limit=50', undefined, otherToken);
+  const notifsAfterSelfCommentReact = ((notifAfterSelfCommentReactRes.data as NotifBody)?.data ?? []).filter(
+    (n) => n.type === 'POST_REACTION' && n.referenceId === textPostId,
+  );
+  assert('Reagir no próprio comentário não gera notificação para si mesma', notifsAfterSelfCommentReact.length === notifCountBeforeSelfReact);
+
+  const removeCommentReactRes = await reqJson('DELETE', `/posts/${textPostId}/comments/${commentId}/reactions`, undefined, participantToken);
+  assert('Remover reação de comentário funciona (200)', removeCommentReactRes.status === 200);
+  const removeCommentReactAgainRes = await reqJson('DELETE', `/posts/${textPostId}/comments/${commentId}/reactions`, undefined, participantToken);
+  assert('Remover reação de comentário inexistente retorna 404', removeCommentReactAgainRes.status === 404);
 
   // ── PASSO 10-11: Exclusão de publicação ───────────────────────────────────────
   console.log('\n7️⃣ Testando exclusão de publicação...');

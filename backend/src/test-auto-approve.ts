@@ -14,7 +14,11 @@
  * 8. Modalidade QUE EXIGE evidência: continua PENDING até a evidência
  *    chegar — só aprova sozinha DEPOIS do upload da evidência
  * 9. Enviar evidência (opcional) pra uma atividade JÁ aprovada continua
- *    funcionando (não bloqueia mais com ACTIVITY_NOT_EDITABLE)
+ *    funcionando (não bloqueia mais com ACTIVITY_NOT_EDITABLE), e a foto é
+ *    anexada RETROATIVAMENTE ao post automático que já tinha nascido sem
+ *    imagem (a evidência opcional ainda não existia no momento da
+ *    auto-aprovação) — a primeira imagem que chega "ganha", uma segunda
+ *    evidência extra não troca a foto já anexada
  * 10. Limite diário é respeitado mesmo com aprovação instantânea (a 2ª
  *     atividade do dia já conta como aprovada pra bloquear a 3ª)
  * 11. Desativando a configuração, o comportamento manual de sempre volta:
@@ -224,11 +228,34 @@ async function main() {
   );
 
   // ── PASSO 9: Evidência opcional numa atividade já aprovada ─────────────────────
+  // Este é EXATAMENTE o cenário do bug corrigido em post.service.ts::
+  // attachEvidenceImageIfMissing: a atividade (Meditação, sem exigência de
+  // evidência) já auto-aprovou e criou o post automático SEM foto no passo
+  // 5-7 (a evidência opcional ainda nem existia naquele momento). Quando
+  // ela chega agora, tem que ser anexada retroativamente ao post que já
+  // existe, em vez de ficar perdida.
   console.log('\n6️⃣ Testando envio de evidência (opcional) numa atividade JÁ aprovada...');
+  const dbPostBeforeExtraEvidence = await prisma.post.findFirst({ where: { activityId } });
+  assert('Post automático nasceu sem foto (evidência opcional ainda não existia na aprovação)', dbPostBeforeExtraEvidence?.imageUrl === null);
+
   const extraEvidenceRes = await uploadEvidence(activityId, participantToken);
   assert(
     'Enviar evidência extra numa atividade já APPROVED continua funcionando (201)',
     extraEvidenceRes.status === 201,
+  );
+
+  const dbPostAfterExtraEvidence = await prisma.post.findUnique({ where: { id: dbPostBeforeExtraEvidence!.id } });
+  assert(
+    'A foto da evidência tardia foi anexada retroativamente ao post automático já existente',
+    !!dbPostAfterExtraEvidence?.imageUrl,
+  );
+
+  const secondExtraEvidenceRes = await uploadEvidence(activityId, participantToken);
+  assert('Uma SEGUNDA evidência extra também é aceita (201)', secondExtraEvidenceRes.status === 201);
+  const dbPostAfterSecondEvidence = await prisma.post.findUnique({ where: { id: dbPostBeforeExtraEvidence!.id } });
+  assert(
+    'A foto do post não é trocada por uma segunda evidência — a primeira imagem "ganha"',
+    dbPostAfterSecondEvidence?.imageUrl === dbPostAfterExtraEvidence?.imageUrl,
   );
 
   // ── PASSO 10: Limite diário respeitado com aprovação instantânea ──────────────

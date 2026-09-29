@@ -5,18 +5,27 @@ import { Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Avatar, emojiForIcon } from '../components/ui/Badge';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
+import { ReactionPicker, ReactionSummaryItem } from '../components/ui/ReactionPicker';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
-// Mesmo conjunto fixo aceito pelo backend (post.dto.ts) — 1 reação por
-// pessoa/post, trocável. A ordem aqui é a ordem de exibição na barra do post.
-const REACTION_OPTIONS: { code: ReactionEmojiCode; emoji: string; label: string }[] = [
-  { code: 'THUMBS_UP', emoji: '👍', label: 'Curtir' },
-  { code: 'HEART', emoji: '❤️', label: 'Amei' },
-  { code: 'CLAP', emoji: '👏', label: 'Aplaudir' },
-  { code: 'FIRE', emoji: '🔥', label: 'Mandou bem' },
-  { code: 'PARTY', emoji: '🎉', label: 'Comemorar' },
-];
+/** Aplica localmente o efeito de trocar/remover uma reação sobre um resumo agregado — usado tanto pra post quanto pra comentário (otimista, revertido se a chamada à API falhar). */
+function applyReactionLocally(
+  summary: ReactionSummaryItem[],
+  previousReaction: ReactionEmojiCode | null,
+  nextEmoji: ReactionEmojiCode | null,
+): ReactionSummaryItem[] {
+  let next = summary.map((r) => ({ ...r }));
+  if (previousReaction) {
+    next = next.map((r) => (r.emoji === previousReaction ? { ...r, count: r.count - 1 } : r)).filter((r) => r.count > 0);
+  }
+  if (nextEmoji) {
+    const existing = next.find((r) => r.emoji === nextEmoji);
+    if (existing) existing.count += 1;
+    else next.push({ emoji: nextEmoji, count: 1 });
+  }
+  return next;
+}
 
 /**
  * Mural — feed geral da empresa, mais uma aba por evento em que o usuário
@@ -220,31 +229,35 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
 
   const isOwner = post.user.id === user?.id;
 
-  async function handleReact(code: ReactionEmojiCode) {
+  async function handleReact(emoji: ReactionEmojiCode) {
     const previousReaction = myReaction;
     const previousSummary = reactionsSummary;
-    const isRemoving = myReaction === code;
 
-    let nextSummary = previousSummary.map((r) => ({ ...r }));
-    if (previousReaction) {
-      nextSummary = nextSummary.map((r) => (r.emoji === previousReaction ? { ...r, count: r.count - 1 } : r)).filter((r) => r.count > 0);
-    }
-    if (!isRemoving) {
-      const existing = nextSummary.find((r) => r.emoji === code);
-      if (existing) existing.count += 1;
-      else nextSummary.push({ emoji: code, count: 1 });
-    }
-
-    setMyReaction(isRemoving ? null : code);
-    setReactionsSummary(nextSummary);
+    setMyReaction(emoji);
+    setReactionsSummary(applyReactionLocally(previousSummary, previousReaction, emoji));
 
     try {
-      if (isRemoving) await api.delete(`/posts/${post.id}/reactions`);
-      else await api.post(`/posts/${post.id}/reactions`, { emoji: code });
+      await api.post(`/posts/${post.id}/reactions`, { emoji });
     } catch {
       setMyReaction(previousReaction);
       setReactionsSummary(previousSummary);
       showToast('Não foi possível registrar sua reação.', 'error');
+    }
+  }
+
+  async function handleRemoveReaction() {
+    const previousReaction = myReaction;
+    const previousSummary = reactionsSummary;
+
+    setMyReaction(null);
+    setReactionsSummary(applyReactionLocally(previousSummary, previousReaction, null));
+
+    try {
+      await api.delete(`/posts/${post.id}/reactions`);
+    } catch {
+      setMyReaction(previousReaction);
+      setReactionsSummary(previousSummary);
+      showToast('Não foi possível remover sua reação.', 'error');
     }
   }
 
@@ -335,26 +348,7 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
       )}
 
       <footer className="post-card__footer">
-        <div className="post-card__reactions">
-          {REACTION_OPTIONS.map(({ code, emoji, label }) => {
-            const count = reactionsSummary.find((r) => r.emoji === code)?.count ?? 0;
-            const active = myReaction === code;
-            return (
-              <button
-                key={code}
-                type="button"
-                className={`post-card__reaction ${active ? 'post-card__reaction--active' : ''}`}
-                title={label}
-                aria-label={label}
-                aria-pressed={active}
-                onClick={() => handleReact(code)}
-              >
-                <span aria-hidden="true">{emoji}</span>
-                {count > 0 && <span className="post-card__reaction-count">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
+        <ReactionPicker reactionsSummary={reactionsSummary} myReaction={myReaction} onReact={handleReact} onRemove={handleRemoveReaction} />
         <button type="button" className="post-card__action" onClick={() => setCommentsOpen((v) => !v)}>
           💬 {post.commentsCount}
         </button>
@@ -527,25 +521,14 @@ function CommentsSection({ postId }: { postId: string }) {
       ) : (
         <ul className="comments__list">
           {comments.map((c) => (
-            <li key={c.id} className="comments__item">
-              <Avatar name={c.user.name} avatarType={c.user.avatarType} avatarUrl={c.user.avatarUrl} userId={c.user.id} size={28} />
-              <div style={{ flex: 1 }}>
-                <span className="comments__author">{c.user.name}</span>
-                <p className="comments__text">{c.content}</p>
-              </div>
-              {(c.user.id === user?.id || isAdmin) && (
-                <button
-                  type="button"
-                  className="post-card__delete"
-                  aria-label="Excluir comentário"
-                  title="Excluir comentário"
-                  disabled={deletingId === c.id}
-                  onClick={() => handleDeleteComment(c.id)}
-                >
-                  🗑️
-                </button>
-              )}
-            </li>
+            <CommentItem
+              key={c.id}
+              postId={postId}
+              comment={c}
+              canDelete={c.user.id === user?.id || isAdmin}
+              deleting={deletingId === c.id}
+              onDelete={() => handleDeleteComment(c.id)}
+            />
           ))}
           {comments.length === 0 && <li className="comments__empty">Nenhum comentário ainda.</li>}
         </ul>
@@ -563,6 +546,81 @@ function CommentsSection({ postId }: { postId: string }) {
         </button>
       </form>
     </div>
+  );
+}
+
+function CommentItem({
+  postId,
+  comment,
+  canDelete,
+  deleting,
+  onDelete,
+}: {
+  postId: string;
+  comment: Comment;
+  canDelete: boolean;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  const { showToast } = useToast();
+  const [myReaction, setMyReaction] = useState(comment.myReaction);
+  const [reactionsSummary, setReactionsSummary] = useState(comment.reactionsSummary);
+
+  async function handleReact(emoji: ReactionEmojiCode) {
+    const previousReaction = myReaction;
+    const previousSummary = reactionsSummary;
+
+    setMyReaction(emoji);
+    setReactionsSummary(applyReactionLocally(previousSummary, previousReaction, emoji));
+
+    try {
+      await api.post(`/posts/${postId}/comments/${comment.id}/reactions`, { emoji });
+    } catch {
+      setMyReaction(previousReaction);
+      setReactionsSummary(previousSummary);
+      showToast('Não foi possível registrar sua reação.', 'error');
+    }
+  }
+
+  async function handleRemoveReaction() {
+    const previousReaction = myReaction;
+    const previousSummary = reactionsSummary;
+
+    setMyReaction(null);
+    setReactionsSummary(applyReactionLocally(previousSummary, previousReaction, null));
+
+    try {
+      await api.delete(`/posts/${postId}/comments/${comment.id}/reactions`);
+    } catch {
+      setMyReaction(previousReaction);
+      setReactionsSummary(previousSummary);
+      showToast('Não foi possível remover sua reação.', 'error');
+    }
+  }
+
+  return (
+    <li className="comments__item">
+      <Avatar name={comment.user.name} avatarType={comment.user.avatarType} avatarUrl={comment.user.avatarUrl} userId={comment.user.id} size={28} />
+      <div style={{ flex: 1 }}>
+        <span className="comments__author">{comment.user.name}</span>
+        <p className="comments__text">{comment.content}</p>
+        <div className="comments__reactions">
+          <ReactionPicker reactionsSummary={reactionsSummary} myReaction={myReaction} onReact={handleReact} onRemove={handleRemoveReaction} />
+        </div>
+      </div>
+      {canDelete && (
+        <button
+          type="button"
+          className="post-card__delete"
+          aria-label="Excluir comentário"
+          title="Excluir comentário"
+          disabled={deleting}
+          onClick={onDelete}
+        >
+          🗑️
+        </button>
+      )}
+    </li>
   );
 }
 

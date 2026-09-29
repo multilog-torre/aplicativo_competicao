@@ -57,4 +57,12 @@ router.get(
 );
 router.delete('/:id/comments/:commentId', asyncHandler(CommentController.delete));
 
+// 4. Reações em comentários (emoji)
+router.post(
+  '/:id/comments/:commentId/reactions',
+  validateRequest({ body: SetReactionSchema }),
+  asyncHandler(CommentController.setReaction),
+);
+router.delete('/:id/comments/:commentId/reactions', asyncHandler(CommentController.removeReaction));
+
 export { router as postRoutes };

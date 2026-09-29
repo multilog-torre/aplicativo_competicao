@@ -213,7 +213,8 @@ export interface DashboardData {
   motivationalMessage: string;
 }
 
-export type ReactionEmojiCode = 'THUMBS_UP' | 'HEART' | 'CLAP' | 'FIRE' | 'PARTY';
+/** Qualquer emoji do Unicode (validado no backend com emoji-regex) — antes era um conjunto fixo de 5. */
+export type ReactionEmojiCode = string;
 
 export interface PostActivityInfo {
   modality: string;
@@ -242,9 +243,13 @@ export interface Post {
 
 export interface Comment {
   id: string;
+  postId: string;
   content: string;
   createdAt: string;
   user: { id: string; name: string; avatarType: string; avatarUrl: string | null };
+  reactionsCount: number;
+  reactionsSummary: { emoji: string; count: number }[];
+  myReaction: string | null;
 }
 
 export interface AdminUser {

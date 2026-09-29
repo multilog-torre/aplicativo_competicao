@@ -280,6 +280,7 @@ export class AdminUserService {
             posts: true,
             comments: true,
             postReactions: true,
+            commentReactions: true,
             notifications: true,
             auditLogs: true,
           },

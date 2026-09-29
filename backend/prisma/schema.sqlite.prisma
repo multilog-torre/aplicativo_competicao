@@ -64,6 +64,7 @@ model User {
   posts               Post[]
   comments            Comment[]
   postReactions       PostReaction[]
+  commentReactions    CommentReaction[]
   notifications       Notification[]
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
@@ -570,8 +571,9 @@ model Comment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions CommentReaction[]
 
   @@map("comments")
 }
@@ -580,8 +582,8 @@ model PostReaction {
   id        String   @id @default(uuid())
   postId    String   @map("post_id")
   userId    String   @map("user_id")
-  // Conjunto fixo, validado no backend (post.dto.ts) — não é emoji livre, pra
-  // manter a contagem/agrupamento por tipo previsível na UI.
+  // Qualquer emoji do Unicode (validado com emoji-regex no backend, ver
+  // post.dto.ts) — antes era um conjunto fixo de 5, aberto a pedido do usuário.
   emoji     String
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -591,6 +593,22 @@ model PostReaction {
   // 1 reação por pessoa/post — trocar de emoji é um update, não um novo registro.
   @@unique([postId, userId])
   @@map("post_reactions")
+}
+
+model CommentReaction {
+  id        String   @id @default(uuid())
+  commentId String   @map("comment_id")
+  userId    String   @map("user_id")
+  // Mesma regra de PostReaction: qualquer emoji, validado com emoji-regex.
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 1 reação por pessoa/comentário — trocar de emoji é um update.
+  @@unique([commentId, userId])
+  @@map("comment_reactions")
 }
 
 // -------------------------------------------------------------

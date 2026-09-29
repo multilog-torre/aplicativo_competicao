@@ -1403,13 +1403,18 @@ textarea {
   gap: 4px;
 }
 
-.post-card__reactions {
+/* ============================================================
+   ReactionPicker — barra de reações reutilizada por post e comentário
+   ============================================================ */
+.reaction-picker {
+  position: relative;
   display: flex;
+  align-items: center;
   gap: 4px;
   flex-wrap: wrap;
 }
 
-.post-card__reaction {
+.reaction-picker__chip {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full, 999px);
@@ -1423,20 +1428,64 @@ textarea {
   transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.post-card__reaction:hover {
+.reaction-picker__chip:hover {
   transform: translateY(-1px);
   border-color: var(--color-accent);
 }
 
-.post-card__reaction--active {
+.reaction-picker__chip--active {
   background: var(--color-accent-bg);
   border-color: var(--color-accent);
 }
 
-.post-card__reaction-count {
+.reaction-picker__chip-count {
   font-size: 0.76rem;
   font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.reaction-picker__add {
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-full, 999px);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.reaction-picker__add:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.reaction-picker__add-plus {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.reaction-picker__popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 150;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.reaction-picker__popover-loading {
+  width: 300px;
+  height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
 }
 
 .comments {
@@ -1457,6 +1506,10 @@ textarea {
 .comments__item {
   display: flex;
   gap: 8px;
+}
+
+.comments__reactions {
+  margin-top: 6px;
 }
 
 .comments__author {

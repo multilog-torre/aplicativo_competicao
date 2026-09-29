@@ -1,14 +1,11 @@
 import { prisma } from '../../config/database';
 import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { NotificationService } from '../notifications/notification.service';
+import { IMAGE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
 import { PostService } from '../posts/post.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { getStorageProvider } from '../storage/storage.factory';
 import { ListPendingActivitiesQueryDTO, RejectActivityDTO } from './admin-activity.dto';
-
-// Mesmo conjunto aceito como foto de post manual (post.service.ts) — evidências em
-// outros formatos (PDF, vídeo etc.) não viram foto no card do Mural, só o post em si.
-const IMAGE_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
 export class AdminActivityService {
   /**
