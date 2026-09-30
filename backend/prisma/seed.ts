@@ -271,9 +271,21 @@ async function main() {
       category: 'SPORTS',
       icon: 'activity',
       description: 'Realização de algum esporte (ex: luta, volêi, futebol',
-      rulesDescription: '30 pontos por cada realização de esportes',
-      scoringType: 'FIXED',
-      basePoints: 30,
+      // 4ª rodada de recalibragem (a pedido do usuário): de FIXED (30 pts
+      // fixos por realização, sem duração definida) pra MULTIPLIER por
+      // minuto — mesmo raciocínio de Academia/Meditação. Taxa própria
+      // (0,7 pt/min = 42 pts/h), entre a de Academia (0,6/min, MET 3-6) e
+      // Corrida (equivalente a 54 pts/h, MET 8-10): "Esportes" é um
+      // guarda-chuva largo (vôlei recreativo MET 4, futebol MET 7, luta
+      // MET 10,3 — Compendium of Physical Activities), então a taxa é
+      // necessariamente uma média entre intensidades bem diferentes, não
+      // um valor preciso por esporte específico como as modalidades
+      // individuais (Corrida/Caminhada/Ciclismo) conseguem ter.
+      rulesDescription: '0,7 ponto por minuto de prática esportiva (42 pts/hora) — registre a duração da sessão/partida',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'minuto',
+      multiplier: 0.7,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png,pdf',
     },

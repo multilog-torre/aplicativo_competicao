@@ -41,7 +41,7 @@ A pedido do usuário, todas as modalidades foram recalibradas numa régua comum 
 | Modalidade | `scoringType` | Valor | pts/hora |
 |---|---|---|---|
 | **Academia & Musculação** | MULTIPLIER | **0,6 pt/minuto** | 36 |
-| Esportes | FIXED | 30 pts/realização | ~24 |
+| **Esportes** | MULTIPLIER | **0,7 pt/minuto** | 42 |
 | **Meditação & Mindfulness** | MULTIPLIER | **0,4 pt/minuto** | 24 |
 | Corrida de Rua/Esteira | QUANTITY | 6 pts/km | ~54 (a 9km/h) |
 | Ciclismo | QUANTITY | 3 pts/km | ~54 (a 18km/h) |
@@ -58,9 +58,19 @@ Curso e Eventos/Palestras deixaram de ser um valor fixo por registro (que tratav
 - **Meditação cai pra 0,4 pt/minuto (24 pts/hora)** — mais BAIXA que o valor fixo anterior (12 pts/sessão ≈ 48 pts/h no mínimo de 15 min). Decisão deliberada: meditação não exige equipamento, local específico nem evidência forte de verificar duração real — é o "alvo mais fácil" pra registro de má-fé (ex.: alguém alegando minutos que não praticou). Mantê-la na taxa mais baixa do sistema, com `dailyLimit` preservado (2 registros/dia, nunca removido mesmo com a conversão), reduz esse incentivo.
   - Vale notar que a pesquisa em mindfulness **não sustenta** recompensa linear por duração do jeito que sustenta pra exercício físico: [sessões de 5 minutos já trazem benefício real](https://www.mindful.org/5-minutes-of-mindfulness-brings-real-benefits-according-to-science/), e um estudo achou que [4 sessões de 5min geraram MAIS redução de estresse que 4 sessões de 20min](https://www.nature.com/articles/s41598-023-46578-y) — frequência prediz adesão de longo prazo melhor que duração. Ainda assim, a pontuação por minuto foi implementada a pedido do usuário; a ressalva é só sobre o que a ciência diretamente sustenta.
 
+**4ª rodada (Esportes convertida pra por-minuto, a pedido do usuário)**: de FIXED (30 pts fixos por realização, sem duração definida documentada) pra MULTIPLIER a **0,7 pt/minuto (42 pts/hora)** — entre Academia (0,6/min) e a faixa de Corrida/Ciclismo (~54 pts/h equivalente). "Esportes" é um guarda-chuva largo (vôlei recreativo, futebol, luta), e o MET de cada um varia muito mais do que nas outras modalidades: vôlei recreativo = 4 MET, futebol = 7 MET, luta/boxe = 10,3 MET ([Compendium of Physical Activities](https://pacompendium.com/sports/)) — quase 2,5x de diferença entre o esporte mais leve e o mais intenso cobertos pela mesma modalidade. A taxa escolhida é necessariamente uma média entre essas intensidades, não uma taxa precisa por esporte específico como Corrida/Caminhada/Ciclismo conseguem ter (cada uma é 1 atividade só, com 1 MET só).
+
 Essa recalibragem também obrigou a recalcular os limiares de nível (ver [niveis.md](./niveis.md)) — o teto de pontos atingível num ciclo caiu bastante ao cortar o valor fixo alto de Eventos/Palestras, então os 5 níveis foram redistribuídos por simulação de perfis de participante (sedentário a extremo) ao longo de um ciclo de ~3 meses.
 
 Esse cálculo roda **só no backend** — o frontend nunca envia `points`, apenas `activityTypeId` + `quantity`. Existe um endpoint de simulação (`POST /scoring/simulate`) que devolve o cálculo e o *breakdown* em texto sem criar nada, usado pela tela de registro para mostrar uma prévia antes de confirmar.
+
+### Arredondamento (`Math.round`) — por que existe e por que não foi removido
+
+`calculatedPoints`, cada linha do ledger (`PointsTransaction.points`) e os totais (`totalPoints`/`lifetimePoints`) são `Int` no banco — pontuação inteira é uma decisão de design deliberada, não um acidente (nenhum programa de pontos/gamificação real mostra "134,7 pontos" pra ninguém). Como `quantidade × taxa` quase sempre gera uma fração (ex.: 6,3km × 6 pts/km = 37,8), o resultado final sempre passa por `Math.round()` antes de virar um `Int`.
+
+**Por que `round` e não `floor`/`ceil`**: das três estratégias possíveis, `floor` sempre desfavorece a pessoa (perde até quase 1 ponto em toda atividade, sistematicamente), `ceil` sempre infla o placar (favorece sistematicamente), e `round` é a única sem viés — às vezes ganha uma fração, às vezes perde, e estatisticamente se cancela ao longo de várias atividades. O desvio máximo possível é de **±0,5 ponto por atividade** (só no caso exato de cair em X,5), irrelevante frente a limiares de nível na faixa de centenas/milhares de pontos.
+
+**Decisão do usuário (confirmada)**: manter como está. As duas alternativas reais pra eliminar o arredondamento de vez — (1) migrar todo o sistema de pontos pra decimal (schema, ledger, limiares de nível, tudo) ou (2) guardar o resto fracionário de cada cálculo e somar na próxima atividade da pessoa — foram avaliadas e descartadas por desproporção: a complexidade de qualquer uma das duas é grande demais pra resolver uma margem de ±0,5 ponto que já não tem viés sistemático.
 
 ## Não existe pontuação por criar conta
 
