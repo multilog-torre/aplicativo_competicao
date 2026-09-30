@@ -5,6 +5,7 @@ import { Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Avatar, emojiForIcon } from '../components/ui/Badge';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
+import { ImageLightbox } from '../components/ui/ImageLightbox';
 import { ReactionPicker, ReactionSummaryItem } from '../components/ui/ReactionPicker';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -225,6 +226,7 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [reactionsSummary, setReactionsSummary] = useState(post.reactionsSummary);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [moderateAction, setModerateAction] = useState<'HIDE' | 'MODERATE' | null>(null);
@@ -347,8 +349,18 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
 
       {post.hasImage && (
         <div className="post-card__image-wrap">
-          {imageLoading ? <LoadingState label="Carregando foto…" /> : imageUrl ? <img src={imageUrl} alt="Foto da publicação" className="post-card__image" /> : null}
+          {imageLoading ? (
+            <LoadingState label="Carregando foto…" />
+          ) : imageUrl ? (
+            <button type="button" className="post-card__image-button" onClick={() => setLightboxOpen(true)} aria-label="Ver foto em tamanho grande">
+              <img src={imageUrl} alt="Foto da publicação" className="post-card__image" />
+            </button>
+          ) : null}
         </div>
+      )}
+
+      {lightboxOpen && imageUrl && (
+        <ImageLightbox src={imageUrl} alt="Foto da publicação" onClose={() => setLightboxOpen(false)} />
       )}
 
       <footer className="post-card__footer">
