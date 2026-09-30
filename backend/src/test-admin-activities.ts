@@ -120,10 +120,16 @@ async function main() {
     (await reqJson('POST', '/auth/login', { email: 'renan@empresa.com', password: 'user123' })).data as LoginBody
   )?.data?.user?.totalPoints ?? 0;
 
+  // Data 3 dias no passado (não hoje) — de propósito, pra testar que o post
+  // automático no Mural mostra a DATA DA ATIVIDADE escolhida no registro,
+  // não a data de hoje em que o post foi criado/aprovado (bug relatado
+  // pelo usuário: uma atividade registrada com atraso aparecia no Mural
+  // como se tivesse acontecido na hora da postagem).
+  const pastActivityDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
   const createRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: noEvidenceType.id, activityDate: new Date().toISOString(), quantity: 1 },
+    { activityTypeId: noEvidenceType.id, activityDate: pastActivityDate, quantity: 1 },
     participantToken,
   );
   type ActivityBody = { data?: { id?: string; calculatedPoints?: number } };
@@ -173,10 +179,15 @@ async function main() {
   assert('Post automático não tem foto (atividade sem evidência)', dbAutoPost?.imageUrl === null);
 
   const autoPostFeedRes = await reqJson('GET', '/posts', undefined, participantToken);
-  type FeedBody = { data?: Array<{ id: string; activity?: { modality?: string; points?: number } | null }> };
+  type FeedBody = { data?: Array<{ id: string; activity?: { modality?: string; points?: number; activityDate?: string } | null }> };
   const autoPostInFeed = ((autoPostFeedRes.data as FeedBody)?.data ?? []).find((p) => p.id === dbAutoPost?.id);
   assert('Post automático aparece no feed do Mural geral', !!autoPostInFeed);
   assert('Post automático expõe modalidade e pontos da atividade', autoPostInFeed?.activity?.points === activity?.calculatedPoints);
+  assert(
+    'Post automático mostra a DATA DA ATIVIDADE escolhida no registro (3 dias atrás), não a data de hoje em que foi postado',
+    !!autoPostInFeed?.activity?.activityDate &&
+      new Date(autoPostInFeed.activity.activityDate).toDateString() === new Date(pastActivityDate).toDateString(),
+  );
 
   // ── PASSO 7: Aprovar novamente é bloqueado ────────────────────────────────────
   console.log('\n4️⃣ Testando bloqueio de dupla aprovação...');

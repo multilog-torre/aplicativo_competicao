@@ -301,7 +301,11 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
         <Avatar name={post.user.name} avatarType={post.user.avatarType} avatarUrl={post.user.avatarUrl} userId={post.user.id} />
         <div>
           <div className="post-card__author">{post.user.name}</div>
-          <time className="post-card__date">{new Date(post.createdAt).toLocaleString('pt-BR')}</time>
+          <time className="post-card__date">
+            {post.activity
+              ? new Date(post.activity.activityDate).toLocaleDateString('pt-BR')
+              : new Date(post.createdAt).toLocaleString('pt-BR')}
+          </time>
         </div>
         {post.status !== 'PUBLISHED' && (
           <span className="badge badge--warning">{MODERATION_STATUS_LABELS[post.status] ?? post.status}</span>

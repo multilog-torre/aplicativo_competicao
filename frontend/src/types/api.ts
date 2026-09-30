@@ -222,6 +222,11 @@ export interface PostActivityInfo {
   quantity: number;
   unit: string | null;
   points: number;
+  /** Data que a pessoa escolheu ao registrar a atividade (só data, sem
+   * horário — o formulário de registro não tem campo de hora) — usada no
+   * Mural em vez de createdAt, pra não parecer que a atividade aconteceu
+   * na hora em que o post foi publicado/aprovado. */
+  activityDate: string;
 }
 
 export interface Post {
