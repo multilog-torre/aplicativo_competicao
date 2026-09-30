@@ -111,8 +111,8 @@ async function main() {
   const createdActivity = (createRes.data as ActivityBody)?.data;
   assert('Status inicial é PENDING', createdActivity?.status === 'PENDING');
   assert(
-    `Pontos calculados corretamente (esperado 40, obtido ${createdActivity?.calculatedPoints})`,
-    createdActivity?.calculatedPoints === 40,
+    `Pontos calculados corretamente (esperado 30, obtido ${createdActivity?.calculatedPoints})`,
+    createdActivity?.calculatedPoints === 30,
   );
   const activityId = createdActivity?.id ?? '';
 

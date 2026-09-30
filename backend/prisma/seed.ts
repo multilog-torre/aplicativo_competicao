@@ -80,16 +80,27 @@ async function main() {
 
   // 4. Níveis de Gamificação
   // Faixas recalibradas para o ciclo de premiação de 3 meses (totalPoints
-  // zera a cada fechamento de ciclo — ver ciclos.md): o nível máximo
-  // (Campeão, 5.500 pts) foi pensado pra ser alcançável só perto do fim do
-  // ciclo por alguém muito engajado (atividade quase diária, múltiplas
-  // modalidades), não nas primeiras semanas.
+  // zera a cada fechamento de ciclo — ver ciclos.md), 2ª rodada de ajuste:
+  // a 1ª calibragem (0/700/1.800/3.200/5.500) foi feita ANTES da
+  // recalibragem de pontos por modalidade abaixo — quando as modalidades
+  // de alto valor fixo (Eventos/Palestras, Curso) foram recalculadas por
+  // hora/minuto em vez de valor fixo desproporcional, o teto de pontos
+  // atingível num ciclo caiu, e Campeão (5.500) deixou de ser alcançável
+  // mesmo por quem tem o engajamento mais extremo simulado (~4.650-5.000
+  // pts). Estas novas faixas foram calibradas simulando ~9 perfis de
+  // participante (sedentário, leitor, ativo moderado, atleta dedicado,
+  // engajamento excepcional, extremo) ao longo de 13 semanas: Explorador
+  // pro primeiro engajamento consistente, Competidor pra rotina dedicada
+  // de verdade, Destaque pro engajamento excepcional/multi-modalidade, e
+  // Campeão só alcançável pelo perfil extremo (quase diário, todas as
+  // modalidades) — pensado pra ser raro, não pra maioria dos participantes
+  // engajados.
   const levels = [
     { levelNumber: 1, name: 'Iniciante', minPoints: 0, badgeIcon: 'compass', description: 'Primeiros passos na competição' },
-    { levelNumber: 2, name: 'Explorador', minPoints: 700, badgeIcon: 'map-pin', description: 'Consistência inicial demonstrada' },
-    { levelNumber: 3, name: 'Competidor', minPoints: 1800, badgeIcon: 'flame', description: 'Presença constante nos rankings' },
-    { levelNumber: 4, name: 'Destaque', minPoints: 3200, badgeIcon: 'star', description: 'Inspiração e alto engajamento' },
-    { levelNumber: 5, name: 'Campeão', minPoints: 5500, badgeIcon: 'crown', description: 'Elite máxima da corporação' },
+    { levelNumber: 2, name: 'Explorador', minPoints: 600, badgeIcon: 'map-pin', description: 'Consistência inicial demonstrada' },
+    { levelNumber: 3, name: 'Competidor', minPoints: 1700, badgeIcon: 'flame', description: 'Presença constante nos rankings' },
+    { levelNumber: 4, name: 'Destaque', minPoints: 2850, badgeIcon: 'star', description: 'Inspiração e alto engajamento' },
+    { levelNumber: 5, name: 'Campeão', minPoints: 4500, badgeIcon: 'crown', description: 'Elite máxima da corporação' },
   ];
 
   const createdLevels: Record<number, string> = {};
@@ -107,10 +118,31 @@ async function main() {
   // Corrida/Caminhada/Ciclismo (pts/km) recalibrados por esforço físico
   // real (base MET ÷ velocidade média de cada modalidade), não só por
   // percepção: pedalar exige menos esforço por km do que correr ou
-  // caminhar, então deixou de valer o mesmo que Caminhada. Corrida também
-  // caiu (de 10 para 8) porque, por km, correr não exige muito mais
-  // esforço fisiológico do que caminhar — só percorre a distância mais
-  // rápido, o que já a beneficia sozinho (mais km no mesmo tempo).
+  // caminhar, então deixou de valer o mesmo que Caminhada.
+  //
+  // 2ª rodada de recalibragem (a pedido do usuário, análise em
+  // docs/sistema/pontuacao.md): convertida pra "pontos por hora de esforço
+  // equivalente" como régua comum entre TODAS as modalidades, não só as
+  // cardio. Academia (20 pts/sessão ≈ 50min ≈ 24 pts/h) foi usada como
+  // âncora — o resto foi ajustado pra ficar na mesma faixa:
+  // - Corrida caiu de 8→6 pts/km (ainda a mais valiosa por hora entre as
+  //   cardio, mas menos desproporcional que antes).
+  // - Caminhada caiu de 5→4 pts/km.
+  // - Ciclismo ficou em 3 pts/km (já estava bem calibrado, ~54 pts/h a
+  //   18km/h).
+  // - Meditação subiu de 15→12... [ver nota abaixo — valor real em
+  //   produção antes desta mudança era 10, editado via Admin UI depois do
+  //   seed original; 12 é o valor final acordado].
+  // - Leitura triplicou de 0,1→0,3 pt/página — era a mais subvalorizada de
+  //   todas (~3 pts/h vs 20-50+ pts/h do resto).
+  // - Curso e Eventos/Palestras (que não existiam no seed original — foram
+  //   criadas depois via Admin UI com 100-150 e 250 pts FIXOS) deixaram de
+  //   ser um valor fixo desproporcional (uma palestra de 2h valendo mais
+  //   que 3 meses de academia) e passaram a ser por MINUTO, mesma taxa de
+  //   0,4 pt/min (=24 pts/h, mesma âncora da Academia) — precedente real
+  //   disso é o modelo de crédito profissional PMI PDU/CEU (1h = 1
+  //   unidade, proporcional linear, sem degrau artificial entre uma
+  //   sessão de 30min e uma de 45min).
   const modalities = [
     {
       name: 'Academia & Musculação',
@@ -130,11 +162,11 @@ async function main() {
       category: 'SPORTS',
       icon: 'run',
       description: 'Corrida ao ar livre ou em esteira',
-      rulesDescription: '8 pontos para cada 1 km percorrido (comprovado via app Strava/Garmin/Smartwatch)',
+      rulesDescription: '6 pontos para cada 1 km percorrido (comprovado via app Strava/Garmin/Smartwatch)',
       scoringType: 'QUANTITY',
-      basePoints: 8,
+      basePoints: 6,
       unit: 'km',
-      multiplier: 8.0,
+      multiplier: 6.0,
       dailyLimit: 30,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png,pdf',
@@ -144,11 +176,11 @@ async function main() {
       category: 'SPORTS',
       icon: 'footprints',
       description: 'Caminhada contínua',
-      rulesDescription: '5 pontos para cada 1 km percorrido',
+      rulesDescription: '4 pontos para cada 1 km percorrido',
       scoringType: 'QUANTITY',
-      basePoints: 5,
+      basePoints: 4,
       unit: 'km',
-      multiplier: 5.0,
+      multiplier: 4.0,
       dailyLimit: 20,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png',
@@ -186,11 +218,11 @@ async function main() {
       // dailyLimit no sistema, ver atividades.md), não "5 páginas". Não
       // existe hoje um jeito de limitar a SOMA de páginas por dia — mesma
       // limitação que já existe pra km em Corrida/Caminhada/Ciclismo.
-      rulesDescription: '0,1 ponto por página lida (300 páginas ≈ 30 pontos) — registre o progresso a cada sessão de leitura',
+      rulesDescription: '0,3 ponto por página lida (300 páginas ≈ 90 pontos) — registre o progresso a cada sessão de leitura',
       scoringType: 'MULTIPLIER',
       basePoints: 1,
       unit: 'página',
-      multiplier: 0.1,
+      multiplier: 0.3,
       dailyLimit: 5,
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png,pdf,txt',
@@ -200,12 +232,59 @@ async function main() {
       category: 'HEALTH',
       icon: 'heart-pulse',
       description: 'Prática de atenção plena ou meditação guiada',
-      rulesDescription: '15 pontos por sessão de no mínimo 15 minutos',
+      rulesDescription: '12 pontos por sessão de no mínimo 15 minutos',
       scoringType: 'FIXED',
-      basePoints: 15,
+      basePoints: 12,
       unit: 'sessao',
       dailyLimit: 2,
       requiresEvidence: false,
+    },
+    {
+      name: 'Esportes',
+      category: 'SPORTS',
+      icon: 'activity',
+      description: 'Realização de algum esporte (ex: luta, volêi, futebol',
+      rulesDescription: '30 pontos por cada realização de esportes',
+      scoringType: 'FIXED',
+      basePoints: 30,
+      requiresEvidence: true,
+      allowedFileTypes: 'jpg,jpeg,png,pdf',
+    },
+    {
+      name: 'Curso',
+      category: 'EDUCATION',
+      icon: 'activity',
+      description: 'Cursos de especialização, aprendizagem, treinamento etc..',
+      // Por minuto (não mais fixo por conclusão) — 0,4 pt/min = 24 pts/h,
+      // mesma âncora de Academia. Precedente: crédito profissional PMI
+      // PDU/CEU (1h = 1 unidade, proporcional linear). A pessoa registra os
+      // minutos de uma sessão de estudo, ou o total de horas do curso de
+      // uma vez só ao concluir — os dois funcionam igual, sem limite diário.
+      rulesDescription: '0,4 ponto por minuto de curso (24 pts/hora) — registre os minutos estudados por sessão, ou a carga horária total ao concluir',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'minuto',
+      multiplier: 0.4,
+      requiresEvidence: true,
+      allowedFileTypes: 'jpg,jpeg,png,pdf',
+    },
+    {
+      name: 'Eventos/Palestras',
+      category: 'EDUCATION',
+      icon: 'activity',
+      description: 'Participação de eventos ou palestras relacionadas a área de atuação.',
+      // Mesmo modelo de Curso — mesma taxa (0,4 pt/min = 24 pts/h), mesma
+      // categoria de "desenvolvimento profissional por tempo investido".
+      // Antes era 250 pts fixos por participação, independente da duração
+      // — uma palestra de 2h valia mais que 3 meses de academia. Ver
+      // pontuacao.md pra análise completa da recalibragem.
+      rulesDescription: '0,4 ponto por minuto de participação (24 pts/hora) — registre a duração do evento/palestra',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'minuto',
+      multiplier: 0.4,
+      requiresEvidence: true,
+      allowedFileTypes: 'jpg,jpeg,png,pdf',
     },
   ];
 
@@ -256,8 +335,10 @@ async function main() {
     const isCumulative = (modality.scoringType === 'QUANTITY' || modality.scoringType === 'MULTIPLIER') && !!modality.unit;
     // Meta-base (bronze) por tipo de unidade — 10km faz sentido pra
     // corrida/caminhada/ciclismo, mas seria trivial demais para páginas
-    // (10 páginas = 2 minutos de leitura). 300 páginas ≈ 1 livro médio.
-    const baseTarget = !isCumulative ? 5 : modality.unit === 'página' ? 300 : 10;
+    // (10 páginas = 2 minutos de leitura) ou minutos (10min = quase nada
+    // de um curso/evento). 300 páginas ≈ 1 livro médio; 300 minutos = 5h,
+    // uma meta razoável de acúmulo pra Curso/Eventos-Palestras.
+    const baseTarget = !isCumulative ? 5 : modality.unit === 'página' || modality.unit === 'minuto' ? 300 : 10;
     const unitLabel = modality.unit ?? 'atividades';
 
     return (['BRONZE', 'PRATA', 'OURO'] as const).map((level) => {

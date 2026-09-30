@@ -14,27 +14,29 @@ Cadastro administrável (`ADMIN`/`ADMIN_MASTER`) que define **como uma atividade
 
 Excluir uma modalidade sem nenhuma atividade vinculada apaga de verdade; havendo histórico, vira soft-delete (`INACTIVE`).
 
-## Modalidades do seed e a recalibragem por esforço físico
+## Modalidades do seed e a recalibragem por hora de esforço equivalente
 
-Os valores abaixo refletem o seed atual (`backend/prisma/seed.ts`) — cada modalidade é livremente editável por um admin depois, então isto é o ponto de partida, não uma regra imutável.
+Os valores abaixo refletem o seed atual (`backend/prisma/seed.ts`) — cada modalidade é livremente editável por um admin depois, então isto é o ponto de partida, não uma regra imutável. Nenhuma modalidade tem `dailyLimit`/`weeklyLimit`/`monthlyLimit` configurado hoje (decisão deliberada do usuário — sem teto de registros por período).
 
-| Modalidade | `scoringType` | Taxa | `dailyLimit` (registros/dia) | Evidência |
+| Modalidade | Categoria | `scoringType` | Taxa | Evidência |
 |---|---|---|---|---|
-| Academia & Musculação | `FIXED` | 20 pts/sessão | 1 | Sim |
-| Corrida de Rua / Esteira | `QUANTITY` | 8 pts/km | 30 | Sim |
-| Caminhada | `QUANTITY` | 5 pts/km | 20 | Sim |
-| Ciclismo | `QUANTITY` | 3 pts/km | 80 | Sim |
-| Leitura de Livros | `MULTIPLIER` | 0,1 pt/página | 5 | Sim |
-| Meditação & Mindfulness | `FIXED` | 15 pts/sessão | 2 | Não |
+| Academia & Musculação | SPORTS | `FIXED` | 20 pts/sessão | Sim |
+| Corrida de Rua / Esteira | SPORTS | `QUANTITY` | 6 pts/km | Sim |
+| Caminhada | SPORTS | `QUANTITY` | 4 pts/km | Sim |
+| Ciclismo | SPORTS | `QUANTITY` | 3 pts/km | Sim |
+| Esportes (vôlei, luta, futebol...) | SPORTS | `FIXED` | 30 pts/realização | Sim |
+| Meditação & Mindfulness | HEALTH | `FIXED` | 12 pts/sessão | Não |
+| Leitura de Livros | EDUCATION | `MULTIPLIER` | 0,3 pt/página | Sim |
+| Curso | EDUCATION | `MULTIPLIER` | 0,4 pt/minuto | Sim |
+| Eventos/Palestras | EDUCATION | `MULTIPLIER` | 0,4 pt/minuto | Sim |
 
-Corrida/Caminhada/Ciclismo foram recalibradas por **esforço físico real**, não só por percepção: usando MET (Equivalente Metabólico, referência de educação física/saúde ocupacional) dividido pela velocidade média de cada modalidade como proxy de "esforço por km", ancorando Caminhada em 5 pts/km (valor já existente antes da recalibragem):
+A recalibragem (a pedido do usuário, análise completa em [pontuacao.md](./pontuacao.md)) converteu **todas** as modalidades pra uma régua comum de **pontos por hora de esforço/tempo equivalente**, usando Academia (~24 pts/hora) como âncora:
 
-- **Ciclismo caiu de 5 para 3 pts/km** — pedalar exige bem menos esforço por km do que caminhar ou correr (é a distorção original que motivou a recalibragem: antes, Ciclismo permitia mais pontos no teto diário do que Corrida, apesar de ser a modalidade mais fácil das três).
-- **Corrida caiu de 10 para 8 pts/km** — por km (não por minuto), correr não exige muito mais esforço fisiológico do que caminhar; a vantagem de quem corre já vem naturalmente de percorrer mais km no mesmo tempo, não precisa de uma taxa por km desproporcional.
+- Corrida/Caminhada/Ciclismo (pts/km) foram recalibradas por **esforço físico real** (MET ÷ velocidade média): Corrida caiu de 8→6 pts/km, Caminhada de 5→4 pts/km — Ciclismo (3 pts/km) já estava numa faixa razoável.
+- **Leitura de Livros triplicou** de 0,1→0,3 pt/página — era a modalidade mais subvalorizada do sistema (~3 pts/hora, uma fração de qualquer atividade física).
+- **Curso e Eventos/Palestras deixaram de valer um fixo desproporcional por registro** (100-250 pts, independente da duração real — uma palestra de 2h chegava a valer mais que 3 meses de academia) **e passaram a pontuar por minuto** (0,4 pt/min = 24 pts/hora, mesma âncora da Academia), com precedente no modelo de crédito profissional PMI PDU/CEU (1h = 1 unidade, proporcional linear). A pessoa registra os minutos de uma sessão, ou o total de uma vez ao concluir — funciona igual, sem mínimo artificial (uma sessão de 30 min vale exatamente a metade de uma de 60 min).
 
-**Leitura de Livros deixou de pontuar por livro concluído (`FIXED`, 30 pts fixos) e passou a pontuar por página lida** (`MULTIPLIER`, 0,1 pt/página — 300 páginas ≈ 30 pts, mantendo equivalência com o valor antigo para um livro médio), registrada de forma incremental por sessão (a pessoa registra o progresso conforme lê, não só quando termina o livro) — dá crédito por leitura parcial em livros longos e livros maiores naturalmente valem mais que livros curtos.
-
-`dailyLimit: 5` na Leitura é **5 registros de sessão de leitura por dia**, não "5 páginas" — mesma ressalva da nota sobre limites acima: não existe hoje uma forma de capar a *soma* de páginas (ou km) por dia, só a *contagem* de registros.
+Essa recalibragem também exigiu recalcular os 5 limiares de nível — ver [niveis.md](./niveis.md).
 
 ## Ciclo de vida de uma atividade registrada (`UserActivity`)
 

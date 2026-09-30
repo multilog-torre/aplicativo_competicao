@@ -27,10 +27,32 @@ Depende do `scoringType` configurado na modalidade ([atividades.md](./atividades
 
 | `scoringType` | Fórmula | Exemplo |
 |---|---|---|
-| `FIXED` | `basePoints`, sempre — a quantidade não interfere | 1 sessão de meditação = 20 pts, seja qual for a duração informada |
-| `QUANTITY` | `round(quantidade × basePoints)` | 7.5 km × 10 pts/km = 75 pts |
-| `TIME` | `round(quantidade × basePoints)` (quantidade em minutos) | 30 min × 1 pt/min = 30 pts |
-| `MULTIPLIER` | `round(quantidade × multiplier)` | 100 (passos) × 0.05 = 5 pts |
+| `FIXED` | `basePoints`, sempre — a quantidade não interfere | 1 sessão de meditação = 12 pts, seja qual for a duração informada |
+| `QUANTITY` | `round(quantidade × basePoints)` | 7.5 km de corrida × 6 pts/km = 45 pts |
+| `TIME` | `round(quantidade × basePoints)` (quantidade em minutos) — nenhuma modalidade usa hoje, ver nota abaixo | 30 min × 1 pt/min = 30 pts |
+| `MULTIPLIER` | `round(quantidade × multiplier)` — usado quando a taxa por unidade precisa ser decimal (`basePoints` é `Int`, `multiplier` é `Float`) | 30 minutos de curso × 0,4 = 12 pts |
+
+`TIME` existe no schema mas está **sem uso** — Curso e Eventos/Palestras, que são "por minuto", usam `MULTIPLIER` (não `TIME`) justamente porque a taxa (0,4 pt/min) é decimal e `TIME` também exigiria um `basePoints` inteiro. Ver "Recalibragem por hora de esforço equivalente" abaixo.
+
+## Recalibragem por hora de esforço equivalente (modalidades)
+
+A pedido do usuário, todas as modalidades foram recalibradas numa régua comum — **pontos por hora de esforço/tempo real investido** — usando Academia (20 pts/sessão ≈ 50min ≈ 24 pts/hora) como âncora. Antes, modalidades de valor fixo alto (Eventos/Palestras a 250 pts fixos, Curso a 100-150 pts fixos) rendiam de 5x a 50x mais por hora que qualquer atividade física, e Leitura (0,1 pt/página) rendia ~3 pts/hora — uma fração do resto.
+
+| Modalidade | `scoringType` | Valor | ≈ pts/hora |
+|---|---|---|---|
+| Academia & Musculação | FIXED | 20 pts/sessão | ~24 (âncora) |
+| Esportes | FIXED | 30 pts/realização | ~24 |
+| Meditação & Mindfulness | FIXED | 12 pts/sessão | ~36-48 |
+| Corrida de Rua/Esteira | QUANTITY | 6 pts/km | ~54 (a 9km/h) |
+| Ciclismo | QUANTITY | 3 pts/km | ~54 (a 18km/h) |
+| Caminhada | QUANTITY | 4 pts/km | ~20 (a 5km/h) |
+| Leitura de Livros | MULTIPLIER | 0,3 pt/página | ~9 |
+| **Curso** | MULTIPLIER | **0,4 pt/minuto** | 24 (fixo — é literalmente por hora) |
+| **Eventos/Palestras** | MULTIPLIER | **0,4 pt/minuto** | 24 (fixo — é literalmente por hora) |
+
+Curso e Eventos/Palestras deixaram de ser um valor fixo por registro (que tratava um evento de 30 minutos igual a um de 8 horas) e passaram a ser por **minuto** — precedente real: o modelo de crédito profissional PMI PDU/CEU (1 hora = 1 unidade de crédito, proporcional linear, sem degrau entre uma sessão de 30 e 45 minutos). A pessoa registra os minutos de uma sessão de estudo/participação, ou o total de uma vez ao concluir — as duas formas funcionam igual, e não há limite diário que impeça registros parciais.
+
+Essa recalibragem também obrigou a recalcular os limiares de nível (ver [niveis.md](./niveis.md)) — o teto de pontos atingível num ciclo caiu bastante ao cortar o valor fixo alto de Eventos/Palestras, então os 5 níveis foram redistribuídos por simulação de perfis de participante (sedentário a extremo) ao longo de um ciclo de ~3 meses.
 
 Esse cálculo roda **só no backend** — o frontend nunca envia `points`, apenas `activityTypeId` + `quantity`. Existe um endpoint de simulação (`POST /scoring/simulate`) que devolve o cálculo e o *breakdown* em texto sem criar nada, usado pela tela de registro para mostrar uma prévia antes de confirmar.
 
