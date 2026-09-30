@@ -16,25 +16,27 @@ Excluir uma modalidade sem nenhuma atividade vinculada apaga de verdade; havendo
 
 ## Modalidades do seed e a recalibragem por hora de esforço equivalente
 
-Os valores abaixo refletem o seed atual (`backend/prisma/seed.ts`) — cada modalidade é livremente editável por um admin depois, então isto é o ponto de partida, não uma regra imutável. Nenhuma modalidade tem `dailyLimit`/`weeklyLimit`/`monthlyLimit` configurado hoje (decisão deliberada do usuário — sem teto de registros por período).
+Os valores abaixo refletem o seed atual (`backend/prisma/seed.ts`) — cada modalidade é livremente editável por um admin depois, então isto é o ponto de partida, não uma regra imutável. O seed define `dailyLimit` pra Corrida (30), Caminhada (20), Ciclismo (80), Leitura (5), Meditação (2) e Academia (1) — contagem de **registros**/dia, não soma de km/páginas/minutos (ver nota abaixo). Nenhuma modalidade tem `weeklyLimit`/`monthlyLimit`. **Em produção**, porém, todos os `dailyLimit` estão `null` hoje (editados manualmente via Admin > Modalidades, independente do seed) — decisão deliberada do usuário de não ter teto de registros por período; este código nunca reaplica os limites do seed sobre um banco já existente.
 
 | Modalidade | Categoria | `scoringType` | Taxa | Evidência |
 |---|---|---|---|---|
-| Academia & Musculação | SPORTS | `FIXED` | 20 pts/sessão | Sim |
+| Academia & Musculação | SPORTS | `MULTIPLIER` | 0,6 pt/minuto | Sim |
 | Corrida de Rua / Esteira | SPORTS | `QUANTITY` | 6 pts/km | Sim |
 | Caminhada | SPORTS | `QUANTITY` | 4 pts/km | Sim |
 | Ciclismo | SPORTS | `QUANTITY` | 3 pts/km | Sim |
 | Esportes (vôlei, luta, futebol...) | SPORTS | `FIXED` | 30 pts/realização | Sim |
-| Meditação & Mindfulness | HEALTH | `FIXED` | 12 pts/sessão | Não |
+| Meditação & Mindfulness | HEALTH | `MULTIPLIER` | 0,4 pt/minuto | Não |
 | Leitura de Livros | EDUCATION | `MULTIPLIER` | 0,3 pt/página | Sim |
 | Curso | EDUCATION | `MULTIPLIER` | 0,4 pt/minuto | Sim |
 | Eventos/Palestras | EDUCATION | `MULTIPLIER` | 0,4 pt/minuto | Sim |
 
-A recalibragem (a pedido do usuário, análise completa em [pontuacao.md](./pontuacao.md)) converteu **todas** as modalidades pra uma régua comum de **pontos por hora de esforço/tempo equivalente**, usando Academia (~24 pts/hora) como âncora:
+A recalibragem (a pedido do usuário, análise completa em [pontuacao.md](./pontuacao.md)) converteu as modalidades pra uma régua comum de **pontos por hora de esforço/tempo equivalente**:
 
 - Corrida/Caminhada/Ciclismo (pts/km) foram recalibradas por **esforço físico real** (MET ÷ velocidade média): Corrida caiu de 8→6 pts/km, Caminhada de 5→4 pts/km — Ciclismo (3 pts/km) já estava numa faixa razoável.
 - **Leitura de Livros triplicou** de 0,1→0,3 pt/página — era a modalidade mais subvalorizada do sistema (~3 pts/hora, uma fração de qualquer atividade física).
-- **Curso e Eventos/Palestras deixaram de valer um fixo desproporcional por registro** (100-250 pts, independente da duração real — uma palestra de 2h chegava a valer mais que 3 meses de academia) **e passaram a pontuar por minuto** (0,4 pt/min = 24 pts/hora, mesma âncora da Academia), com precedente no modelo de crédito profissional PMI PDU/CEU (1h = 1 unidade, proporcional linear). A pessoa registra os minutos de uma sessão, ou o total de uma vez ao concluir — funciona igual, sem mínimo artificial (uma sessão de 30 min vale exatamente a metade de uma de 60 min).
+- **Curso e Eventos/Palestras deixaram de valer um fixo desproporcional por registro** (100-250 pts, independente da duração real — uma palestra de 2h chegava a valer mais que 3 meses de academia) **e passaram a pontuar por minuto** (0,4 pt/min = 24 pts/hora), com precedente no modelo de crédito profissional PMI PDU/CEU (1h = 1 unidade, proporcional linear).
+- **Academia e Meditação também passaram a pontuar por minuto** (3ª rodada), mas com taxas PRÓPRIAS (não a universal de 0,4): Academia sobe pra **0,6 pt/min (36 pts/h)**, reconhecendo o esforço físico de força/peso; Meditação cai pra **0,4 pt/min (24 pts/h)**, deliberadamente mais baixa que o valor fixo anterior — é a modalidade com menor barreira de verificação (sem equipamento, local ou evidência forte de duração), então uma taxa mais baixa reduz o incentivo a registro de má-fé. `dailyLimit: 2` da Meditação foi preservado por esse mesmo motivo (ver pontuacao.md pra citação das pesquisas sobre duração vs. frequência em mindfulness).
+- Em todos os casos "por minuto", a pessoa registra os minutos de uma sessão, ou o total de uma vez ao concluir — funciona igual, sem mínimo artificial (uma sessão de 30 min vale exatamente a metade de uma de 60 min).
 
 Essa recalibragem também exigiu recalcular os 5 limiares de nível — ver [niveis.md](./niveis.md).
 

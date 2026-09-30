@@ -204,7 +204,7 @@ async function main() {
   const createActivityRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: new Date().toISOString(), quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: new Date().toISOString(), quantity: 20 },
     participantToken,
   );
   type ActivityBody = { data?: { id?: string; calculatedPoints?: number } };
@@ -243,7 +243,7 @@ async function main() {
   const createActivity2Res = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: new Date().toISOString(), quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: new Date().toISOString(), quantity: 20 },
     participantToken,
   );
   const activity2 = (createActivity2Res.data as ActivityBody)?.data;

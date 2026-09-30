@@ -143,17 +143,38 @@ async function main() {
   //   disso é o modelo de crédito profissional PMI PDU/CEU (1h = 1
   //   unidade, proporcional linear, sem degrau artificial entre uma
   //   sessão de 30min e uma de 45min).
+  //
+  // 3ª rodada (a pedido do usuário): Academia e Meditação também
+  // converteram de FIXED (valor único por sessão, ignorando a duração
+  // real) pra MULTIPLIER por minuto — mesmo raciocínio de Curso/Eventos,
+  // mas com taxas PRÓPRIAS, não a universal de 0,4:
+  // - Academia: 0,6 pt/min (36 pts/h) — mais alta que a âncora universal
+  //   de propósito, a pedido do usuário, reconhecendo o esforço físico
+  //   de força/peso (MET de musculação: 3-6, RESEARCH: Compendium of
+  //   Physical Activities — mesma faixa de intensidade de cardio leve a
+  //   moderado, mas o usuário optou por valorizar mais que isso).
+  // - Meditação: 0,4 pt/min (24 pts/h) — mais BAIXA que o valor fixo
+  //   anterior (12 pts/sessão ≈ 48 pts/h no mínimo de 15min), decisão
+  //   deliberada do usuário: meditação não exige equipamento/local/
+  //   evidência forte de verificar, então é o "alvo mais fácil" pra
+  //   registro de má-fé — mantê-la na taxa universal (mais baixa que
+  //   Academia) reduz esse incentivo. A pesquisa também mostra que
+  //   duração não é o fator que mais importa em meditação (sessões
+  //   curtas e frequentes podem ser tão ou mais eficazes que longas —
+  //   ver pontuacao.md), então não há razão forte pra premiar duração
+  //   longa com uma taxa alta aqui.
   const modalities = [
     {
       name: 'Academia & Musculação',
       category: 'SPORTS',
       icon: 'dumbbell',
       description: 'Treino de musculação ou funcional',
-      rulesDescription: '1 sessão de treino no dia com duração mínima de 40 min',
-      scoringType: 'FIXED',
-      basePoints: 20,
-      unit: 'treino',
-      dailyLimit: 1,
+      rulesDescription: '0,6 ponto por minuto de treino (36 pts/hora) — registre a duração da sessão',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'minuto',
+      multiplier: 0.6,
+      dailyLimit: 1, // mantido (mesmo valor de antes da conversão pra por-minuto)
       requiresEvidence: true,
       allowedFileTypes: 'jpg,jpeg,png',
     },
@@ -232,10 +253,16 @@ async function main() {
       category: 'HEALTH',
       icon: 'heart-pulse',
       description: 'Prática de atenção plena ou meditação guiada',
-      rulesDescription: '12 pontos por sessão de no mínimo 15 minutos',
-      scoringType: 'FIXED',
-      basePoints: 12,
-      unit: 'sessao',
+      rulesDescription: '0,4 ponto por minuto de meditação (24 pts/hora) — registre a duração da sessão',
+      scoringType: 'MULTIPLIER',
+      basePoints: 1,
+      unit: 'minuto',
+      multiplier: 0.4,
+      // dailyLimit mantido (era 2 registros/dia antes de virar por minuto)
+      // — com a conversão pra MULTIPLIER, esse limite passa a ser uma
+      // segunda camada de proteção contra má-fé além da taxa mais baixa:
+      // sem ele, dava pra registrar dezenas de sessões de 1 minuto no
+      // mesmo dia pra somar pontos artificialmente.
       dailyLimit: 2,
       requiresEvidence: false,
     },

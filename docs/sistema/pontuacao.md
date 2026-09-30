@@ -36,21 +36,27 @@ Depende do `scoringType` configurado na modalidade ([atividades.md](./atividades
 
 ## Recalibragem por hora de esforço equivalente (modalidades)
 
-A pedido do usuário, todas as modalidades foram recalibradas numa régua comum — **pontos por hora de esforço/tempo real investido** — usando Academia (20 pts/sessão ≈ 50min ≈ 24 pts/hora) como âncora. Antes, modalidades de valor fixo alto (Eventos/Palestras a 250 pts fixos, Curso a 100-150 pts fixos) rendiam de 5x a 50x mais por hora que qualquer atividade física, e Leitura (0,1 pt/página) rendia ~3 pts/hora — uma fração do resto.
+A pedido do usuário, todas as modalidades foram recalibradas numa régua comum — **pontos por hora de esforço/tempo real investido**. Antes, modalidades de valor fixo alto (Eventos/Palestras a 250 pts fixos, Curso a 100-150 pts fixos) rendiam de 5x a 50x mais por hora que qualquer atividade física, e Leitura (0,1 pt/página) rendia ~3 pts/hora — uma fração do resto.
 
-| Modalidade | `scoringType` | Valor | ≈ pts/hora |
+| Modalidade | `scoringType` | Valor | pts/hora |
 |---|---|---|---|
-| Academia & Musculação | FIXED | 20 pts/sessão | ~24 (âncora) |
+| **Academia & Musculação** | MULTIPLIER | **0,6 pt/minuto** | 36 |
 | Esportes | FIXED | 30 pts/realização | ~24 |
-| Meditação & Mindfulness | FIXED | 12 pts/sessão | ~36-48 |
+| **Meditação & Mindfulness** | MULTIPLIER | **0,4 pt/minuto** | 24 |
 | Corrida de Rua/Esteira | QUANTITY | 6 pts/km | ~54 (a 9km/h) |
 | Ciclismo | QUANTITY | 3 pts/km | ~54 (a 18km/h) |
 | Caminhada | QUANTITY | 4 pts/km | ~20 (a 5km/h) |
 | Leitura de Livros | MULTIPLIER | 0,3 pt/página | ~9 |
-| **Curso** | MULTIPLIER | **0,4 pt/minuto** | 24 (fixo — é literalmente por hora) |
-| **Eventos/Palestras** | MULTIPLIER | **0,4 pt/minuto** | 24 (fixo — é literalmente por hora) |
+| Curso | MULTIPLIER | 0,4 pt/minuto | 24 |
+| Eventos/Palestras | MULTIPLIER | 0,4 pt/minuto | 24 |
 
 Curso e Eventos/Palestras deixaram de ser um valor fixo por registro (que tratava um evento de 30 minutos igual a um de 8 horas) e passaram a ser por **minuto** — precedente real: o modelo de crédito profissional PMI PDU/CEU (1 hora = 1 unidade de crédito, proporcional linear, sem degrau entre uma sessão de 30 e 45 minutos). A pessoa registra os minutos de uma sessão de estudo/participação, ou o total de uma vez ao concluir — as duas formas funcionam igual, e não há limite diário que impeça registros parciais.
+
+**3ª rodada (Academia e Meditação também convertidas pra por-minuto, a pedido do usuário)**: diferente de Curso/Eventos, aqui as taxas NÃO seguem a âncora universal de 0,4/min — cada uma tem uma taxa própria, por decisão deliberada:
+
+- **Academia sobe pra 0,6 pt/minuto (36 pts/hora)** — mais alta que a média do sistema, reconhecendo o esforço físico de força/peso. MET de musculação (3-6, [2024 Adult Compendium of Physical Activities](https://pmc.ncbi.nlm.nih.gov/articles/PMC10818145/)) coloca a modalidade na mesma faixa de intensidade de cardio leve-moderado, mas o usuário optou por valorizar mais que isso. Precedente de mercado pra "exercício por minuto": Fitbit Active Zone Minutes.
+- **Meditação cai pra 0,4 pt/minuto (24 pts/hora)** — mais BAIXA que o valor fixo anterior (12 pts/sessão ≈ 48 pts/h no mínimo de 15 min). Decisão deliberada: meditação não exige equipamento, local específico nem evidência forte de verificar duração real — é o "alvo mais fácil" pra registro de má-fé (ex.: alguém alegando minutos que não praticou). Mantê-la na taxa mais baixa do sistema, com `dailyLimit` preservado (2 registros/dia, nunca removido mesmo com a conversão), reduz esse incentivo.
+  - Vale notar que a pesquisa em mindfulness **não sustenta** recompensa linear por duração do jeito que sustenta pra exercício físico: [sessões de 5 minutos já trazem benefício real](https://www.mindful.org/5-minutes-of-mindfulness-brings-real-benefits-according-to-science/), e um estudo achou que [4 sessões de 5min geraram MAIS redução de estresse que 4 sessões de 20min](https://www.nature.com/articles/s41598-023-46578-y) — frequência prediz adesão de longo prazo melhor que duração. Ainda assim, a pontuação por minuto foi implementada a pedido do usuário; a ressalva é só sobre o que a ciência diretamente sustenta.
 
 Essa recalibragem também obrigou a recalcular os limiares de nível (ver [niveis.md](./niveis.md)) — o teto de pontos atingível num ciclo caiu bastante ao cortar o valor fixo alto de Eventos/Palestras, então os 5 níveis foram redistribuídos por simulação de perfis de participante (sedentário a extremo) ao longo de um ciclo de ~3 meses.
 

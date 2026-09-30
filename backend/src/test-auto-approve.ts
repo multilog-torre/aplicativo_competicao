@@ -163,7 +163,7 @@ async function main() {
   const createRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 20 },
     participantToken,
   );
   assert('Criação retorna 201', createRes.status === 201);
@@ -265,7 +265,7 @@ async function main() {
   const secondRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 20 },
     participantToken,
   );
   assert('2ª atividade do dia (dentro do limite) funciona (201)', secondRes.status === 201);
@@ -273,7 +273,7 @@ async function main() {
   const thirdRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: testDay, quantity: 20 },
     participantToken,
   );
   assert(
@@ -295,7 +295,7 @@ async function main() {
   const manualRes = await reqJson(
     'POST',
     '/activities',
-    { activityTypeId: meditationType.id, activityDate: testDayBefore, quantity: 1 },
+    { activityTypeId: meditationType.id, activityDate: testDayBefore, quantity: 20 },
     participantToken,
   );
   assert(
