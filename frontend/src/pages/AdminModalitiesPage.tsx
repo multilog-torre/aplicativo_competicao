@@ -21,6 +21,19 @@ const SCORING_LABELS: Record<string, string> = {
   MULTIPLIER: 'Multiplicador customizado',
 };
 
+/** QUANTITY usa `basePoints` como taxa por unidade (`multiplier` é só um
+ * espelho não usado no cálculo). MULTIPLIER usa `multiplier` como taxa por
+ * unidade (`basePoints` aqui é só um placeholder fixo em 1, nunca o valor
+ * real) — mostrar `basePoints` nesse caso confundia quem lia "1 pts por
+ * minuto" achando que valia 1 ponto, quando o valor real é o multiplicador. */
+function formatPoints(t: ActivityType): string {
+  const perUnit = t.unit ? ` / ${t.unit}` : '';
+  if (t.scoringType === 'MULTIPLIER') {
+    return `${t.multiplier.toLocaleString('pt-BR')} pts${perUnit}`;
+  }
+  return `${t.basePoints} pts${perUnit}`;
+}
+
 export function AdminModalitiesPage() {
   const { showToast } = useToast();
   const [types, setTypes] = useState<ActivityType[]>([]);
@@ -89,9 +102,8 @@ export function AdminModalitiesPage() {
                 <tr key={t.id}>
                   <td data-label="Nome">{t.name}</td>
                   <td data-label="Categoria">{CATEGORY_LABELS[t.category] ?? t.category}</td>
-                  <td data-label="Pontuação">
-                    {SCORING_TYPES.includes(t.scoringType) ? t.scoringType : t.scoringType} — {t.basePoints} pts
-                    {t.unit ? ` / ${t.unit}` : ''}
+                  <td data-label="Pontuação" title={SCORING_LABELS[t.scoringType] ?? t.scoringType}>
+                    {t.scoringType} — {formatPoints(t)}
                   </td>
                   <td data-label="Evidência">{t.requiresEvidence ? 'Obrigatória' : 'Não exigida'}</td>
                   <td data-label="Status">

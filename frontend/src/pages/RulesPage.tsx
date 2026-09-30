@@ -33,11 +33,21 @@ const SCORING_LABELS: Record<string, string> = {
 /** Monta a frase de "quanto pontua" de uma modalidade a partir dos seus dados
  * atuais — sempre que o admin muda basePoints/multiplier/unit, ou cria uma
  * modalidade nova, esta página reflete o valor automaticamente (não há nada
- * hardcoded aqui: tudo vem de GET /activity-types). */
+ * hardcoded aqui: tudo vem de GET /activity-types).
+ *
+ * QUANTITY usa `basePoints` como taxa por unidade (`multiplier` é só um
+ * espelho não usado no cálculo, ver pontuacao.md — nunca exibido aqui pra
+ * não sugerir uma multiplicação que não existe). MULTIPLIER usa `multiplier`
+ * como taxa por unidade (`basePoints` aqui é só um placeholder fixo em 1,
+ * nunca o valor real — exibi-lo confundia quem lia "1 pts por minuto
+ * (x0.4)" achando que valia 1 ponto por minuto). */
 function describeScoring(t: ActivityType): string {
-  if (t.scoringType === 'QUANTITY' || t.scoringType === 'MULTIPLIER') {
-    const perUnit = t.unit ? ` por ${t.unit}` : '';
-    return `${t.basePoints} pts${perUnit}${t.multiplier !== 1 ? ` (x${t.multiplier})` : ''}`;
+  if (t.scoringType === 'QUANTITY') {
+    return `${t.basePoints} pts${t.unit ? ` por ${t.unit}` : ''}`;
+  }
+  if (t.scoringType === 'MULTIPLIER') {
+    const rate = t.multiplier.toLocaleString('pt-BR');
+    return `${rate} pt${t.multiplier === 1 ? '' : 's'}${t.unit ? ` por ${t.unit}` : ''}`;
   }
   if (t.scoringType === 'TIME') {
     return `${t.basePoints} pts${t.unit ? ` por ${t.unit}` : ' por unidade de tempo'}`;
