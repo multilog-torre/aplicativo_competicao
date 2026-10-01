@@ -510,6 +510,13 @@ textarea {
   cursor: help;
 }
 
+.table__subtext {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
 .table__actions {
   display: flex;
   gap: 8px;

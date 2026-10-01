@@ -60,7 +60,12 @@ export function ActivitiesPage() {
             <tbody>
               {activities.map((a) => (
                 <tr key={a.id}>
-                  <td data-label="Data">{new Date(a.activityDate).toLocaleDateString('pt-BR')}</td>
+                  <td data-label="Data">
+                    {new Date(a.activityDate).toLocaleDateString('pt-BR')}
+                    <span className="table__subtext">
+                      postado às {new Date(a.submittedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </td>
                   <td data-label="Modalidade">{a.activityType?.name}</td>
                   <td data-label="Quantidade">
                     {a.quantity}

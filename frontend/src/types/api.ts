@@ -145,6 +145,10 @@ export interface UserActivity {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   activityDate: string;
   createdAt: string;
+  /** Quando a pessoa de fato registrou a atividade no app (pode ser bem depois
+   * da activityDate, se ela esqueceu de postar no dia) — igual a createdAt,
+   * mas com o nome que combina com o campo do backend (submitted_at). */
+  submittedAt: string;
   rejectionReason?: string | null;
   description?: string | null;
   evidences?: Array<{ id: string; fileType: string; downloadUrl: string }>;
