@@ -231,6 +231,9 @@ export interface PostActivityInfo {
    * Mural em vez de createdAt, pra não parecer que a atividade aconteceu
    * na hora em que o post foi publicado/aprovado. */
   activityDate: string;
+  /** Quando a pessoa de fato registrou a atividade no app — exibido ao lado
+   * da activityDate no Mural como "postado às HH:MM". */
+  submittedAt: string;
 }
 
 export interface Post {

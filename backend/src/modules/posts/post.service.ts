@@ -33,6 +33,7 @@ type PostRow = {
     unit: string | null;
     calculatedPoints: number;
     activityDate: Date;
+    submittedAt: Date;
     activityType: { name: string; icon: string | null };
   } | null;
   _count: { comments: number; reactions: number };
@@ -48,6 +49,7 @@ const POST_INCLUDE = {
       unit: true,
       calculatedPoints: true,
       activityDate: true,
+      submittedAt: true,
       activityType: { select: { name: true, icon: true } },
     },
   } as const,
@@ -399,6 +401,7 @@ export class PostService {
             unit: post.activity.unit,
             points: post.activity.calculatedPoints,
             activityDate: post.activity.activityDate,
+            submittedAt: post.activity.submittedAt,
           }
         : null,
       commentsCount: post._count.comments,

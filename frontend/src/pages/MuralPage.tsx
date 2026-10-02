@@ -303,7 +303,9 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
           <div className="post-card__author">{post.user.name}</div>
           <time className="post-card__date">
             {post.activity
-              ? new Date(post.activity.activityDate).toLocaleDateString('pt-BR')
+              ? `${new Date(post.activity.activityDate).toLocaleDateString('pt-BR')} · postado às ${new Date(
+                  post.activity.submittedAt,
+                ).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
               : new Date(post.createdAt).toLocaleString('pt-BR')}
           </time>
         </div>
