@@ -201,8 +201,8 @@ export function DashboardPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
-          <span className="stat-card__label">Minha pontuação</span>
-          <span className="stat-card__value">{points.total.toLocaleString('pt-BR')}</span>
+          <span className="stat-card__label">{points.periodTotal !== null ? `Pontos no ciclo "${points.cycleName}"` : 'Minha pontuação'}</span>
+          <span className="stat-card__value">{(points.periodTotal ?? points.total).toLocaleString('pt-BR')}</span>
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Ranking</span>

@@ -47,6 +47,14 @@ Quem não tem nenhuma transação dentro do período do ciclo (ex.: já carregav
 - Conquistas (`achievements`) — são vitalícias, nunca resetam. Mudar isso quebraria a regra de que uma conquista nunca é concedida duas vezes.
 - O motor de conquistas propositalmente **não roda** durante o reset (ver [pontuacao.md](./pontuacao.md) para o motivo técnico exato).
 
+## Ver o próprio total de um ciclo já encerrado (Dashboard)
+
+O Hall da Fama (abaixo) resolve "quem ganhou cada ciclo", mas não respondia "quantos pontos eu tinha quando aquele ciclo fechou" para quem não ficou no pódio — o card principal do Dashboard (`points.total`) sempre mostra o saldo **atual** (`User.totalPoints`), que já passou pelo reset.
+
+O seletor "Ciclo de premiação" do Dashboard já existia e redireciona os gráficos para o período exato do ciclo escolhido, mas o card do topo ficava preso ao saldo atual mesmo com um ciclo passado selecionado — a pedido do usuário, passou a trocar para `points.periodTotal`: a soma de todos os lançamentos do ledger com aquele `cycleId`, ou seja, exatamente o saldo que a pessoa tinha no instante em que o ciclo fechou (o `CYCLE_RESET` seguinte nasce com `cycleId = null`, então nunca entra nessa soma — ver acima). Não exigiu nenhuma tabela nova: o dado já estava todo no ledger, só não era somado dessa forma em nenhum lugar.
+
+`points.total` (saldo atual) continua existindo sem alteração de significado — outras partes do sistema dependem dele representar sempre o estado presente. `periodTotal` só vem preenchido quando o filtro é por `cycleId`; um intervalo de datas livre (sem ciclo específico) não altera o card, só os gráficos, porque poderia atravessar um reset no meio e produzir um número sem sentido de "saldo ao final de X" (decisão do usuário).
+
 ## Hall da Fama
 
 Tela pública (`/hall-da-fama`, qualquer usuário autenticado — participante ou admin) que lista **todos** os ciclos já encerrados, mais recente primeiro, cada um com o pódio completo (avatar, nome, prêmio e pontos de cada colocado). Reaproveita o mesmo `GET /cycles` já público usado internamente — não é um endpoint novo, é a mesma leitura que a tela "Ver pódio" de Admin > Ciclos já usava, só que numa página própria e sem exigir papel de admin.

@@ -22,10 +22,14 @@ const POINTS_HISTORY_DEFAULT_MONTHS = 12;
 const PERFORMANCE_WEEKS = 8;
 
 /** Filtros já resolvidos — cycleId, se informado, já foi traduzido para um
- * dateFrom/dateTo concreto (ver DashboardService.resolveFilters). */
+ * dateFrom/dateTo concreto (ver DashboardService.resolveFilters), mas o
+ * cycleId original é mantido junto (cycleId/cycleName) pra poder calcular
+ * points.periodTotal sem precisar buscar o ciclo de novo. */
 interface ResolvedFilters {
   dateFrom?: Date;
   dateTo?: Date;
+  cycleId?: string;
+  cycleName?: string;
 }
 
 function toDateKey(date: Date): string {
@@ -60,13 +64,14 @@ export class DashboardService {
 
     const filters = await this.resolveFilters(rawFilters);
 
-    const [leaderboard, recentActivities, pointsHistory, activitiesByModality, performanceByPeriod] =
+    const [leaderboard, recentActivities, pointsHistory, activitiesByModality, performanceByPeriod, periodTotal] =
       await Promise.all([
         RankingService.getGeneralLeaderboard(),
         this.getRecentActivities(userId, activityLimit),
         this.getPersonalPointsHistory(userId, filters, user.createdAt),
         this.getActivitiesByModality(userId, filters),
         this.getPerformanceByPeriod(userId),
+        this.getCyclePeriodTotal(userId, filters.cycleId),
       ]);
 
     const myIndex = leaderboard.findIndex((entry) => entry.id === userId);
@@ -78,7 +83,16 @@ export class DashboardService {
     });
 
     return {
-      points: { total: user.totalPoints },
+      points: {
+        total: user.totalPoints,
+        // Só preenchido quando o filtro é por cycleId — representa o saldo
+        // reconstruído do ledger (soma de todos os lançamentos daquele
+        // ciclo), ou seja, o que a pessoa tinha quando o ciclo fechou (ou
+        // tem agora, se o ciclo filtrado ainda estiver ACTIVE). O card do
+        // topo no frontend troca pra esse número quando ele vem preenchido.
+        periodTotal,
+        cycleName: filters.cycleName ?? null,
+      },
       ranking: {
         position,
         totalParticipants: leaderboard.length,
@@ -119,9 +133,9 @@ export class DashboardService {
    * os dois venham juntos). */
   private static async resolveFilters(raw: GetDashboardQueryDTO): Promise<ResolvedFilters> {
     if (raw.cycleId) {
-      const cycle = await prisma.awardCycle.findUnique({ where: { id: raw.cycleId }, select: { startDate: true, endDate: true } });
+      const cycle = await prisma.awardCycle.findUnique({ where: { id: raw.cycleId }, select: { name: true, startDate: true, endDate: true } });
       if (!cycle) throw new NotFoundError(`Ciclo com ID '${raw.cycleId}' não foi encontrado.`);
-      return { dateFrom: cycle.startDate, dateTo: cycle.endDate };
+      return { dateFrom: cycle.startDate, dateTo: cycle.endDate, cycleId: raw.cycleId, cycleName: cycle.name };
     }
     return { dateFrom: raw.dateFrom, dateTo: raw.dateTo };
   }
@@ -214,6 +228,26 @@ export class DashboardService {
       month: buildSeries(pointsByMonth, monthCount, (i) => monthKeyAndLabelAt(toShifted, i)),
       year: buildSeries(pointsByYear, yearCount, (i) => yearKeyAndLabelAt(toShifted, i)),
     };
+  }
+
+  /**
+   * Soma de todos os lançamentos do ledger tagueados com `cycleId` — o
+   * "saldo ao final do ciclo" (ou o saldo corrente, se o ciclo filtrado
+   * ainda estiver ACTIVE). Reconstrução exata a partir do histórico
+   * imutável (ver cycleId em PointsTransaction, schema.prisma), sem
+   * precisar de nenhuma tabela nova: o CYCLE_RESET que zera o próximo
+   * ciclo nasce com cycleId=null (scoring.service.ts), então nunca entra
+   * nessa soma e não derruba o total do ciclo anterior.
+   * `undefined` (sem filtro de ciclo) retorna `null` — o card do topo no
+   * frontend usa `points.total` (saldo atual) nesse caso.
+   */
+  private static async getCyclePeriodTotal(userId: string, cycleId: string | undefined): Promise<number | null> {
+    if (!cycleId) return null;
+    const { _sum } = await prisma.pointsTransaction.aggregate({
+      where: { userId, cycleId },
+      _sum: { points: true },
+    });
+    return _sum.points ?? 0;
   }
 
   /** Atividades aprovadas agrupadas por modalidade (gráfico "Atividades por

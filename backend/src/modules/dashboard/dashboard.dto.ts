@@ -5,9 +5,17 @@ import { z } from 'zod';
  * (diferente do Painel Geral, que também tem usuário/departamento/
  * atividade) — aqui o "usuário" já é fixo, é a própria pessoa autenticada.
  * `cycleId` tem prioridade sobre dateFrom/dateTo quando os dois vierem
- * juntos. Afetam apenas os gráficos (pointsHistory/activitiesByModality),
- * nunca os cards de indicador do topo (pontuação/ranking/nível/progresso
- * são sempre o estado atual).
+ * juntos. Afetam os gráficos (pointsHistory/activitiesByModality) e,
+ * quando `cycleId` é informado, também o card de pontos do topo — que
+ * passa a mostrar `points.periodTotal` (o saldo que a pessoa tinha
+ * quando aquele ciclo fechou, reconstruído do ledger) em vez do saldo
+ * atual. Ranking/nível/progresso continuam sempre o estado atual — não
+ * fazem sentido "no passado" sem um histórico de snapshots que não
+ * existe (ver rankingEvolution em dashboard.service.ts). Um
+ * dateFrom/dateTo livre (sem cycleId) não altera o card de pontos, só
+ * os gráficos — calcular "pontos no período" pra um intervalo arbitrário
+ * pode atravessar um reset de ciclo no meio e dar um número sem sentido
+ * de "saldo ao final de X", decisão do usuário.
  */
 export const GetDashboardQuerySchema = z
   .object({

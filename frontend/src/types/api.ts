@@ -198,7 +198,14 @@ export interface RankingEntry {
 }
 
 export interface DashboardData {
-  points: { total: number };
+  points: {
+    total: number;
+    /** Saldo reconstruído do ledger pro ciclo filtrado (null se nenhum
+     * cycleId foi passado no filtro) — quando vier preenchido, é isso que
+     * o card principal mostra, no lugar de `total` (saldo atual). */
+    periodTotal: number | null;
+    cycleName: string | null;
+  };
   ranking: { position: number | null; totalParticipants: number };
   level: {
     current: { id: string; levelNumber: number; name: string; badgeIcon: string; minPoints: number } | null;
