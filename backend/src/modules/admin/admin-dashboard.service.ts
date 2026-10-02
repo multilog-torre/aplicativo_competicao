@@ -527,11 +527,46 @@ export class AdminDashboardService {
   }
 
   /**
+   * Top 5 usuários ATIVOS por pontos ganhos dentro de `filters.dateFrom`/
+   * `dateTo` (soma líquida do ledger no período — inclui débitos, igual o
+   * saldo exibido em todo o resto do painel) — usado só quando há filtro
+   * de data/ciclo em getTopUsersEvolution, pra responder "quem liderou
+   * ESSE período" em vez de "quem lidera hoje".
+   */
+  private static async getTopUserIdsByPeriodPoints(filters: ResolvedFilters): Promise<string[]> {
+    const activeUsers = await prisma.user.findMany({
+      where: { status: 'ACTIVE', ...(filters.departmentId ? { departmentId: filters.departmentId } : {}) },
+      select: { id: true },
+    });
+    if (activeUsers.length === 0) return [];
+
+    const grouped = await prisma.pointsTransaction.groupBy({
+      by: ['userId'],
+      where: {
+        userId: { in: activeUsers.map((u) => u.id) },
+        createdAt: { ...(filters.dateFrom ? { gte: filters.dateFrom } : {}), ...(filters.dateTo ? { lte: filters.dateTo } : {}) },
+      },
+      _sum: { points: true },
+      orderBy: { _sum: { points: 'desc' } },
+      take: TOP_USERS_EVOLUTION_SIZE,
+    });
+    return grouped.map((g) => g.userId);
+  }
+
+  /**
    * "Evolução dos usuários" — quem está com mais pontos, dia a dia/mês a
    * mês/ano a ano: uma linha por usuário (o saldo ACUMULADO dele naquele
-   * momento, não o ganho daquele período), pros top 5 usuários por pontos
-   * atuais (ou só o usuário filtrado, se `filters.userId` estiver ativo —
-   * é o que alimenta o clique-para-filtrar no nome do usuário).
+   * momento, não o ganho daquele período), pro top 5 (ou só o usuário
+   * filtrado, se `filters.userId` estiver ativo — é o que alimenta o
+   * clique-para-filtrar no nome do usuário).
+   *
+   * Quem entra no top 5 depende de haver filtro de data/ciclo (a pedido do
+   * usuário, bug relatado): SEM filtro, é o top 5 por saldo ATUAL
+   * (`totalPoints`) — "quem está liderando agora". COM filtro (ex.: um
+   * ciclo já encerrado), passa a ser o top 5 por pontos GANHOS NAQUELE
+   * PERÍODO (soma do ledger na janela) — senão filtrar por um ciclo
+   * passado continuaria escolhendo os líderes de HOJE (saldo pós-reset),
+   * e quem liderou o ciclo filtrado de verdade nunca apareceria.
    *
    * Busca o histórico completo (sem limite de data) de cada usuário
    * escolhido pra poder calcular corretamente o saldo acumulado em CADA
@@ -543,6 +578,8 @@ export class AdminDashboardService {
     let userIds: string[];
     if (filters.userId) {
       userIds = [filters.userId];
+    } else if (filters.dateFrom || filters.dateTo) {
+      userIds = await this.getTopUserIdsByPeriodPoints(filters);
     } else {
       const topUsers = await prisma.user.findMany({
         where: { status: 'ACTIVE', ...(filters.departmentId ? { departmentId: filters.departmentId } : {}) },

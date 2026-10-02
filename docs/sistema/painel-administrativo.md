@@ -33,6 +33,8 @@ A maioria é sempre **"ao vivo"**, sem filtro nenhum — retrato geral e atual d
 
 Sempre respeitaram o filtro (não é novidade desta mudança): `activitiesOverTime`, `pointsHistory`, `activitiesByModality`/`topActivities`, `topUsersEvolution`, `modalityHighlights`. Sem filtro, cada um usa sua própria janela padrão (últimos 30 dias, 12 meses, etc. — varia por gráfico, documentado no próprio código). `usersByDepartment` e `redemptionsByStatus` são exceção: nunca filtram, são sempre uma foto do presente.
 
+**Bug corrigido em "Evolução dos usuários" (`topUsersEvolution`)**: o gráfico sempre respeitou o filtro pra recortar a JANELA de tempo exibida, mas a escolha de QUAIS usuários entram no top 5 não respeitava — continuava sempre pegando o top 5 por saldo **atual** (`totalPoints` de agora), mesmo filtrando por um ciclo já encerrado. Resultado relatado pelo usuário: filtrar por um ciclo passado mostrava sempre os mesmos 5 líderes de hoje, e quem de fato liderou aquele ciclo (ex.: o pódio real daquele período) podia nem aparecer, se hoje não estiver mais entre os 5 com mais pontos (ex.: após um reset). Corrigido: com `dateFrom`/`dateTo` (direto ou via `cycleId`) ativo, o top 5 passa a ser escolhido por pontos **ganhos dentro daquele período** (soma do ledger na janela, via `getTopUserIdsByPeriodPoints`), não pelo saldo de agora. Sem filtro, continua sendo o top 5 por saldo atual, como sempre foi.
+
 ## `GET /cycles/current`
 
 Endpoint separado (não faz parte do payload de `/admin/dashboard`) que devolve o ciclo `ACTIVE` agora, ou `null`. Alimenta o card "🏁 Ciclo Atual" no topo do painel — mesma lógica de "ciclo ativo" usada pela regra de pontuação por ciclo ([ciclos.md](./ciclos.md)).
