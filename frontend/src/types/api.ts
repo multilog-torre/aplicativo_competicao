@@ -212,6 +212,8 @@ export interface DashboardData {
     next: { id: string; name: string; minPoints: number; pointsNeeded: number } | null;
     progress: { current: number; target: number | null };
   };
+  /** Dias seguidos com atividade aprovada (estado atual, não afetado por filtro de ciclo/data). */
+  streak: { currentDays: number };
   recentActivities: UserActivity[];
   filtersApplied: { dateFrom: string | null; dateTo: string | null };
   charts: {

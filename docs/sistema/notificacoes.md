@@ -2,11 +2,11 @@
 
 ## O modelo
 
-Cada notificação é uma linha em `Notification`: `title`, `message`, `type` (um de 18 valores fixos), `isRead`, `referenceId` (aponta para a entidade que a originou), sempre vinculada a **um único usuário** — não existe notificação em massa "para todo mundo" de uma vez (mesmo quando o gatilho afeta várias pessoas, como um fechamento de ciclo, cada pessoa recebe sua própria linha).
+Cada notificação é uma linha em `Notification`: `title`, `message`, `type` (um de 21 valores fixos), `isRead`, `referenceId` (aponta para a entidade que a originou), sempre vinculada a **um único usuário** — não existe notificação em massa "para todo mundo" de uma vez (mesmo quando o gatilho afeta várias pessoas, como um fechamento de ciclo, cada pessoa recebe sua própria linha).
 
 Sem WebSocket/SSE no projeto — "tempo real" aqui significa **polling**: o frontend pergunta periodicamente se há algo novo (a cada 20s, tanto para o contador do sino quanto para o toast de conquista).
 
-## Os 18 tipos e o que dispara cada um
+## Os 21 tipos e o que dispara cada um
 
 | Tipo | O que dispara | Vai para |
 |---|---|---|
@@ -20,6 +20,8 @@ Sem WebSocket/SSE no projeto — "tempo real" aqui significa **polling**: o fron
 | `REWARD_UPDATE` | Resgate de prêmio aprovado, entregue ou cancelado | Quem resgatou |
 | `NEW_USER_PENDING` | Alguém se autocadastra e fica pendente | Todo `ADMIN_MASTER` |
 | `CYCLE_ENDED` | Fechamento de ciclo — uma para quem ficou no pódio (com o prêmio, se houver), outra genérica para os demais avisando o reset | Todos os usuários ativos |
+| `CYCLE_ENDING_SOON_3D` / `CYCLE_ENDING_SOON_1D` | Verificador periódico (`server.ts`, 5 em 5 min) detecta que um ciclo `ACTIVE` está a 3 dias / 1 dia do fim | `PARTICIPANTE`: sempre, lembrete pra registrar as últimas atividades. `ADMIN`/`ADMIN_MASTER`: só se houver atividade(s) `PENDING` de verdade, com a contagem na mensagem — avisa que aprovar depois do fechamento não credita mais pontos pra esse ciclo |
+| `STREAK_MILESTONE` | Atividade aprovada **hoje** faz a sequência de dias seguidos bater um marco (3/7/14/30/60/100) | O próprio usuário |
 | `EVENT_APPROVED` / `EVENT_REJECTED` | Admin aprova/rejeita um evento proposto | Quem criou o evento |
 | `EVENT_UPDATED` | Data de um evento muda | Todo inscrito |
 | `EVENT_BONUS_CREDITED` | Admin confirma presença e credita o bônus | Quem compareceu |
@@ -29,6 +31,8 @@ Sem WebSocket/SSE no projeto — "tempo real" aqui significa **polling**: o fron
 | `INFO` | Valor padrão do schema | Nenhum fluxo atual usa este tipo |
 
 `POST_REACTION` e `POST_COMMENT` nunca disparam quando a própria pessoa reage/comenta na sua publicação, e nunca viram notificação em massa — mesmo o post automático de atividade aprovada (ver [mural.md](./mural.md)) não notifica ninguém além de quem interage com ele depois.
+
+**`CYCLE_ENDING_SOON_3D`/`_1D` — idempotência sem coluna nova**: o verificador roda a cada 5 min, e a condição "faltam ≤3 dias" continua verdadeira em todo tick seguinte até o ciclo fechar — ou seja, não dá pra usar a janela de tempo como critério de "já avisei". Em vez de adicionar uma coluna em `AwardCycle` pra marcar "já notificado", a própria tabela `Notification` é a fonte da verdade: antes de criar, verifica se já existe uma notificação daquele tipo com `referenceId = cycleId` pra aquele usuário, e pula se já existir. Mesma ideia do `STREAK_MILESTONE`: só dispara na primeira aprovação do dia (senão repetiria a cada atividade extra aprovada, já que a sequência não muda de novo até o dia seguinte), e nunca para uma atividade aprovada com `activityDate` de um dia passado (evita uma mensagem de "parabéns" fora de contexto ao aprovar algo atrasado).
 
 ## Central de notificações (sino no topbar)
 

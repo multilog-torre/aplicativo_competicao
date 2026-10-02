@@ -20,11 +20,15 @@ const server = app.listen(env.PORT, () => {
 // API no momento exato em que o ciclo vence. Ressalva: em hosts com
 // hibernação por inatividade (ex.: Render free tier), este intervalo só
 // roda enquanto o processo está desperto.
+// Mesmo tick também avisa participantes/admins de ciclo perto de fechar
+// (checkAndNotifyEndingSoonCycles) — a pedido do usuário, ver ciclos.md.
 const CYCLE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-CycleService.checkAndCloseExpiredCycles().catch((err) => console.error('Erro ao verificar ciclos expirados no startup:', err));
-const cycleCheckInterval = setInterval(() => {
+function runCycleChecks() {
   CycleService.checkAndCloseExpiredCycles().catch((err) => console.error('Erro ao verificar ciclos expirados:', err));
-}, CYCLE_CHECK_INTERVAL_MS);
+  CycleService.checkAndNotifyEndingSoonCycles().catch((err) => console.error('Erro ao verificar ciclos perto de fechar:', err));
+}
+runCycleChecks();
+const cycleCheckInterval = setInterval(runCycleChecks, CYCLE_CHECK_INTERVAL_MS);
 
 // Tratamento de Encerramento Gracioso (Graceful Shutdown)
 const shutdown = async (signal: string) => {

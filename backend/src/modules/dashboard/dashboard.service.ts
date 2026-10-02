@@ -15,6 +15,7 @@ import {
   yearKeyAndLabelAt,
 } from '../../shared/utils/dateWindows';
 import { RankingService } from '../ranking/ranking.service';
+import { computeCurrentStreakDays } from '../../shared/utils/streak.util';
 import { GetDashboardQueryDTO } from './dashboard.dto';
 
 const POINTS_HISTORY_DEFAULT_DAYS = 30;
@@ -64,7 +65,7 @@ export class DashboardService {
 
     const filters = await this.resolveFilters(rawFilters);
 
-    const [leaderboard, recentActivities, pointsHistory, activitiesByModality, performanceByPeriod, periodTotal] =
+    const [leaderboard, recentActivities, pointsHistory, activitiesByModality, performanceByPeriod, periodTotal, streakDays] =
       await Promise.all([
         RankingService.getGeneralLeaderboard(),
         this.getRecentActivities(userId, activityLimit),
@@ -72,6 +73,7 @@ export class DashboardService {
         this.getActivitiesByModality(userId, filters),
         this.getPerformanceByPeriod(userId),
         this.getCyclePeriodTotal(userId, filters.cycleId),
+        this.getCurrentStreakDays(userId),
       ]);
 
     const myIndex = leaderboard.findIndex((entry) => entry.id === userId);
@@ -107,6 +109,11 @@ export class DashboardService {
         progress: { current: user.totalPoints, target: nextLevel?.minPoints ?? null },
       },
       recentActivities,
+      // Sequência de dias seguidos com atividade aprovada — incentivo ao uso
+      // diário (a pedido do usuário), sempre o estado ATUAL, nunca afetado
+      // pelo filtro de ciclo/data (faria pouco sentido "sequência num ciclo
+      // passado" quando o conceito é justamente sobre o presente).
+      streak: { currentDays: streakDays },
       filtersApplied: {
         dateFrom: filters.dateFrom ?? null,
         dateTo: filters.dateTo ?? null,
@@ -248,6 +255,15 @@ export class DashboardService {
       _sum: { points: true },
     });
     return _sum.points ?? 0;
+  }
+
+  /** Sequência atual de dias seguidos com atividade aprovada (ver streak.util.ts). */
+  private static async getCurrentStreakDays(userId: string): Promise<number> {
+    const activities = await prisma.userActivity.findMany({
+      where: { userId, status: 'APPROVED' },
+      select: { activityDate: true },
+    });
+    return computeCurrentStreakDays(activities.map((a) => a.activityDate));
   }
 
   /** Atividades aprovadas agrupadas por modalidade (gráfico "Atividades por

@@ -49,3 +49,21 @@ Uma conquista nunca concedida a ninguém é excluída de verdade. Uma já conced
 ## Visibilidade
 
 Conquistas desbloqueadas e o progresso de qualquer colega são **públicos a qualquer usuário autenticado** — não restritos a "dono ou admin". Essa é uma decisão de transparência tomada junto com a seção "Participantes" (ver [ranking-e-participantes.md](./ranking-e-participantes.md)): o perfil de um colega mostra as mesmas conquistas e progresso que o próprio perfil mostraria.
+
+## Sequência atual de dias (card do Dashboard + notificação de marco)
+
+Incentivo ao uso diário (a pedido do usuário, inspirado em Duolingo/Headspace/Snapchat) — **diferente** da conquista `STREAK_DAYS` acima:
+
+| | `STREAK_DAYS` (conquista) | Sequência atual (Dashboard) |
+|---|---|---|
+| O que mede | Maior sequência **de todos os tempos** (recorde histórico) | Sequência **viva agora** — dias seguidos até hoje |
+| Nunca diminui | Sim — é um recorde, só cresce ou se mantém | Não — zera se passar 1 dia sem nenhuma atividade aprovada |
+| Onde aparece | Progresso da conquista (grade "Minhas Conquistas") | Card "🔥 X dias" sempre visível no Dashboard (mesmo com 0) |
+| Função de cálculo | `computeMaxStreakDays` | `computeCurrentStreakDays` |
+
+Ambas vivem em `shared/utils/streak.util.ts`, operam sobre o mesmo dado-fonte (`activityDate` de atividades `APPROVED`, deduplicado por dia de calendário) e usam a mesma regra de "não quebra até o dia terminar": se a pessoa já fez algo hoje, conta a partir de hoje; se não fez nada hoje mas fez ontem, a sequência continua viva (ainda não acabou o dia de hoje) — só zera se nem hoje nem ontem tiver nada.
+
+**Notificação de marco (`STREAK_MILESTONE`)**: disparada dentro de `AdminActivityService.approve()` (mesma transação da aprovação, manual ou automática) quando a sequência atual bate exatamente 3, 7, 14, 30, 60 ou 100 dias — frases variam por marco (ver `admin-activity.service.ts`, `STREAK_MILESTONE_MESSAGES`). Duas salvaguardas pra não gerar ruído:
+
+- **Só na primeira aprovação do dia**: aprovar uma segunda atividade no mesmo dia não recalcula pra um marco diferente (a sequência já contou aquele dia), então não dispara de novo.
+- **Só se a atividade aprovada for de HOJE**: aprovar uma atividade atrasada (`activityDate` de dias passados) nunca dispara a notificação — isso evitaria uma mensagem de "parabéns pelos 7 dias" aparecendo num momento sem relação com a sequência real da pessoa naquele instante.

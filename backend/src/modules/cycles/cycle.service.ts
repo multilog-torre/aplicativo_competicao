@@ -280,6 +280,115 @@ export class CycleService {
     }
   }
 
+  // ─── Aviso de ciclo acabando ────────────────────────────────────────────────
+
+  /** `days` até o fim do ciclo que disparam um aviso, e o tipo de notificação
+   * usado como chave de idempotência (nunca reenviar pro mesmo usuário+ciclo). */
+  private static readonly ENDING_SOON_THRESHOLDS: Array<{ days: number; type: 'CYCLE_ENDING_SOON_3D' | 'CYCLE_ENDING_SOON_1D' }> = [
+    { days: 3, type: 'CYCLE_ENDING_SOON_3D' },
+    { days: 1, type: 'CYCLE_ENDING_SOON_1D' },
+  ];
+
+  /**
+   * Avisa participantes e admins que um ciclo ACTIVE está perto de fechar (a
+   * pedido do usuário) — chamado junto de checkAndCloseExpiredCycles, no
+   * mesmo verificador periódico de 5 em 5 min (server.ts).
+   *
+   * Dois avisos por ciclo (3 dias antes e 1 dia antes), cada um disparado só
+   * uma vez por usuário: a condição `endDate - now <= limiar` continua
+   * verdadeira em todo tick seguinte até o ciclo fechar, então a idempotência
+   * não vem da janela de tempo, vem de checar se já existe uma notificação
+   * daquele tipo pra aquele ciclo antes de criar outra (reaproveita a própria
+   * tabela de notificações — sem precisar de coluna nova em AwardCycle).
+   *
+   * Dois públicos, com mensagens diferentes:
+   * - PARTICIPANTE: lembrete genérico pra registrar as últimas atividades
+   *   antes do reset (ver ciclos.md — pontos ganhos só contam se houver
+   *   ciclo ACTIVE no momento do crédito).
+   * - ADMIN/ADMIN_MASTER: só recebe se houver atividade(s) PENDING de
+   *   verdade — avisa que, se não validar antes do fechamento, a aprovação
+   *   feita depois do reset não credita mais pontos pra ESTE ciclo (pode
+   *   até não contar pra nenhum, se não houver ciclo ativo no momento).
+   */
+  public static async checkAndNotifyEndingSoonCycles(): Promise<void> {
+    const now = new Date();
+    for (const { days, type } of this.ENDING_SOON_THRESHOLDS) {
+      const windowEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+      const cycles = await prisma.awardCycle.findMany({
+        where: { status: 'ACTIVE', endDate: { gte: now, lte: windowEnd } },
+        select: { id: true, name: true, endDate: true },
+      });
+
+      for (const cycle of cycles) {
+        await this.notifyCycleEndingSoon(cycle, type, days);
+      }
+    }
+  }
+
+  private static async notifyCycleEndingSoon(
+    cycle: { id: string; name: string; endDate: Date },
+    type: 'CYCLE_ENDING_SOON_3D' | 'CYCLE_ENDING_SOON_1D',
+    daysLabel: number,
+  ): Promise<void> {
+    const alreadyNotified = await prisma.notification.findMany({
+      where: { type, referenceId: cycle.id },
+      select: { userId: true },
+    });
+    const alreadyNotifiedIds = new Set(alreadyNotified.map((n) => n.userId));
+    const dateLabel = cycle.endDate.toLocaleDateString('pt-BR');
+
+    const participants = await prisma.user.findMany({
+      where: { status: 'ACTIVE', userRoles: { some: { role: { name: 'PARTICIPANTE' } } } },
+      select: { id: true },
+    });
+    const participantMessage =
+      daysLabel === 1
+        ? `⏰ Último dia! O ciclo "${cycle.name}" fecha amanhã (${dateLabel}). Essa é sua última chance de pontuar nesse ciclo.`
+        : `⏳ O ciclo "${cycle.name}" termina em ${daysLabel} dias (${dateLabel})! Aproveite pra registrar suas últimas atividades antes do fechamento.`;
+
+    await Promise.all(
+      participants
+        .filter((u) => !alreadyNotifiedIds.has(u.id))
+        .map((u) =>
+          NotificationService.create({
+            userId: u.id,
+            title: daysLabel === 1 ? 'Último dia do ciclo! ⏰' : 'Ciclo terminando em breve ⏳',
+            message: participantMessage,
+            type,
+            referenceId: cycle.id,
+          }),
+        ),
+    );
+
+    // Admins só recebem se houver pendência de verdade — senão não tem nada
+    // pra "validar" e a notificação seria só ruído.
+    const pendingCount = await prisma.userActivity.count({ where: { status: 'PENDING' } });
+    if (pendingCount > 0) {
+      const admins = await prisma.user.findMany({
+        where: { status: 'ACTIVE', userRoles: { some: { role: { name: { in: ['ADMIN', 'ADMIN_MASTER'] } } } } },
+        select: { id: true },
+      });
+      const adminMessage =
+        daysLabel === 1
+          ? `🚨 Último dia! O ciclo "${cycle.name}" fecha amanhã e ainda há ${pendingCount} atividade(s) pendente(s) de aprovação. Valide o quanto antes pra não perder pontos dos participantes.`
+          : `⚠️ O ciclo "${cycle.name}" termina em ${daysLabel} dias e há ${pendingCount} atividade(s) pendente(s) de aprovação. Valide antes do fechamento pra não perder pontos dos participantes.`;
+
+      await Promise.all(
+        admins
+          .filter((u) => !alreadyNotifiedIds.has(u.id))
+          .map((u) =>
+            NotificationService.create({
+              userId: u.id,
+              title: 'Pendências antes do fechamento do ciclo ⚠️',
+              message: adminMessage,
+              type,
+              referenceId: cycle.id,
+            }),
+          ),
+      );
+    }
+  }
+
   private static async closeCycle(cycleId: string): Promise<void> {
     const cycle = await prisma.awardCycle.findUniqueOrThrow({ where: { id: cycleId }, include: { prizes: true } });
     const prizeByPosition = new Map(cycle.prizes.map((p) => [p.position, p]));

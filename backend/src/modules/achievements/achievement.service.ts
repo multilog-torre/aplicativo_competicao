@@ -9,6 +9,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { RankingService } from '../ranking/ranking.service';
 import { getStorageProvider } from '../storage/storage.factory';
 import { applyPointsToUser } from '../scoring/points-application.util';
+import { computeMaxStreakDays } from '../../shared/utils/streak.util';
 import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
 
 const ALLOWED_ICON_EXTENSIONS = ['png', 'svg', 'jpg', 'jpeg'];
@@ -85,28 +86,6 @@ function resolveActivityTypeIdColumn(ruleType: string, ruleValue: Record<string,
     return ruleValue.activityTypeId;
   }
   return null;
-}
-
-/** Maior sequência histórica de dias consecutivos (dedupe por dia de calendário). */
-function computeMaxStreakDays(dates: Date[]): number {
-  if (dates.length === 0) return 0;
-
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-  const uniqueDaysMs = Array.from(
-    new Set(dates.map((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime())),
-  ).sort((a, b) => a - b);
-
-  let maxStreak = 1;
-  let currentStreak = 1;
-  for (let i = 1; i < uniqueDaysMs.length; i++) {
-    if (uniqueDaysMs[i] - uniqueDaysMs[i - 1] === ONE_DAY_MS) {
-      currentStreak++;
-      maxStreak = Math.max(maxStreak, currentStreak);
-    } else {
-      currentStreak = 1;
-    }
-  }
-  return maxStreak;
 }
 
 /** Mesmo padrão de User.avatarType/avatarUrl (ProfileService): quando o

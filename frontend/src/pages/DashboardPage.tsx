@@ -174,7 +174,7 @@ export function DashboardPage() {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!dashboard) return null;
 
-  const { points, ranking, level, recentActivities, charts, motivationalMessage } = dashboard;
+  const { points, ranking, level, streak, recentActivities, charts, motivationalMessage } = dashboard;
   const progressPct = level.progress.target
     ? Math.min(100, Math.round((level.progress.current / level.progress.target) * 100))
     : 100;
@@ -203,6 +203,12 @@ export function DashboardPage() {
         <div className="stat-card">
           <span className="stat-card__label">{points.periodTotal !== null ? `Pontos no ciclo "${points.cycleName}"` : 'Minha pontuação'}</span>
           <span className="stat-card__value">{(points.periodTotal ?? points.total).toLocaleString('pt-BR')}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-card__label">Sequência</span>
+          <span className="stat-card__value">
+            🔥 {streak.currentDays} {streak.currentDays === 1 ? 'dia' : 'dias'}
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Ranking</span>

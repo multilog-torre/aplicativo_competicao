@@ -5,7 +5,22 @@ import { IMAGE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
 import { PostService } from '../posts/post.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { getStorageProvider } from '../storage/storage.factory';
+import { computeCurrentStreakDays } from '../../shared/utils/streak.util';
 import { ListPendingActivitiesQueryDTO, RejectActivityDTO } from './admin-activity.dto';
+
+// Marcos de incentivo por sequência de dias seguidos com atividade aprovada
+// (a pedido do usuário — "parabéns pelos X dias seguidos"), calibrados pra
+// comemorar cedo (3 dias, prende o engajamento inicial) e depois espaçar
+// mais (semanal → mensal), igual Duolingo/Headspace. Frases variam por
+// marco pra não repetir a mesma mensagem genérica toda vez.
+const STREAK_MILESTONE_MESSAGES: Record<number, string> = {
+  3: '🔥 3 dias seguidos! Você pegou o ritmo — bora manter amanhã?',
+  7: '🔥 Uma semana inteira sem folga! 7 dias seguidos, mandou bem.',
+  14: '⚡ 14 dias seguidos! Duas semanas de dedicação total.',
+  30: '🏆 30 dias seguidos! Isso não é mais esforço, é hábito. Parabéns!',
+  60: '🚀 60 dias seguidos! Dois meses de consistência — você é referência.',
+  100: '👑 100 dias seguidos! Marco histórico, poucos chegam até aqui.',
+};
 
 export class AdminActivityService {
   /**
@@ -145,6 +160,49 @@ export class AdminActivityService {
         },
         tx,
       );
+
+      // Notificação de incentivo por sequência de dias seguidos (a pedido do
+      // usuário). Só dispara quando a atividade aprovada é de HOJE — aprovar
+      // uma atividade atrasada de dias passados não deve gerar uma mensagem
+      // de "parabéns" fora de contexto. E só na PRIMEIRA aprovação do dia
+      // (senão repetiria a mesma mensagem a cada atividade extra aprovada no
+      // mesmo dia, já que a sequência não muda de novo até o dia seguinte).
+      const now = new Date();
+      const isToday =
+        activity.activityDate.getFullYear() === now.getFullYear() &&
+        activity.activityDate.getMonth() === now.getMonth() &&
+        activity.activityDate.getDate() === now.getDate();
+
+      if (isToday) {
+        const approvedDates = await tx.userActivity.findMany({
+          where: { userId: activity.userId, status: 'APPROVED' },
+          select: { activityDate: true },
+        });
+        const isFirstApprovalToday =
+          approvedDates.filter(
+            (a) =>
+              a.activityDate.getFullYear() === now.getFullYear() &&
+              a.activityDate.getMonth() === now.getMonth() &&
+              a.activityDate.getDate() === now.getDate(),
+          ).length === 1; // a própria atividade recém-aprovada já está incluída aqui
+
+        if (isFirstApprovalToday) {
+          const streakDays = computeCurrentStreakDays(approvedDates.map((a) => a.activityDate), now);
+          const milestoneMessage = STREAK_MILESTONE_MESSAGES[streakDays];
+          if (milestoneMessage) {
+            await NotificationService.create(
+              {
+                userId: activity.userId,
+                title: 'Sequência de dias! 🔥',
+                message: milestoneMessage,
+                type: 'STREAK_MILESTONE',
+                referenceId: activity.id,
+              },
+              tx,
+            );
+          }
+        }
+      }
 
       // Publica automaticamente no Mural geral — todo colaborador vê no feed
       // (a pedido do usuário). Se houver evidência em formato de imagem, ela é
