@@ -12,7 +12,7 @@ Todo lançamento de pontos positivo (atividade aprovada, bônus manual, recompen
 
 - **O lançamento sempre existe no ledger** (Regra de Ouro — nunca se descarta um evento), só não é somado no placar. Fica marcado com `PointsTransaction.cycleId = null`.
 - **Débitos e correções sempre aplicam**, com ou sem ciclo ativo: resgate de prêmio, `PENALTY`, e qualquer `REVERSAL` (mesmo uma reversão que devolva pontos, ex.: desfazer uma penalidade). Do contrário, um resgate feito bem no intervalo entre dois ciclos "sumiria" sem debitar de fato o saldo — uma brecha de pontos grátis. Só o GANHO NOVO (positivo, que não seja reversão) é que depende de ciclo ativo.
-- **Ranking** (qualquer período — geral, semana, mês, ano) segue a mesma regra: só soma transações com `cycleId` preenchido.
+- **Ranking** (qualquer período — geral, semana, mês, ano) segue a mesma regra completa acima (não só "cycleId preenchido" — também inclui sempre `CYCLE_RESET` e débitos/`REVERSAL`, senão o reset nunca seria descontado do período; bug já corrigido, ver [ranking-e-participantes.md](./ranking-e-participantes.md)). O recorte `GERAL` sem filtro de modalidade nem recalcula nada — lê `User.totalPoints` direto, já que é exatamente o mesmo número.
 - **Conquistas do tipo `TOTAL_POINTS`** (Centena, Clube dos 1.000, Milionário de Pontos) são a única exceção deliberada — ver `lifetimePoints` abaixo.
 - Ver [pontuacao.md](./pontuacao.md) pro detalhe de implementação (`points-application.util.ts`).
 

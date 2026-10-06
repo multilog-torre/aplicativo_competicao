@@ -54,27 +54,25 @@ export class RankingService {
    * ranking") e pelo Dashboard (Fase 17 — posição atual e mensagem
    * motivacional), evitando duplicar a mesma agregação em múltiplos lugares.
    *
-   * Só soma transações com `cycleId` preenchido — pontos ganhos sem nenhum
-   * ciclo de premiação ativo (antes do 1º ciclo, ou no intervalo entre
-   * dois) não contam pro placar de competição, mesma regra de
-   * `User.totalPoints` (ver points-application.util.ts e ciclos.md).
+   * Lê `User.totalPoints` diretamente — é literalmente o mesmo "placar de
+   * competição" que o Dashboard e o Perfil mostram (ver
+   * points-application.util.ts), já mantido corretamente a cada transação
+   * (inclusive reset de ciclo). ANTES recalculava somando o ledger com
+   * `cycleId != null`, só que o próprio lançamento `CYCLE_RESET` nasce com
+   * `cycleId = null` (de propósito — é a exceção que sempre conta) e por
+   * isso ficava de fora dessa soma: o reset nunca era descontado, e o
+   * ranking continuava empilhando pontos de ciclos já encerrados pra
+   * sempre (bug relatado pelo usuário, confirmado ao vivo — ver ciclos.md).
    */
   public static async getGeneralLeaderboard(externalTx?: TransactionClient): Promise<LeaderboardEntryLite[]> {
     const client = externalTx ?? prisma;
-    const sums = await client.pointsTransaction.groupBy({
-      by: ['userId'],
-      where: { cycleId: { not: null } },
-      _sum: { points: true },
-    });
-    const sumByUser = new Map(sums.map((s) => [s.userId, s._sum.points ?? 0]));
-
     const users = await client.user.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, name: true, avatarType: true, avatarUrl: true },
+      select: { id: true, name: true, avatarType: true, avatarUrl: true, totalPoints: true },
     });
 
     return users
-      .map((u) => ({ id: u.id, name: u.name, points: sumByUser.get(u.id) ?? 0, avatarType: u.avatarType, avatarUrl: u.avatarUrl }))
+      .map((u) => ({ id: u.id, name: u.name, points: u.totalPoints, avatarType: u.avatarType, avatarUrl: u.avatarUrl }))
       .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name, 'pt-BR'));
   }
 
@@ -86,11 +84,23 @@ export class RankingService {
   }
 
   /**
-   * Ranking dinâmico, sempre calculado a partir do ledger imutável
-   * (points_transactions) — nunca a partir de um valor em cache no frontend,
-   * e nunca apenas do agregado `users.total_points` (que só serve para o
-   * período GERAL/vitalício). Isso garante que o ranking mude automaticamente
-   * assim que uma atividade é aprovada (Fase 8) e cria uma nova transação.
+   * Ranking dinâmico — nunca a partir de um valor em cache no frontend.
+   *
+   * GERAL sem filtro de modalidade: lê `User.totalPoints` direto (mesma
+   * razão de `getGeneralLeaderboard` acima — é o placar de competição já
+   * mantido corretamente a cada transação, reset de ciclo incluso).
+   *
+   * Semana/Mês/Ano, ou GERAL com `activityTypeId` (não dá pra usar
+   * `totalPoints`, que não é nem recortado por data nem por modalidade):
+   * soma do ledger no período, com o MESMO critério de inclusão que
+   * `applyPointsToUser` usa pra decidir o que conta pro `totalPoints`
+   * (points-application.util.ts) — sempre inclui `CYCLE_RESET` e
+   * `REVERSAL`/débitos (`points < 0`), além de ganhos com `cycleId`
+   * preenchido. Isso corrige o bug relatado pelo usuário: ANTES só exigia
+   * `cycleId != null`, o que deixava o `CYCLE_RESET` (que nasce com
+   * `cycleId = null` de propósito) fora da soma — o reset nunca era
+   * descontado e o período continuava empilhando pontos de ciclos já
+   * encerrados pra sempre.
    *
    * Regra de empate: pontuações iguais são ordenadas alfabeticamente pelo nome.
    */
@@ -113,21 +123,23 @@ export class RankingService {
     }
 
     const periodStart = getPeriodStart(query.period, new Date());
+    const needsLedgerSum = periodStart !== null || !!query.activityTypeId;
 
-    // cycleId != null em qualquer período: pontos ganhos sem ciclo de
-    // premiação ativo não contam pro ranking, nem no geral nem em nenhum
-    // recorte de tempo (ver points-application.util.ts e ciclos.md).
-    const transactionWhere: Record<string, unknown> = { cycleId: { not: null } };
-    if (periodStart) transactionWhere.createdAt = { gte: periodStart };
-    if (query.activityTypeId) transactionWhere.activity = { activityTypeId: query.activityTypeId };
+    let sumByUser = new Map<string, number>();
+    if (needsLedgerSum) {
+      const transactionWhere: Record<string, unknown> = {
+        OR: [{ transactionType: 'CYCLE_RESET' }, { transactionType: 'REVERSAL' }, { points: { lt: 0 } }, { cycleId: { not: null } }],
+      };
+      if (periodStart) transactionWhere.createdAt = { gte: periodStart };
+      if (query.activityTypeId) transactionWhere.activity = { activityTypeId: query.activityTypeId };
 
-    // Soma oficial de pontos por usuário, direto do ledger, no período/filtro solicitado.
-    const sums = await prisma.pointsTransaction.groupBy({
-      by: ['userId'],
-      where: transactionWhere,
-      _sum: { points: true },
-    });
-    const sumByUser = new Map(sums.map((s) => [s.userId, s._sum.points ?? 0]));
+      const sums = await prisma.pointsTransaction.groupBy({
+        by: ['userId'],
+        where: transactionWhere,
+        _sum: { points: true },
+      });
+      sumByUser = new Map(sums.map((s) => [s.userId, s._sum.points ?? 0]));
+    }
 
     // Candidatos: todos os usuários ativos (do departamento filtrado, se houver),
     // incluídos mesmo com 0 pontos no período — para exibir a posição completa.
@@ -141,6 +153,7 @@ export class RankingService {
         name: true,
         avatarType: true,
         avatarUrl: true,
+        totalPoints: true,
         lifetimePoints: true,
         department: { select: { id: true, name: true } },
       },
@@ -153,7 +166,7 @@ export class RankingService {
         avatarType: user.avatarType,
         avatarUrl: user.avatarUrl,
         department: user.department,
-        points: sumByUser.get(user.id) ?? 0,
+        points: needsLedgerSum ? (sumByUser.get(user.id) ?? 0) : user.totalPoints,
         totalPointsAllTime: user.lifetimePoints,
       }))
       // Empate: quem tem mais pontos vem primeiro; em caso de igualdade, ordem alfabética pelo nome.

@@ -7,9 +7,13 @@ Duas telas distintas, propositalmente com ordenações diferentes:
 
 ## Ranking (`GET /ranking`)
 
-Sempre calculado **na hora**, direto do ledger de transações (`points_transactions`) — nunca de um valor em cache no frontend, e nunca apenas do agregado `User.totalPoints` (que só serve para o período `GERAL`/vitalício). Isso garante que o ranking mude automaticamente assim que uma atividade é aprovada, sem nenhum recálculo manual.
+Sempre calculado **na hora**, nunca de um valor em cache no frontend — muda automaticamente assim que uma atividade é aprovada, sem nenhum recálculo manual.
 
-**Períodos**: `GERAL` (vitalício), `SEMANA` (desde a última segunda-feira), `MÊS`, `ANO` — cada um soma só as transações daquele intervalo de `createdAt`.
+**`GERAL` sem filtro de modalidade** lê `User.totalPoints` direto — é o mesmo "placar de competição" que Dashboard/Perfil mostram, já mantido corretamente a cada transação (reset de ciclo incluso). **`SEMANA`/`MÊS`/`ANO`, ou `GERAL` com filtro de modalidade**, recalculam somando o ledger de transações (`points_transactions`) no intervalo/filtro pedido, com o MESMO critério de inclusão que decide o que conta pro `totalPoints` (ver [ciclos.md](./ciclos.md) e [pontuacao.md](./pontuacao.md)): sempre inclui `CYCLE_RESET` e débitos (`REVERSAL`, pontos negativos), além de ganhos com um ciclo de premiação ativo no momento.
+
+**Bug corrigido (relatado pelo usuário)**: antes dessa correção, a soma do ledger exigia só `cycleId != null` — mas o próprio lançamento `CYCLE_RESET` nasce com `cycleId = null` de propósito (é a exceção que sempre deveria contar), então ficava de fora da soma. Resultado: o reset nunca era descontado, e o ranking (geral e todos os períodos) continuava empilhando pontos de ciclos já encerrados pra sempre, mesmo com `User.totalPoints` corretamente zerado. Não confundir com `lifetimePoints` (campo **separado**, nunca resetado, visível no ranking como `totalPointsAllTime` — existe só pra sustentar as conquistas `TOTAL_POINTS` vitalícias, ver [conquistas.md](./conquistas.md)): esse sempre funcionou certo e continua mostrando o acumulado de vida toda, de propósito.
+
+**Períodos**: `GERAL`, `SEMANA` (desde a última segunda-feira), `MÊS`, `ANO`.
 
 **Filtros**: por modalidade (soma só transações de atividades daquela modalidade) e por departamento.
 
