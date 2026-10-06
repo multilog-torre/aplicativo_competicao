@@ -65,6 +65,9 @@ Antes desta tela existir, o único jeito de ver o pódio de um ciclo já encerra
 
 ## Edição e cancelamento
 
-- Só um ciclo `ACTIVE` pode ser editado. As datas só podem mudar **antes** dele começar.
+- Só um ciclo `ACTIVE` pode ser editado.
+- **Antes do ciclo começar**: `startDate`/`endDate` mudam livremente (respeitando não-sobreposição com outros ciclos).
+- **Depois que o ciclo já começou**: `endDate` continua travado (adiantar ou atrasar o fechamento de um ciclo em andamento mexeria com pódio/reset já "agendados" pela data). `startDate` tem uma exceção: pode ser **antecipada** (movida pra uma data **anterior** à atual), nunca adiada — a pedido do usuário, pra "resgatar" atividades que já aconteceram antes do ciclo começar oficialmente mas que deveriam contar pra ele (ex.: ciclo criado com atraso em relação ao anterior, deixando um intervalo sem cobertura). Mover a data de início pra trás só AMPLIA a janela do ciclo, nunca reduz o que já foi creditado a ele — diferente de adiar, que excluiria retroativamente créditos já contabilizados.
+  - **O que essa antecipação NÃO faz sozinha**: não retroage em nada já lançado no ledger. Uma atividade que, numa data agora coberta pela janela ampliada, já tinha sido aprovada e creditada com `cycleId = null` (porque não havia ciclo ativo cobrindo ela na época) **continua com `cycleId = null`** — o `cycleId` de uma transação é gravado uma única vez, no momento do crédito (ver "Pontuação só conta com um ciclo ativo" acima), e nunca é reescrito depois. A antecipação da data só muda o comportamento **daqui pra frente**: créditos novos (ex.: aprovar agora uma atividade pendente cuja `activityDate` cai dentro da janela ampliada) passam a contar pro ciclo corretamente. Pra uma atividade específica que já foi aprovada com o `cycleId` errado antes da correção de data, é preciso uma correção manual pontual (reversão + reconferência), não existe recálculo em massa automático.
 - `cancel`: interrompe um ciclo antes do encerramento normal — não gera pódio nem reset.
 - `delete`: só permitido se o ciclo ainda nem começou; depois disso, a única forma de interromper é cancelar (preserva o registro).

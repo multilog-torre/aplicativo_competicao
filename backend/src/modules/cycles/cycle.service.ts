@@ -129,8 +129,27 @@ export class CycleService {
     if (existing.status !== 'ACTIVE') {
       throw new AppError('Só é possível editar um ciclo que ainda está ativo.', 422, 'CYCLE_NOT_EDITABLE');
     }
-    if (new Date() >= existing.startDate && (dto.startDate !== undefined || dto.endDate !== undefined)) {
-      throw new AppError('Não é possível alterar as datas de um ciclo que já começou.', 422, 'CYCLE_ALREADY_STARTED');
+    const alreadyStarted = new Date() >= existing.startDate;
+    if (alreadyStarted) {
+      // Ciclo já começou: `endDate` continua travado (adiantar ou atrasar o
+      // fechamento de um ciclo em andamento é arriscado demais — mexe com
+      // pódio/reset já agendados). `startDate` tem UMA exceção: pode ser
+      // ANTECIPADA (nunca adiada) — a pedido do usuário, pra "resgatar"
+      // atividades que já aconteceram antes do ciclo começar oficialmente,
+      // mas que deveriam contar pra ele (ex.: ciclo criado com atraso em
+      // relação ao anterior). Mover pra TRÁS nunca reduz o que já foi
+      // creditado a este ciclo (só amplia a janela), diferente de adiar,
+      // que excluiria retroativamente créditos já contabilizados.
+      if (dto.endDate !== undefined) {
+        throw new AppError('Não é possível alterar a data de fim de um ciclo que já começou.', 422, 'CYCLE_ALREADY_STARTED');
+      }
+      if (dto.startDate !== undefined && dto.startDate >= existing.startDate) {
+        throw new AppError(
+          'A data de início de um ciclo que já começou só pode ser ANTECIPADA (movida pra uma data anterior à atual), nunca adiada.',
+          422,
+          'CYCLE_ALREADY_STARTED',
+        );
+      }
     }
 
     const nextStart = dto.startDate ?? existing.startDate;
