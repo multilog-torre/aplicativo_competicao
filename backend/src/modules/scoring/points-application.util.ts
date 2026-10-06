@@ -1,12 +1,22 @@
 import { TransactionClient } from '../../shared/types/prisma';
 
 /**
- * Retorna o id do ciclo de premiação ACTIVE agora (dentro da janela
- * startDate..endDate, status ainda ACTIVE — não CLOSED/CANCELLED), ou
- * `null` se não houver nenhum rolando neste instante: antes do primeiro
- * ciclo existir, ou no intervalo entre um ciclo fechado e o próximo
- * começar. Usado pra decidir se um crédito de pontos conta pro "placar de
- * competição" (`User.totalPoints`) — ver ciclos.md.
+ * Retorna o id do ciclo de premiação ACTIVE na data de referência (dentro
+ * da janela startDate..endDate, status ainda ACTIVE — não CLOSED/
+ * CANCELLED), ou `null` se não houver nenhum rolando naquele instante:
+ * antes do primeiro ciclo existir, ou no intervalo entre um ciclo fechado
+ * e o próximo começar. Usado pra decidir se um crédito de pontos conta
+ * pro "placar de competição" (`User.totalPoints`) — ver ciclos.md.
+ *
+ * `referenceDate` (padrão: agora) existe pra separar dois instantes que
+ * NEM SEMPRE coincidem: quando a atividade aconteceu (`activityDate`) e
+ * quando ela foi de fato aprovada/creditada (que pode ser dias depois,
+ * numa modalidade que exige evidência e demora pra ser avaliada — ou
+ * ainda mais tarde, se a pessoa registra hoje algo de semanas atrás).
+ * `ScoringService.creditPoints` passa `activityDate` quando o crédito tem
+ * origem numa atividade — bônus/penalidade manuais sem atividade
+ * associada continuam usando "agora" (não tem outra data de referência
+ * que faça sentido). Ver ciclos.md pro bug real que isso corrigiu.
  *
  * Fica num util isolado (não dentro de ScoringService nem CycleService)
  * de propósito: ScoringService.creditPoints chama isso, CycleService
@@ -14,10 +24,9 @@ import { TransactionClient } from '../../shared/types/prisma';
  * ChallengeService também precisam — colocar em qualquer um dos três
  * criaria import circular.
  */
-export async function getActiveCycleId(tx: TransactionClient): Promise<string | null> {
-  const now = new Date();
+export async function getActiveCycleId(tx: TransactionClient, referenceDate: Date = new Date()): Promise<string | null> {
   const cycle = await tx.awardCycle.findFirst({
-    where: { status: 'ACTIVE', startDate: { lte: now }, endDate: { gte: now } },
+    where: { status: 'ACTIVE', startDate: { lte: referenceDate }, endDate: { gte: referenceDate } },
     select: { id: true },
   });
   return cycle?.id ?? null;

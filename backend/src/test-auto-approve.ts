@@ -157,6 +157,28 @@ async function main() {
   const testDay = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString();
   const testDayBefore = new Date(Date.now() - 201 * 24 * 60 * 60 * 1000).toISOString();
 
+  // O crédito de pontos agora é atribuído ao ciclo ACTIVE na data da
+  // ATIVIDADE (activityDate), não mais no momento da aprovação (ver
+  // points-application.util.ts — corrige o bug de atividade atribuída ao
+  // ciclo errado quando a aprovação demora). Isso significa que testDay (de
+  // propósito bem no passado, ver comentário acima) só credita pontos de
+  // verdade se existir algum ciclo ACTIVE cobrindo aquela data — o "Ciclo
+  // Padrão" de conveniência do seed cobre isso, mas test-cycles.ts (que
+  // roda antes desta suíte numa regressão em cadeia) consome esse ciclo e
+  // recria um novo só a partir de HOJE, não retroativo. Cria um ciclo
+  // próprio cobrindo testDay, exclusivo deste arquivo, pra garantir que o
+  // crédito conte independente da ordem de execução das suítes.
+  await reqJson(
+    'POST',
+    '/cycles',
+    {
+      name: 'Ciclo teste exclusivo de test-auto-approve (passado)',
+      startDate: new Date(Date.now() - 205 * 24 * 60 * 60 * 1000).toISOString(),
+      endDate: new Date(Date.now() - 195 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    masterToken,
+  );
+
   const beforeProfileRes = await reqJson('GET', '/profile', undefined, participantToken);
   const pointsBefore = (beforeProfileRes.data as ProfileBody)?.data?.totalPoints ?? 0;
 

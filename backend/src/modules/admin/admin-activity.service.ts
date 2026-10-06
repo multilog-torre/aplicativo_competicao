@@ -129,6 +129,10 @@ export class AdminActivityService {
           activityId: activity.id,
           referenceType: 'UserActivity',
           referenceId: activity.id,
+          // Ciclo é decidido pela data em que a atividade ACONTECEU, não
+          // pelo momento em que ela é aprovada (pode ser dias depois numa
+          // modalidade com evidência) — ver points-application.util.ts.
+          cycleReferenceDate: activity.activityDate,
         },
         tx,
       );

@@ -97,7 +97,7 @@ Conferido diretamente no fluxo de cadastro: `register()`/`AdminUserService.creat
 
 Toda vez que pontos entram ou saem (qualquer um dos 10 tipos acima), o mesmo método central roda estes passos, nesta ordem:
 
-1. Descobre se há um ciclo de premiação `ACTIVE` agora (`getActiveCycleId`) e grava esse `cycleId` (ou `null`) na própria transação.
+1. Descobre se há um ciclo de premiação `ACTIVE` cobrindo a data de referência (`getActiveCycleId`) e grava esse `cycleId` (ou `null`) na própria transação. Pra `ACTIVITY`, a data de referência é a **`activityDate`** (quando a atividade aconteceu) — não "agora"/momento da aprovação (bug corrigido, ver [ciclos.md](./ciclos.md): sem isso, uma atividade atrasada ou que demorou pra ser aprovada podia ser creditada ao ciclo errado). Pra `BONUS`/`PENALTY`/`ADJUSTMENT`/recompensas de conquista/desafio, continua sendo "agora".
 2. Cria a linha imutável em `points_transactions`.
 3. Aplica o valor em `User.totalPoints`/`User.lifetimePoints` conforme a regra da seção acima (`applyPointsToUser`).
 4. Reclassifica o nível do usuário ([niveis.md](./niveis.md)) — sempre com base no `totalPoints` já atualizado, então também respeita a regra de ciclo automaticamente.

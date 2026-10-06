@@ -250,6 +250,16 @@ export class ScoringService {
       rewardId?: string;
       referenceType?: string;
       referenceId?: string;
+      /** Data usada pra decidir QUAL ciclo estava ativo (em vez de "agora")
+       * — passado pela aprovação de atividade (activityDate), pra um
+       * crédito contar pro ciclo em que a atividade de fato aconteceu, não
+       * pro ciclo que por acaso está rolando no momento em que alguém
+       * aprova (pode ser dias depois, numa modalidade com evidência, ou
+       * numa atividade registrada em atraso). Sem isso, padrão é "agora"
+       * (bônus/penalidade manuais não têm outra data de referência). Ver
+       * ciclos.md.
+       */
+      cycleReferenceDate?: Date;
     },
     externalTx?: TransactionClient,
   ) {
@@ -271,7 +281,7 @@ export class ScoringService {
       // próprio mecanismo de zeragem, sempre afeta totalPoints independente
       // disso.
       const isCycleReset = params.transactionType === 'CYCLE_RESET';
-      const cycleId = isCycleReset ? null : await getActiveCycleId(tx);
+      const cycleId = isCycleReset ? null : await getActiveCycleId(tx, params.cycleReferenceDate);
       // Débitos/correções (resgate de prêmio, penalidade, reversão) sempre
       // afetam totalPoints, com ou sem ciclo ativo — só um GANHO NOVO é que
       // fica condicionado a ter ciclo rolando. Sem isso, um resgate feito
