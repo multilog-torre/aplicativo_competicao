@@ -79,6 +79,33 @@ export class AdminActivityService {
    * funcionando do mesmo jeito, chamada com um adminId real.
    */
   public static async approve(activityId: string, adminId: string | null) {
+    // Busca a evidência de imagem (se houver) e lê o arquivo do storage ANTES
+    // de abrir a transação — storage.read() é uma chamada de rede externa
+    // (Cloudinary), que pode demorar ou falhar por instabilidade de rede, e
+    // NUNCA deve rodar dentro de uma transação de banco. Bug real já
+    // aconteceu duas vezes em produção: o Prisma fecha a transação sozinho
+    // depois do timeout padrão de 5s (interactive transaction), e a
+    // aprovação inteira falha e desfaz tudo (status volta pra PENDING) bem
+    // no fim, na chamada de prisma.post.create() — "Transaction already
+    // closed" — mesmo a evidência já tendo sido salva com sucesso antes.
+    // Buscar e ler o arquivo aqui fora, antes da transação, elimina esse
+    // risco por completo: a transação em si passa a conter só operações de
+    // banco, rápidas e previsíveis. Mesmo assim, o timeout explícito abaixo
+    // (15s, acima do padrão de 5s do Prisma) fica como margem de segurança
+    // extra — essa transação faz várias consultas em sequência (ranking,
+    // nível, conquistas, sequência de dias, post do Mural).
+    const imageEvidence = await prisma.activityEvidence.findFirst({
+      where: { activityId, fileType: { in: IMAGE_EVIDENCE_MIME_TYPES } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let imageSource: { buffer: Buffer; fileName: string; mimeType: string } | undefined;
+    if (imageEvidence) {
+      const storage = getStorageProvider();
+      const buffer = await storage.read(imageEvidence.storagePath);
+      imageSource = { buffer, fileName: imageEvidence.fileName, mimeType: imageEvidence.fileType };
+    }
+
     return prisma.$transaction(async (tx) => {
       const activity = await tx.userActivity.findUnique({
         where: { id: activityId },
@@ -209,20 +236,10 @@ export class AdminActivityService {
       }
 
       // Publica automaticamente no Mural geral — todo colaborador vê no feed
-      // (a pedido do usuário). Se houver evidência em formato de imagem, ela é
-      // copiada pro storage do próprio post (ver PostService.createFromActivity).
-      const imageEvidence = await tx.activityEvidence.findFirst({
-        where: { activityId: activity.id, fileType: { in: IMAGE_EVIDENCE_MIME_TYPES } },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      let imageSource: { buffer: Buffer; fileName: string; mimeType: string } | undefined;
-      if (imageEvidence) {
-        const storage = getStorageProvider();
-        const buffer = await storage.read(imageEvidence.storagePath);
-        imageSource = { buffer, fileName: imageEvidence.fileName, mimeType: imageEvidence.fileType };
-      }
-
+      // (a pedido do usuário). Se houver evidência em formato de imagem, ela
+      // já foi lida do storage ANTES desta transação abrir (imageSource,
+      // acima) e é só copiada pro storage do próprio post aqui dentro (ver
+      // PostService.createFromActivity).
       await PostService.createFromActivity(
         {
           userId: activity.userId,
@@ -238,7 +255,7 @@ export class AdminActivityService {
         transaction: creditResult.transaction,
         newTotalPoints: creditResult.newTotalPoints,
       };
-    });
+    }, { timeout: 15000 });
   }
 
   /**
