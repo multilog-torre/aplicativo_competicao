@@ -2,6 +2,8 @@
 
 Este documento explica, com detalhes, cada serviço externo usado para colocar a Torre no ar, o que cada um faz especificamente neste projeto, e o que exige (ou não) atenção contínua depois que tudo está funcionando.
 
+> Pra entender o **fluxo** — o que acontece, passo a passo, quando alguém usa o app (ex.: registrar uma atividade com foto) — ver [INTEGRACAO.md](./INTEGRACAO.md).
+
 ---
 
 ## 1. Visão geral — as 4 peças
