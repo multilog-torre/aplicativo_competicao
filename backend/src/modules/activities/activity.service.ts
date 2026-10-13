@@ -46,6 +46,35 @@ export class ActivityService {
       throw new AppError('Esta modalidade está inativa e não aceita novas atividades.', 422, 'MODALITY_INACTIVE');
     }
 
+    // Só deixa registrar atividade NOVA se houver um ciclo de premiação
+    // ACTIVE agora (a pedido do usuário) — evita a confusão de alguém
+    // registrar algo num intervalo sem ciclo nenhum rolando, cujos pontos
+    // nunca vão contar pro placar de competição (ver ciclos.md). Vale pra
+    // TODO mundo, sem exceção de papel (admin também participa). Só afeta
+    // a CRIAÇÃO — uma atividade já pendente de antes continua podendo ser
+    // aprovada normalmente mesmo sem ciclo ativo (regra separada, já
+    // existente: o crédito só não conta pro placar, mas a aprovação em si
+    // não é bloqueada).
+    //
+    // Consulta direta (sem CycleService.getCurrent()) de propósito: aquele
+    // método chama checkAndCloseExpiredCycles() antes de ler, fechando
+    // qualquer ciclo vencido como efeito colateral — pesado demais só pra
+    // essa checagem de existência, e fecharia ciclos vencidos mais cedo do
+    // que o resto do sistema tolera (mesma folga que já existe em
+    // "COMPLETED é um estado transitório", ciclos.md). O verificador
+    // periódico (server.ts, 5 em 5 min) continua sendo quem de fato fecha.
+    const activeCycleNow = await prisma.awardCycle.findFirst({
+      where: { status: 'ACTIVE', startDate: { lte: new Date() }, endDate: { gte: new Date() } },
+      select: { id: true },
+    });
+    if (!activeCycleNow) {
+      throw new AppError(
+        'Não é possível registrar atividades fora de um período de ciclo ativo. Aguarde o início do próximo ciclo.',
+        422,
+        'NO_ACTIVE_CYCLE',
+      );
+    }
+
     const activityDate = new Date(dto.activityDate);
 
     // Verifica limites diários/semanais/mensais configurados na modalidade

@@ -18,6 +18,14 @@ Todo lançamento de pontos positivo (atividade aprovada, bônus manual, recompen
 - **Conquistas do tipo `TOTAL_POINTS`** (Centena, Clube dos 1.000, Milionário de Pontos) são a única exceção deliberada — ver `lifetimePoints` abaixo.
 - Ver [pontuacao.md](./pontuacao.md) pro detalhe de implementação (`points-application.util.ts`).
 
+## Registro de atividade NOVA exige ciclo ativo agora (a pedido do usuário)
+
+Diferente da regra acima (que é sobre os PONTOS não contarem sem ciclo ativo), esta é sobre a própria **criação** da atividade: `POST /activities` (`ActivityService.create`) recusa com `422 NO_ACTIVE_CYCLE` se não houver nenhum ciclo `ACTIVE` cobrindo o instante exato da tentativa — vale pra qualquer papel, sem exceção (admin também participa). Objetivo: evitar a confusão de alguém registrar algo num intervalo sem ciclo nenhum, cujos pontos nunca vão contar pra nada (regra acima).
+
+**Escopo deliberadamente restrito à criação**: uma atividade que já estava `PENDING` de antes continua podendo ser **aprovada** normalmente mesmo que o ciclo feche nesse meio tempo — só o crédito dela é que não soma no placar (regra de cima, já existente). Bloquear também a aprovação exigiria parar a fila inteira de Admin > Aprovações durante qualquer intervalo sem ciclo, o que não foi pedido.
+
+**Checagem direta, sem efeito colateral**: essa validação consulta `AwardCycle` direto (`status: 'ACTIVE'` + janela de datas cobrindo agora), em vez de usar `CycleService.getCurrent()` — de propósito. `getCurrent()` roda `checkAndCloseExpiredCycles()` antes de ler, fechando qualquer ciclo vencido (pódio + reset) como efeito colateral de uma simples leitura. Usar esse método aqui faria toda tentativa de registrar atividade virar um gatilho de fechamento de ciclo — efeito colateral pesado demais pra essa checagem, e mais agressivo do que o resto do sistema tolera (o fechamento de verdade continua sendo responsabilidade do verificador periódico de 5 em 5 min, `server.ts`, ou de uma leitura explícita do módulo de ciclos).
+
 ### `lifetimePoints` — o contador que nunca some
 
 Existe um segundo contador no usuário, `User.lifetimePoints`, que soma **todo** ganho/perda de pontos (positivo ou negativo) **sempre**, com ou sem ciclo ativo — a única transação que ele ignora é o próprio `CYCLE_RESET` (é só uma zeragem administrativa de placar, não uma perda real). Ele existe **só** pra sustentar as 3 conquistas `TOTAL_POINTS`, que são vitalícias por design e não deveriam depender de estar ou não dentro de um ciclo. Não aparece em nenhuma tela — é puramente um mecanismo interno (exceto no ranking, onde é a fonte do campo `totalPointsAllTime`, que hoje não tem nenhum lugar na tela que o exiba).
