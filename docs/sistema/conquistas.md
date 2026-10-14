@@ -25,6 +25,15 @@ Cada um exige um formato específico de `ruleValue` (JSON) e é avaliado por um 
 
 Para `SPECIFIC_MODALITY`/`CUMULATIVE_QUANTITY`, o `activityTypeId` também é espelhado numa coluna própria da tabela (`Achievement.activityTypeId`), só para filtro/agrupamento administrativo — a avaliação real do critério sempre lê o `ruleValue`, nunca essa coluna.
 
+## Corte de legado (`achievementsCountSince`) — zera o progresso sem apagar histórico
+
+Decisão de negócio (a pedido do usuário, relançamento oficial pós-período de testes): uma configuração global opcional (`SettingsService.getAchievementsCountSince`/`setDate`, mesma tabela key/value de `autoApproveActivities` — tela "Configurações") guarda uma **data de corte única**. Quando definida, os 5 critérios baseados em atividade — `ACTIVITY_COUNT`, `SPECIFIC_MODALITY`, `CUMULATIVE_QUANTITY`, `DISTINCT_MODALITIES` e `STREAK_DAYS` — passam a ignorar qualquer `UserActivity` com `activityDate` **anterior** a esse corte, tanto no cálculo de progresso (`getCatalogWithProgressForUser`) quanto na avaliação de desbloqueio (`checkAndUnlock`). Sem corte definido (`null`, padrão), nada muda — conta a vida toda, como sempre.
+
+- **É um corte ÚNICO e fixo, não um "por ciclo"**: uma vez definido, não se move sozinho a cada novo ciclo depois disso — diferente do reset de pontos (`CYCLE_RESET`, ver [ciclos.md](./ciclos.md)), que acontece a cada fechamento. A pedido explícito do usuário: atividade antiga vira "legado" (não conta mais pra progresso) só uma vez, no relançamento; dali em diante as conquistas voltam a ser vitalícias e cumulativas normalmente, só que contando a partir do corte em vez de desde sempre.
+- **`TOTAL_POINTS` nunca usa esse corte** — continua lendo `lifetimePoints` sem filtro nenhum, vitalício de verdade (mesma decisão de sempre, reafirmada explicitamente quando esse corte foi criado).
+- **Não revoga sozinho uma conquista já concedida**: o corte só afeta o CÁLCULO de progresso/satisfação de critério — uma `UserAchievement` já concedida continua lá até alguém excluir esse registro manualmente (ver "Exclusão" abaixo). Pra realmente "zerar todo mundo" na prática, os dois passos andam juntos: (1) definir o corte, (2) excluir as conquistas já concedidas que devem voltar a ser conquistáveis.
+- **Por que isso foi necessário**: sem o corte, excluir só o registro de `UserAchievement` (sem mexer no histórico de atividades) não resolve nada de verdade — a primeira aprovação de QUALQUER atividade (mesmo uma antiga, só saindo da fila de pendentes) reavalia o histórico inteiro e reconcede o selo na hora, já que o critério nunca olhou pra quando a atividade aconteceu. Isso foi observado na prática: 11 usuários reconquistaram "Primeiro Passo" sozinhos, sem registrar nada novo, só porque atividades antigas pendentes foram aprovadas depois da primeira limpeza.
+
 ## Motor de desbloqueio automático (`checkAndUnlock`)
 
 Roda **dentro da mesma transação atômica** de qualquer crédito/débito de pontos (`ScoringService.creditPoints`), exceto em `CYCLE_RESET` (ver [pontuacao.md](./pontuacao.md) para o porquê). A cada chamada:

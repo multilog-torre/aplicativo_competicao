@@ -10,6 +10,7 @@ import { RankingService } from '../ranking/ranking.service';
 import { getStorageProvider } from '../storage/storage.factory';
 import { applyPointsToUser } from '../scoring/points-application.util';
 import { computeMaxStreakDays } from '../../shared/utils/streak.util';
+import { SettingsService } from '../settings/settings.service';
 import { CreateAchievementDTO, UpdateAchievementDTO } from './achievement.dto';
 
 const ALLOWED_ICON_EXTENSIONS = ['png', 'svg', 'jpg', 'jpeg'];
@@ -74,6 +75,20 @@ function assertValidRuleValue(ruleType: string, ruleValue: Record<string, unknow
     default:
       throw new AppError(`ruleType desconhecido: '${ruleType}'`, 422, 'INVALID_RULE_TYPE');
   }
+}
+
+/**
+ * Filtro de data pra ignorar atividades "legado" na contagem de progresso
+ * de conquista, se um corte estiver configurado (SettingsService —
+ * `achievementsCountSince`, a pedido do usuário: zera o progresso de todo
+ * mundo num relançamento oficial sem apagar o histórico de atividades em
+ * si). `{}` (sem filtro) quando não há corte definido — comportamento
+ * original, vitalício, inalterado. Nunca usado pelo critério TOTAL_POINTS
+ * (lifetimePoints continua vitalício de verdade, decisão explícita).
+ */
+async function buildAchievementActivityDateFilter(): Promise<{ gte: Date } | Record<string, never>> {
+  const cutoff = await SettingsService.getAchievementsCountSince();
+  return cutoff ? { gte: cutoff } : {};
 }
 
 /** Pra ruleTypes ligados a uma modalidade específica, o `activityTypeId` que
@@ -343,11 +358,12 @@ export class AchievementService {
     // admin a desativou; só as ainda BLOQUEADAS respeitam o filtro ACTIVE
     // (não faz sentido mostrar progresso rumo a algo que não pode mais ser
     // conquistado).
+    const activityDateFilter = await buildAchievementActivityDateFilter();
     const [unlockedRows, user, approvedActivities] = await Promise.all([
       prisma.userAchievement.findMany({ where: { userId } }),
       prisma.user.findUnique({ where: { id: userId }, select: { totalPoints: true, lifetimePoints: true, createdAt: true } }),
       prisma.userActivity.findMany({
-        where: { userId, status: 'APPROVED' },
+        where: { userId, status: 'APPROVED', activityDate: activityDateFilter },
         select: { activityTypeId: true, activityDate: true, quantity: true },
       }),
     ]);
@@ -482,7 +498,8 @@ export class AchievementService {
     if (!user) return;
 
     // Dados usados por múltiplas regras — computados uma única vez por chamada.
-    const approvedCount = await tx.userActivity.count({ where: { userId, status: 'APPROVED' } });
+    const activityDateFilter = await buildAchievementActivityDateFilter();
+    const approvedCount = await tx.userActivity.count({ where: { userId, status: 'APPROVED', activityDate: activityDateFilter } });
 
     // Recalculado a cada chamada (não cacheado) — como pointsAwarded pode
     // mudar entre uma conquista RANKING_POSITION e outra dentro do mesmo
@@ -515,7 +532,7 @@ export class AchievementService {
 
         case 'SPECIFIC_MODALITY': {
           const count = await tx.userActivity.count({
-            where: { userId, status: 'APPROVED', activityTypeId: rule.activityTypeId as string },
+            where: { userId, status: 'APPROVED', activityTypeId: rule.activityTypeId as string, activityDate: activityDateFilter },
           });
           satisfied = count >= ((rule.count as number) ?? 1);
           break;
@@ -523,7 +540,7 @@ export class AchievementService {
 
         case 'STREAK_DAYS': {
           const activities = await tx.userActivity.findMany({
-            where: { userId, status: 'APPROVED' },
+            where: { userId, status: 'APPROVED', activityDate: activityDateFilter },
             select: { activityDate: true },
           });
           const maxStreak = computeMaxStreakDays(activities.map((a) => a.activityDate));
@@ -533,7 +550,7 @@ export class AchievementService {
 
         case 'CUMULATIVE_QUANTITY': {
           const agg = await tx.userActivity.aggregate({
-            where: { userId, status: 'APPROVED', activityTypeId: rule.activityTypeId as string },
+            where: { userId, status: 'APPROVED', activityTypeId: rule.activityTypeId as string, activityDate: activityDateFilter },
             _sum: { quantity: true },
           });
           satisfied = (agg._sum.quantity ?? 0) >= (rule.targetQuantity as number);
@@ -543,7 +560,7 @@ export class AchievementService {
         case 'DISTINCT_MODALITIES': {
           const grouped = await tx.userActivity.groupBy({
             by: ['activityTypeId'],
-            where: { userId, status: 'APPROVED' },
+            where: { userId, status: 'APPROVED', activityDate: activityDateFilter },
           });
           satisfied = grouped.length >= (rule.count as number);
           break;

@@ -7,6 +7,9 @@ import { z } from 'zod';
  */
 export const UpdateSettingsSchema = z.object({
   autoApproveActivities: z.boolean().optional(),
+  // `null` explícito remove o corte (volta a contar tudo, vida toda).
+  // `undefined` (campo omitido) não mexe no valor atual.
+  achievementsCountSince: z.coerce.date().nullable().optional(),
 });
 
 export type UpdateSettingsDTO = z.infer<typeof UpdateSettingsSchema>;
