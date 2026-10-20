@@ -51,6 +51,10 @@ Quem não tem nenhuma transação dentro do período do ciclo (ex.: já carregav
 
 > **Ressalva de infraestrutura**: como hospedagens gratuitas costumam hibernar por inatividade, o fechamento de fato só roda quando o servidor está "acordado" — se ninguém acessar o sistema por um tempo após a `endDate`, o fechamento fica pendente até a próxima requisição.
 
+### Efeito sobre edição/exclusão de atividades
+
+Uma vez que um ciclo fecha (`CLOSED`), toda atividade `APPROVED` cujos pontos foram creditados nele fica "congelada" — o autor não pode mais editá-la nem excluí-la (`422 CYCLE_ALREADY_CLOSED`), porque o resultado daquele ciclo (pódio, reset) já é definitivo. Enquanto o ciclo ainda está `ACTIVE`, a edição/exclusão funciona normalmente. Ver "Regra do ciclo ativo" em [atividades.md](./atividades.md).
+
 ## O que NUNCA é afetado pelo reset de ciclo
 
 - O ledger de pontos (`points_transactions`) — o histórico completo permanece intacto para sempre; só o saldo corrente (`totalPoints`) volta a 0.

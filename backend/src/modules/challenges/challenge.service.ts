@@ -312,6 +312,76 @@ export class ChallengeService {
     }
   }
 
+  /**
+   * Desfaz a contribuição de uma atividade editada/excluída no progresso de
+   * qualquer desafio que ela alimentou — a pedido do usuário (editar/excluir
+   * atividade já aprovada). Espelha a MESMA regra de elegibilidade de
+   * `updateProgressForActivity` (modalidade/período do desafio), usando os
+   * valores ANTIGOS da atividade (antes da edição, ou os únicos valores que
+   * ela teve, se for exclusão).
+   *
+   * Cuidado que só existe aqui (não existia na soma): `updateProgressForActivity`
+   * só soma enquanto `completed === false` NO MOMENTO em que a atividade foi
+   * aprovada — se o desafio já tinha sido completado por uma atividade
+   * anterior, esta nunca entrou na conta. Descontar sem checar isso criaria
+   * um progresso que nunca existiu de verdade. A checagem: se o desafio já
+   * estava completo ANTES desta atividade ser aprovada (`completedAt <=
+   * activity.validatedAt`), pula — nunca contou, não desconta.
+   *
+   * Não reverte pontos sozinho (evitaria import circular com ScoringService,
+   * que já importa ChallengeService) — devolve a lista de desafios cujo
+   * prêmio de conclusão precisa ser revertido pelo chamador.
+   */
+  public static async undoProgressForActivity(
+    userId: string,
+    activity: { activityTypeId: string; activityDate: Date; quantity: number; validatedAt: Date | null },
+    tx: TransactionClient,
+  ): Promise<Array<{ challengeId: string; title: string }>> {
+    const participants = await tx.challengeParticipant.findMany({
+      where: {
+        userId,
+        challenge: {
+          status: { not: 'CANCELLED' },
+          startDate: { lte: activity.activityDate },
+          endDate: { gte: activity.activityDate },
+          OR: [{ activityTypeId: null }, { activityTypeId: activity.activityTypeId }],
+        },
+      },
+      include: { challenge: true },
+    });
+
+    const toReverseReward: Array<{ challengeId: string; title: string }> = [];
+
+    for (const participant of participants) {
+      const neverCountedForThisParticipant =
+        participant.completed &&
+        participant.completedAt !== null &&
+        activity.validatedAt !== null &&
+        participant.completedAt.getTime() <= activity.validatedAt.getTime();
+
+      if (neverCountedForThisParticipant) continue;
+
+      const newProgress = Math.max(0, participant.currentProgress - activity.quantity);
+      const stillCompleted = newProgress >= participant.challenge.targetGoal;
+      const isUncompleting = participant.completed && !stillCompleted;
+
+      await tx.challengeParticipant.update({
+        where: { id: participant.id },
+        data: {
+          currentProgress: newProgress,
+          completed: stillCompleted,
+          completedAt: stillCompleted ? participant.completedAt : null,
+        },
+      });
+
+      if (isUncompleting) {
+        toReverseReward.push({ challengeId: participant.challengeId, title: participant.challenge.title });
+      }
+    }
+
+    return toReverseReward;
+  }
+
   // ─── Consulta de progresso ──────────────────────────────────────────────────────
 
   public static async getMyProgress(challengeId: string, userId: string) {

@@ -23,6 +23,10 @@ Um usuário só pode participar uma vez do mesmo desafio (409 `ALREADY_JOINED` n
 
 Toda vez que uma atividade é aprovada (dentro da mesma transação atômica do crédito de pontos), o progresso de **todos os desafios ativos em que o usuário participa e que casam com a data/modalidade da atividade** é incrementado pela `quantity` daquela atividade. Ao cruzar a meta, o desafio é marcado concluído automaticamente — não existe um passo manual de "finalizar".
 
+## Desfazer progresso (edição/exclusão de atividade já aprovada)
+
+Como o progresso é só incremental (nunca recalculado do zero), editar ou excluir uma atividade `APPROVED` que já contribuiu para um desafio precisa desfazer essa contribuição de forma simétrica — subtrai a `quantity` antiga (só se ela de fato havia sido contada, não se o desafio já estava completo antes dela), reverte a recompensa se isso tirar o desafio da marca de concluído, e, no caso de edição, soma o progresso recalculado com os valores novos (podendo completar de novo e recreditar a recompensa). Ver "Edição e exclusão pelo próprio autor" em [atividades.md](./atividades.md) para os detalhes.
+
 ## Conclusão e recompensa
 
 Ao completar (seja pelo cálculo retroativo do `join`, seja pelo incremento de uma nova atividade):

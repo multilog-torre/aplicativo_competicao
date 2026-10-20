@@ -5,7 +5,7 @@ import { uploadSingleFile } from '../../shared/middlewares/uploadMiddleware';
 import { validateRequest } from '../../shared/middlewares/validateRequest';
 import { EvidenceController } from '../evidence/evidence.controller';
 import { ActivityController } from './activity.controller';
-import { CreateActivitySchema, ListActivitiesQuerySchema } from './activity.dto';
+import { CreateActivitySchema, ListActivitiesQuerySchema, UpdateActivitySchema } from './activity.dto';
 
 const router = Router();
 
@@ -37,6 +37,27 @@ router.get(
  * Detalhe de uma atividade específica.
  */
 router.get('/:id', ensureAuthenticated, asyncHandler(ActivityController.getById));
+
+/**
+ * PATCH /api/v1/activities/:id
+ * Edita a própria atividade (quantidade/data/descrição) — a pedido do
+ * usuário. PENDING: livre. APPROVED: reverte e recredita com os valores
+ * novos, só se o ciclo em que pontuou ainda estiver ativo. Ver
+ * ActivityService.update.
+ */
+router.patch(
+  '/:id',
+  ensureAuthenticated,
+  validateRequest({ body: UpdateActivitySchema }),
+  asyncHandler(ActivityController.update),
+);
+
+/**
+ * DELETE /api/v1/activities/:id
+ * Exclui (PENDING/REJECTED) ou cancela (APPROVED) a própria atividade — a
+ * pedido do usuário. Ver ActivityService.remove.
+ */
+router.delete('/:id', ensureAuthenticated, asyncHandler(ActivityController.remove));
 
 /**
  * POST /api/v1/activities/:id/evidence

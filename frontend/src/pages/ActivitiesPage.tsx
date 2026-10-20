@@ -14,6 +14,12 @@ export function ActivitiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<UserActivity | null>(null);
+  const [deleting, setDeleting] = useState<UserActivity | null>(null);
+  // Força o <ActivityCalendarSection> a recarregar (remonta) depois de uma
+  // edição/exclusão — ele busca os dados sozinho e não saberia, de outra
+  // forma, que uma atividade do mês mudou (a pedido do usuário).
+  const [calendarKey, setCalendarKey] = useState(0);
 
   function load() {
     setLoading(true);
@@ -36,7 +42,7 @@ export function ActivitiesPage() {
         </button>
       </div>
 
-      <ActivityCalendarSection />
+      <ActivityCalendarSection key={calendarKey} />
 
       {loading && <LoadingState label="Carregando suas atividades…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
@@ -55,6 +61,7 @@ export function ActivitiesPage() {
                 <th>Quantidade</th>
                 <th>Pontos</th>
                 <th>Status</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -80,6 +87,20 @@ export function ActivitiesPage() {
                       </span>
                     )}
                   </td>
+                  <td data-label="Ações">
+                    <div className="table__actions">
+                      {(a.status === 'PENDING' || a.status === 'APPROVED') && (
+                        <button type="button" className="btn btn--ghost btn--small" onClick={() => setEditing(a)}>
+                          ✏️ Editar
+                        </button>
+                      )}
+                      {a.status !== 'CANCELLED' && (
+                        <button type="button" className="btn btn--ghost btn--small" onClick={() => setDeleting(a)}>
+                          🗑️ Excluir
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -97,7 +118,182 @@ export function ActivitiesPage() {
           }}
         />
       )}
+
+      {editing && (
+        <EditActivityModal
+          activity={editing}
+          onClose={() => setEditing(null)}
+          onUpdated={() => {
+            setEditing(null);
+            showToast('Atividade atualizada com sucesso!', 'success');
+            load();
+            setCalendarKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {deleting && (
+        <DeleteActivityModal
+          activity={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={(status) => {
+            setDeleting(null);
+            showToast(status === 'DELETED' ? 'Atividade excluída com sucesso!' : 'Atividade cancelada com sucesso!', 'success');
+            load();
+            setCalendarKey((k) => k + 1);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function EditActivityModal({
+  activity,
+  onClose,
+  onUpdated,
+}: {
+  activity: UserActivity;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const { showToast } = useToast();
+  const [quantity, setQuantity] = useState(String(activity.quantity));
+  const [activityDate, setActivityDate] = useState(() => {
+    const d = new Date(activity.activityDate);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [description, setDescription] = useState(activity.description ?? '');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const quantityMatters = activity.unit !== null;
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await api.patch(`/activities/${activity.id}`, {
+        activityDate: new Date(`${activityDate}T00:00:00`).toISOString(),
+        quantity: quantityMatters ? Number(quantity) : undefined,
+        description: description || undefined,
+      });
+      onUpdated();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível editar a atividade.';
+      setFormError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Editar atividade — ${activity.activityType?.name ?? ''}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="form">
+        {formError && <div className="alert alert--error">{formError}</div>}
+
+        {activity.status === 'APPROVED' && (
+          <div className="alert alert--info">
+            Esta atividade já foi aprovada. Ao salvar, os pontos (e eventuais desafios) são recalculados
+            automaticamente com os novos valores — só é possível editar enquanto o ciclo de premiação atual
+            ainda estiver ativo.
+          </div>
+        )}
+
+        {quantityMatters ? (
+          <div className="form__row">
+            <label className="field">
+              <span className="field__label">Quantidade{activity.unit ? ` (${activity.unit})` : ''}</span>
+              <input type="number" min="0.01" step="0.01" required value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field__label">Data</span>
+              <input type="date" required value={activityDate} max={todayLocalISODate()} onChange={(e) => setActivityDate(e.target.value)} />
+            </label>
+          </div>
+        ) : (
+          <label className="field">
+            <span className="field__label">Data</span>
+            <input type="date" required value={activityDate} max={todayLocalISODate()} onChange={(e) => setActivityDate(e.target.value)} />
+          </label>
+        )}
+
+        <label className="field">
+          <span className="field__label">Descrição (opcional)</span>
+          <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
+        </label>
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={submitting}>
+            {submitting ? 'Salvando…' : 'Salvar alterações'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DeleteActivityModal({
+  activity,
+  onClose,
+  onDeleted,
+}: {
+  activity: UserActivity;
+  onClose: () => void;
+  onDeleted: (status: 'DELETED' | 'CANCELLED') => void;
+}) {
+  const { showToast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const { data } = await api.delete<{ status: 'DELETED' | 'CANCELLED' }>(`/activities/${activity.id}`);
+      onDeleted(data.status);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Não foi possível excluir a atividade.';
+      setFormError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title="Excluir atividade" onClose={onClose}>
+      <div className="form">
+        {formError && <div className="alert alert--error">{formError}</div>}
+
+        <p>
+          Tem certeza que deseja excluir a atividade de <strong>{activity.activityType?.name}</strong> (
+          {new Date(activity.activityDate).toLocaleDateString('pt-BR')})?
+        </p>
+
+        {activity.status === 'APPROVED' && (
+          <div className="alert alert--info">
+            Esta atividade já foi aprovada. Ao excluir, os {activity.calculatedPoints} pontos (e eventuais
+            desafios concluídos por ela) serão desfeitos automaticamente — só é possível excluir enquanto o
+            ciclo de premiação atual ainda estiver ativo.
+          </div>
+        )}
+
+        <div className="form__actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn--danger" onClick={handleConfirm} disabled={submitting}>
+            {submitting ? 'Excluindo…' : 'Confirmar exclusão'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -273,6 +469,9 @@ function ActivityCalendarSection() {
           .sort((a, b) => new Date(a.activityDate).getTime() - new Date(b.activityDate).getTime())
           .forEach((act) => {
             if (!act.evidences || act.evidences.length === 0) return;
+            // Atividade cancelada não deve mais aparecer no calendário —
+            // a foto "desaparece" junto com a exclusão (a pedido do usuário).
+            if (act.status === 'CANCELLED') return;
             const day = new Date(act.activityDate).getDate();
             const existing = map.get(day);
             if (existing) existing.push(act);

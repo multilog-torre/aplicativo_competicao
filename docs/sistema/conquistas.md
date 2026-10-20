@@ -45,7 +45,7 @@ Roda **dentro da mesma transação atômica** de qualquer crédito/débito de po
 
 **Limitação deliberada**: cada conquista é avaliada uma única vez por chamada — não há recursão. Se o prêmio de uma conquista A (ex.: +500 pontos) fizer a pessoa cruzar o limiar de uma conquista B do tipo `TOTAL_POINTS` na mesma passada, B só é detectada na **próxima** transação de pontos do usuário, não instantaneamente. Decisão consciente para manter a lógica simples e previsível.
 
-Uma conquista é **vitalícia**: uma vez concedida, nunca é removida, mesmo que o admin desative ou exclua a conquista depois.
+Uma conquista é **vitalícia**: uma vez concedida, nunca é removida, mesmo que o admin desative ou exclua a conquista depois — inclusive se, mais tarde, a própria atividade que a desbloqueou for editada ou excluída pelo autor (ver "Edição e exclusão pelo próprio autor" em [atividades.md](./atividades.md)); só a pontuação/progresso de desafio é desfeito nesse caso, nunca a conquista.
 
 ## Progresso (grade "Minhas Conquistas")
 

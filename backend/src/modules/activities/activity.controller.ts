@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../shared/utils/apiResponse';
 import { ActivityService } from './activity.service';
-import { CreateActivityDTO, ListActivitiesQueryDTO } from './activity.dto';
+import { CreateActivityDTO, ListActivitiesQueryDTO, UpdateActivityDTO } from './activity.dto';
 
 function isAdminRequest(req: Request): boolean {
   return req.user!.roles.some((role) => ['ADMIN', 'ADMIN_MASTER'].includes(role));
@@ -35,5 +35,24 @@ export class ActivityController {
 
     const activity = await ActivityService.getById(id, userId, isAdmin);
     return sendSuccess(res, activity, 200);
+  }
+
+  /** PATCH /activities/:id — Edita a própria atividade (quantidade/data/descrição) */
+  static async update(req: Request, res: Response) {
+    const { id } = req.params;
+    const dto = req.body as UpdateActivityDTO;
+    const userId = req.user!.id;
+
+    const activity = await ActivityService.update(id, dto, userId);
+    return sendSuccess(res, activity, 200);
+  }
+
+  /** DELETE /activities/:id — Exclui (PENDING/REJECTED) ou cancela (APPROVED) a própria atividade */
+  static async remove(req: Request, res: Response) {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const result = await ActivityService.remove(id, userId);
+    return sendSuccess(res, result, 200);
   }
 }

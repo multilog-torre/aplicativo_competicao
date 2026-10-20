@@ -100,6 +100,37 @@ A rejeição só muda o status para `REJECTED`, grava o motivo, audita (`REJECT_
 - **Nunca expostas por URL direta**: todo download passa por um endpoint autorizado que confere se quem pede é o dono da atividade ou um admin.
 - Validação de extensão e tamanho máximo (`MAX_UPLOAD_SIZE_MB`) antes de salvar.
 
+## Edição e exclusão pelo próprio autor (`PATCH`/`DELETE /activities/:id`)
+
+A pedido do usuário: a própria pessoa pode corrigir ou remover uma atividade que ela mesma registrou — sem precisar de aprovação de admin (self-service) — para os casos comuns de "digitei a quantidade errada" ou "marquei o dia errado". O que acontece depende do status atual:
+
+- **`PENDING`**: edição livre (quantidade/data/descrição — a modalidade em si não é editável, só uma nova atividade pode trocar de modalidade) e exclusão definitiva (hard-delete, junto com qualquer evidência já enviada). Nada foi creditado ainda, então não há o que desfazer.
+- **`REJECTED`**: só exclusão (hard-delete) — não faz sentido editar algo que já foi avaliado e recusado; para tentar de novo, a pessoa registra uma atividade nova.
+- **`APPROVED`**: editar ou excluir **só é permitido enquanto o ciclo de premiação em que ela pontuou ainda estiver `ACTIVE`** — ver "Regra do ciclo ativo" abaixo. Quando permitido:
+  - **Editar**: reverte a transação de pontos original (nunca apaga/edita a linha antiga — gera uma `REVERSAL`, [Regra de Ouro do ledger](./pontuacao.md)), desfaz a contribuição dela em qualquer desafio ativo (ver "Efeito sobre desafios" abaixo), aplica os novos valores e credita os pontos recalculados do zero com os dados novos — inclusive reavaliando o progresso de desafios outra vez, como se fosse uma nova aprovação com a quantidade/data corrigidas. O texto do post automático no Mural é regenerado para refletir a modalidade/quantidade/pontos atualizados.
+  - **Excluir**: mesma reversão de pontos/desafio, mas o status vira `CANCELLED` (soft-delete — já existe histórico de pontuação) em vez de apagar a linha; o post automático no Mural vinculado é ocultado (`status: HIDDEN`, mesmo mecanismo da moderação — ver [mural.md](./mural.md)).
+  - Em ambos os casos, **conquistas já desbloqueadas permanecem — vitalícias, nunca revogadas** (mesma regra de sempre, [conquistas.md](./conquistas.md)); só a pontuação/progresso de desafio é desfeito e recalculado.
+- **`CANCELLED`**: estado terminal — não pode mais ser editada nem excluída de novo (`ACTIVITY_ALREADY_CANCELLED`).
+
+Em todos os casos, só o próprio autor pode editar/excluir a atividade (`ForbiddenError` para qualquer outra pessoa, admin incluído — isso aqui não é uma ferramenta de moderação).
+
+### Regra do ciclo ativo
+
+Editar ou excluir uma atividade `APPROVED` só é permitido se o ciclo de premiação em que os pontos dela foram creditados ainda estiver `ACTIVE` ([ciclos.md](./ciclos.md)). Depois que um ciclo fecha, o resultado dele é considerado definitivo — a pessoa não pode mais alterar uma pontuação que já entrou no fechamento. Tentar editar/excluir depois disso retorna `422 CYCLE_ALREADY_CLOSED`. Uma atividade cujos pontos nunca foram atribuídos a nenhum ciclo (`cycleId` nulo na transação) não tem essa restrição.
+
+### Efeito sobre desafios
+
+O progresso de um desafio (`ChallengeParticipant.currentProgress`) é um contador incremental, nunca recalculado do zero — então editar/excluir uma atividade que já contribuiu para ele exige desfazer essa contribuição explicitamente, de forma simétrica ao que a aprovação fez:
+
+- Se a quantidade da atividade foi, de fato, somada ao progresso na época (ou seja, o desafio **ainda não estava completo** quando ela foi aprovada), essa quantidade é subtraída do `currentProgress` agora.
+- Se o desafio **já estava `completed: true` antes** desta atividade ser aprovada (comparando `participant.completedAt` com `activity.validatedAt`), a quantidade dela nunca chegou a ser contada — então não é subtraída agora (evitaria corromper o número).
+- Se a subtração faz o desafio deixar de bater a meta, `completed` volta para `false` e a recompensa em pontos que havia sido creditada por completá-lo é revertida também (mesma lógica de `REVERSAL` do ledger).
+- Na edição (não na exclusão), depois de desfazer o efeito da atividade antiga, o progresso é recalculado com os valores novos — se isso fizer o desafio bater a meta de novo, ele é marcado `completed` outra vez e a recompensa é creditada novamente.
+
+### Calendário de evidências ("Minhas Atividades")
+
+O calendário com a fotinho de cada dia (ver seção do app) busca atividades por intervalo de data e ignora qualquer atividade `CANCELLED` — a foto desaparece do dia assim que a atividade é excluída. Editar a data de uma atividade `APPROVED` move a foto para o novo dia automaticamente, já que o calendário sempre busca os dados mais recentes (não há cópia duplicada da evidência por dia).
+
 ## Visibilidade
 
 Um participante só vê e lista as próprias atividades — nunca as de outro colega (diferente do perfil, que hoje expõe atividades recentes entre colegas; ver [ranking-e-participantes.md](./ranking-e-participantes.md)). Um admin vê e filtra por qualquer usuário.

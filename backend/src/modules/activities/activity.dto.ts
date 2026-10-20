@@ -24,6 +24,33 @@ export const CreateActivitySchema = z.object({
 
 export type CreateActivityDTO = z.infer<typeof CreateActivitySchema>;
 
+// ─── Edição de Atividade (a pedido do usuário) ─────────────────────────────────
+// Modalidade (activityTypeId) nunca é editável aqui — trocar de modalidade muda
+// a fórmula de pontos e a exigência de evidência inteira; quem quiser isso
+// registra uma atividade nova. Editar é só pra corrigir um dado digitado
+// errado (quantidade/data/descrição) na MESMA atividade.
+export const UpdateActivitySchema = z
+  .object({
+    activityDate: z
+      .string()
+      .refine((v) => !isNaN(Date.parse(v)), { message: 'Data da atividade inválida.' })
+      .refine((v) => new Date(v).getTime() <= Date.now() + 60_000, {
+        message: 'A data da atividade não pode ser no futuro.',
+      })
+      .optional(),
+    quantity: z
+      .number({ invalid_type_error: 'Quantidade deve ser um número.' })
+      .positive('Quantidade deve ser maior que zero.')
+      .max(99999, 'Quantidade excede o valor máximo permitido.')
+      .optional(),
+    description: z.string().max(1000, 'Descrição deve ter no máximo 1000 caracteres.').optional(),
+  })
+  .refine((data) => data.activityDate !== undefined || data.quantity !== undefined || data.description !== undefined, {
+    message: 'Informe ao menos um campo para atualizar (data, quantidade ou descrição).',
+  });
+
+export type UpdateActivityDTO = z.infer<typeof UpdateActivitySchema>;
+
 // ─── Filtros de Listagem ────────────────────────────────────────────────────────
 export const ListActivitiesQuerySchema = z.object({
   userId: z.string().uuid().optional(), // apenas ADMIN/ADMIN_MASTER podem usar

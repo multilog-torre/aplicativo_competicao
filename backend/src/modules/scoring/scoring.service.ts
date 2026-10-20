@@ -84,6 +84,10 @@ export class ScoringService {
     userId: string,
     activityTypeId: string,
     activityDate: Date,
+    /** Exclui esta própria atividade da contagem — usado ao EDITAR uma
+     * atividade já existente (senão ela se contaria duas vezes contra o
+     * próprio limite). Nunca usado na criação (não há o que excluir). */
+    excludeActivityId?: string,
   ): Promise<{ allowed: boolean; reason?: string }> {
     const activityType = await prisma.activityType.findUnique({
       where: { id: activityTypeId },
@@ -124,6 +128,8 @@ export class ScoringService {
     const startOfMonth = new Date(activityDate.getFullYear(), activityDate.getMonth(), 1, 0, 0, 0);
     const endOfMonth = new Date(activityDate.getFullYear(), activityDate.getMonth() + 1, 0, 23, 59, 59, 999);
 
+    const excludeClause = excludeActivityId ? { id: { not: excludeActivityId } } : {};
+
     // Conta atividades APROVADAS (APPROVED) no período, para a mesma modalidade e usuário
     const [dailyCount, weeklyCount, monthlyCount] = await Promise.all([
       dailyLimit
@@ -133,6 +139,7 @@ export class ScoringService {
               activityTypeId,
               status: 'APPROVED',
               activityDate: { gte: startOfDay, lte: endOfDay },
+              ...excludeClause,
             },
           })
         : Promise.resolve(0),
@@ -144,6 +151,7 @@ export class ScoringService {
               activityTypeId,
               status: 'APPROVED',
               activityDate: { gte: startOfWeek, lte: endOfWeek },
+              ...excludeClause,
             },
           })
         : Promise.resolve(0),
@@ -155,6 +163,7 @@ export class ScoringService {
               activityTypeId,
               status: 'APPROVED',
               activityDate: { gte: startOfMonth, lte: endOfMonth },
+              ...excludeClause,
             },
           })
         : Promise.resolve(0),
