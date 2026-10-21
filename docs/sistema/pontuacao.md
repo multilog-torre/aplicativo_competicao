@@ -34,6 +34,14 @@ Depende do `scoringType` configurado na modalidade ([atividades.md](./atividades
 
 `TIME` existe no schema mas está **sem uso** — Curso e Eventos/Palestras, que são "por minuto", usam `MULTIPLIER` (não `TIME`) justamente porque a taxa (0,4 pt/min) é decimal e `TIME` também exigiria um `basePoints` inteiro. Ver "Recalibragem por hora de esforço equivalente" abaixo.
 
+### Mudar a taxa de uma modalidade é só "daqui pra frente" — nunca retroativo
+
+`UserActivity.calculatedPoints` é um **snapshot**: calculado uma única vez, no momento do registro (com reaprovação posterior usando o mesmo valor, salvo edição — ver "Edição e exclusão" em [atividades.md](./atividades.md)), usando o `basePoints`/`multiplier` da modalidade **naquele instante**, e gravado como uma coluna normal — não é recalculado a cada leitura a partir da configuração atual da modalidade. Quando um admin edita a taxa de uma modalidade (Admin → Modalidades), `ActivityTypeService.update` só grava a nova taxa na própria `ActivityType` e audita a mudança — não existe nenhum job ou endpoint que percorra atividades/transações antigas para recalculá-las. Então:
+
+- Atividades **já aprovadas antes da mudança** mantêm o `calculatedPoints`/`PointsTransaction` de pontos com a taxa antiga, para sempre — pontuações passadas (e o ranking/totalPoints que elas já geraram) nunca mudam retroativamente.
+- Atividades **novas, registradas depois da mudança**, usam a taxa nova.
+- Uma atividade que já estava `PENDING` no momento da mudança e só é aprovada depois **mantém a taxa de quando foi registrada**, não a vigente na aprovação — a aprovação (`AdminActivityService.approve`) só credita o `calculatedPoints` que já foi calculado e gravado no registro (`activity.service.ts`), nunca recalcula nesse momento.
+
 ## Recalibragem por hora de esforço equivalente (modalidades)
 
 A pedido do usuário, todas as modalidades foram recalibradas numa régua comum — **pontos por hora de esforço/tempo real investido**. Antes, modalidades de valor fixo alto (Eventos/Palestras a 250 pts fixos, Curso a 100-150 pts fixos) rendiam de 5x a 50x mais por hora que qualquer atividade física, e Leitura (0,1 pt/página) rendia ~3 pts/hora — uma fração do resto.
