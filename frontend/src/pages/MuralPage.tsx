@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import { useAuthedImage } from '../api/useAuthedImage';
-import { Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
+import { AwardCycle, Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { Avatar, emojiForIcon } from '../components/ui/Badge';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
@@ -95,7 +95,10 @@ function MuralFeed({
   const { showToast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [composerOpen, setComposerOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -103,21 +106,83 @@ function MuralFeed({
   // qualquer participante (PUBLISHED + as próprias); pode escolher ver a
   // fila de ocultas/moderadas de todo mundo, pra poder restaurar.
   const [statusFilter, setStatusFilter] = useState<'' | 'HIDDEN' | 'MODERATED'>('');
+  // Filtro de período — a pedido do usuário, pra conseguir ver o histórico
+  // antigo do mural (antes só os ~30 posts mais recentes apareciam, sem
+  // nenhum jeito de carregar mais). "Ciclo" é um atalho que preenche o
+  // intervalo de data a partir do período daquele ciclo de premiação — o
+  // Mural não guarda o ciclo em que cada post caiu, então o filtro vira um
+  // intervalo de datas por trás, igual ao filtro manual.
+  const [cycles, setCycles] = useState<AwardCycle[]>([]);
+  const [cycleId, setCycleId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    api
+      .get<AwardCycle[]>('/cycles?limit=100')
+      .then(({ data }) => setCycles(data))
+      .catch(() => setCycles([]));
+  }, []);
+
+  function handleCycleChange(id: string) {
+    setCycleId(id);
+    const cycle = cycles.find((c) => c.id === id);
+    if (cycle) {
+      setDateFrom(cycle.startDate.slice(0, 10));
+      setDateTo(cycle.endDate.slice(0, 10));
+    } else {
+      setDateFrom('');
+      setDateTo('');
+    }
+  }
+
+  function handleDateChange(which: 'from' | 'to', value: string) {
+    setCycleId(''); // edição manual de data invalida o atalho de ciclo selecionado
+    if (which === 'from') setDateFrom(value);
+    else setDateTo(value);
+  }
+
+  function buildParams(targetPage: number) {
+    const params = new URLSearchParams({ limit: '30', page: String(targetPage) });
+    if (eventId) params.set('eventId', eventId);
+    if (isAdmin && statusFilter) params.set('status', statusFilter);
+    // "T00:00:00"/"T23:59:59" no fuso local, mesmo padrão de ActivitiesPage —
+    // evita que o intervalo "volte" um dia ao converter pra UTC.
+    if (dateFrom) params.set('dateFrom', new Date(`${dateFrom}T00:00:00`).toISOString());
+    if (dateTo) params.set('dateTo', new Date(`${dateTo}T23:59:59`).toISOString());
+    return params;
+  }
 
   function load() {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ limit: '30' });
-    if (eventId) params.set('eventId', eventId);
-    if (isAdmin && statusFilter) params.set('status', statusFilter);
     api
-      .get<Post[]>(`/posts?${params.toString()}`)
-      .then(({ data }) => setPosts(data))
+      .get<Post[]>(`/posts?${buildParams(1).toString()}`)
+      .then(({ data, meta }) => {
+        setPosts(data);
+        setPage(1);
+        setTotalPages((meta?.totalPages as number) ?? 1);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o mural.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [eventId, statusFilter]);
+  function loadMore() {
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    api
+      .get<Post[]>(`/posts?${buildParams(nextPage).toString()}`)
+      .then(({ data, meta }) => {
+        setPosts((prev) => [...prev, ...data]);
+        setPage(nextPage);
+        setTotalPages((meta?.totalPages as number) ?? 1);
+      })
+      .catch((err) => showToast(err instanceof ApiError ? err.message : 'Não foi possível carregar mais publicações.', 'error'))
+      .finally(() => setLoadingMore(false));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [eventId, statusFilter, dateFrom, dateTo]);
 
   async function handleLeaveGroup() {
     if (!eventId) return;
@@ -143,6 +208,35 @@ function MuralFeed({
             : 'Compartilhe algo com toda a equipe.'}
         </p>
         <div className="table__actions">
+          <select value={cycleId} onChange={(e) => handleCycleChange(e.target.value)} aria-label="Filtrar por ciclo de premiação">
+            <option value="">Todos os ciclos</option>
+            {cycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <label className="field">
+            <span className="field__label">De</span>
+            <input type="date" value={dateFrom} onChange={(e) => handleDateChange('from', e.target.value)} aria-label="Data inicial" />
+          </label>
+          <label className="field">
+            <span className="field__label">Até</span>
+            <input type="date" value={dateTo} onChange={(e) => handleDateChange('to', e.target.value)} aria-label="Data final" />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => {
+                setCycleId('');
+                setDateFrom('');
+                setDateTo('');
+              }}
+            >
+              ✕ Limpar período
+            </button>
+          )}
           {isAdmin && (
             <select
               value={statusFilter}
@@ -180,6 +274,14 @@ function MuralFeed({
           {posts.map((post) => (
             <PostCard key={post.id} post={post} onChanged={load} />
           ))}
+        </div>
+      )}
+
+      {!loading && !error && page < totalPages && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button type="button" className="btn btn--secondary" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Carregando…' : 'Carregar mais publicações'}
+          </button>
         </div>
       )}
 

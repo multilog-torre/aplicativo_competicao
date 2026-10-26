@@ -184,6 +184,13 @@ export class PostService {
         : { OR: [{ status: 'PUBLISHED' }, { userId: requestingUserId }] };
     where.eventId = query.eventId ?? null;
 
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {
+        ...(query.dateFrom && { gte: query.dateFrom }),
+        ...(query.dateTo && { lte: query.dateTo }),
+      };
+    }
+
     const [total, posts] = await Promise.all([
       prisma.post.count({ where }),
       prisma.post.findMany({

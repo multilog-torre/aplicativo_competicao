@@ -23,6 +23,13 @@ export const ListPostsQuerySchema = z.object({
   // Filtro por status só é honrado para ADMIN/ADMIN_MASTER (fila de moderação).
   status: z.enum(['PUBLISHED', 'HIDDEN', 'MODERATED']).optional(),
   eventId: z.string().uuid().optional(),
+  // Filtro de período (a pedido do usuário, pra conseguir ver o histórico
+  // antigo do Mural) — o frontend usa o mesmo filtro tanto pra um intervalo
+  // de data escolhido manualmente quanto pra "ver só as publicações de tal
+  // ciclo de premiação" (resolvendo o ciclo pra startDate/endDate antes de
+  // mandar pro backend; Post não tem uma coluna de ciclo própria).
+  dateFrom: z.coerce.date({ invalid_type_error: 'Data inicial inválida.' }).optional(),
+  dateTo: z.coerce.date({ invalid_type_error: 'Data final inválida.' }).optional(),
   page: z
     .string()
     .optional()

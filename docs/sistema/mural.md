@@ -25,6 +25,15 @@ Toda vez que uma atividade é **aprovada** (manual ou automaticamente — `Admin
 
 `PUBLISHED`/`HIDDEN`/`MODERATED`. Um participante sempre vê publicações `PUBLISHED` de todo mundo **mais as próprias em qualquer status** (para saber se algo seu foi moderado). Um admin pode filtrar explicitamente por status para acessar a fila de moderação.
 
+## Histórico, paginação e filtros
+
+`GET /posts` sempre suportou paginação (`page`/`limit`, padrão 20, máx. 100, ordenado do mais recente pro mais antigo) e nenhum post é apagado por tempo — mas a tela do Mural só pedia os ~30 posts mais recentes, numa única página, sem nenhum jeito de ver os anteriores (a pedido do usuário, que notou publicações antigas "desaparecendo" — na verdade só não eram buscadas). Agora:
+
+- **"Carregar mais publicações"**: botão no fim do feed, visível enquanto `page < totalPages` — busca a próxima página e concatena ao final da lista já carregada (não substitui).
+- **Filtro de período**: dois campos de data (`dateFrom`/`dateTo`, ambos opcionais e combináveis) soltos na tela, viram `?dateFrom=&dateTo=` na API (`PostService.list`, comparando com `Post.createdAt`). Qualquer um dos dois sozinho já filtra (só "de" = tudo a partir dali; só "até" = tudo até ali).
+- **Filtro por ciclo**: um seletor com os ciclos de premiação cadastrados (`GET /cycles`). `Post` não guarda o ciclo em que caiu — selecionar um ciclo só preenche os dois campos de data acima com o `startDate`/`endDate` daquele ciclo (no fuso local, mesmo cuidado de `ActivitiesPage`), então por trás é o mesmo filtro de período. Editar a data manualmente depois de escolher um ciclo limpa a seleção do seletor (os dois filtros não ficam "presos" um ao outro de forma inconsistente).
+- Trocar qualquer filtro (ciclo, data, status de moderação, aba de evento) recarrega a página 1 do zero — "carregar mais" só soma páginas dentro do filtro atual.
+
 ## Exclusão e moderação
 
 - O próprio autor pode excluir a qualquer momento (sem gerar auditoria — é rotina). Botão 🗑️ direto no card da publicação.
