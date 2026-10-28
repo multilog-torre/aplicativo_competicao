@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { ActivityType, UserActivity } from '../types/api';
+import { ActivityType, AwardCycle, UserActivity } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
 import { StatusBadge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
@@ -12,6 +12,7 @@ export function ActivitiesPage() {
   const { showToast } = useToast();
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<UserActivity | null>(null);
@@ -21,17 +22,82 @@ export function ActivitiesPage() {
   // forma, que uma atividade do mês mudou (a pedido do usuário).
   const [calendarKey, setCalendarKey] = useState(0);
 
+  // Histórico completo (a pedido do usuário) — antes a tabela buscava só as
+  // 50 atividades mais recentes, sem filtro nenhum. Agora é paginado (mesmo
+  // padrão "Carregar mais" do Mural) e filtrável por período/ciclo/modalidade,
+  // com a soma de pontos de TUDO que bate o filtro (não só da página atual).
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pointsSum, setPointsSum] = useState(0);
+  const [types, setTypes] = useState<ActivityType[]>([]);
+  const [cycles, setCycles] = useState<AwardCycle[]>([]);
+  const [activityTypeId, setActivityTypeId] = useState('');
+  const [cycleId, setCycleId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    api.get<ActivityType[]>('/activity-types').then(({ data }) => setTypes(data)).catch(() => setTypes([]));
+    api.get<AwardCycle[]>('/cycles?limit=100').then(({ data }) => setCycles(data)).catch(() => setCycles([]));
+  }, []);
+
+  function buildParams(targetPage: number) {
+    const params = new URLSearchParams({ limit: '20', page: String(targetPage) });
+    if (activityTypeId) params.set('activityTypeId', activityTypeId);
+    if (cycleId) params.set('cycleId', cycleId);
+    // "T00:00:00"/"T23:59:59" no fuso local — mesmo cuidado de sempre, evita
+    // que o intervalo "volte" um dia ao converter pra UTC.
+    if (dateFrom) params.set('dateFrom', new Date(`${dateFrom}T00:00:00`).toISOString());
+    if (dateTo) params.set('dateTo', new Date(`${dateTo}T23:59:59`).toISOString());
+    return params;
+  }
+
   function load() {
     setLoading(true);
     setError(null);
     api
-      .get<UserActivity[]>('/activities?limit=50')
-      .then(({ data }) => setActivities(data))
+      .get<UserActivity[]>(`/activities?${buildParams(1).toString()}`)
+      .then(({ data, meta }) => {
+        setActivities(data);
+        setPage(1);
+        setTotalPages((meta?.totalPages as number) ?? 1);
+        setTotal((meta?.total as number) ?? data.length);
+        setPointsSum((meta?.pointsSum as number) ?? 0);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar suas atividades.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  function loadMore() {
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    api
+      .get<UserActivity[]>(`/activities?${buildParams(nextPage).toString()}`)
+      .then(({ data, meta }) => {
+        setActivities((prev) => [...prev, ...data]);
+        setPage(nextPage);
+        setTotalPages((meta?.totalPages as number) ?? 1);
+      })
+      .catch((err) => showToast(err instanceof ApiError ? err.message : 'Não foi possível carregar mais atividades.', 'error'))
+      .finally(() => setLoadingMore(false));
+  }
+
+  function handleCycleChange(id: string) {
+    setCycleId(id);
+  }
+
+  function clearFilters() {
+    setActivityTypeId('');
+    setCycleId('');
+    setDateFrom('');
+    setDateTo('');
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [activityTypeId, cycleId, dateFrom, dateTo]);
+
+  const hasFilters = !!(activityTypeId || cycleId || dateFrom || dateTo);
 
   return (
     <div className="page">
@@ -44,11 +110,66 @@ export function ActivitiesPage() {
 
       <ActivityCalendarSection key={calendarKey} />
 
+      <section className="card" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
+        <label className="field">
+          <span className="field__label">De</span>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} max={todayLocalISODate()} />
+        </label>
+        <label className="field">
+          <span className="field__label">Até</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} max={todayLocalISODate()} />
+        </label>
+        <label className="field" style={{ minWidth: 200, flex: '1 1 200px' }}>
+          <span className="field__label">Ciclo de premiação</span>
+          <select value={cycleId} onChange={(e) => handleCycleChange(e.target.value)}>
+            <option value="">Todos os ciclos</option>
+            {cycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field" style={{ minWidth: 200, flex: '1 1 200px' }}>
+          <span className="field__label">Modalidade</span>
+          <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)}>
+            <option value="">Todas as modalidades</option>
+            {types.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {hasFilters && (
+          <button type="button" className="btn btn--ghost btn--small" onClick={clearFilters}>
+            ✕ Limpar filtros
+          </button>
+        )}
+      </section>
+
+      {!loading && !error && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+          <div className="card" style={{ flex: '1 1 200px' }}>
+            <div className="table__subtext">ATIVIDADES ENCONTRADAS</div>
+            <div style={{ fontSize: 26, fontWeight: 700 }}>{total}</div>
+          </div>
+          <div className="card" style={{ flex: '1 1 200px' }}>
+            <div className="table__subtext">SOMA DE PONTOS NO PERÍODO</div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-success)' }}>+{pointsSum}</div>
+          </div>
+        </div>
+      )}
+
       {loading && <LoadingState label="Carregando suas atividades…" />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
 
       {!loading && !error && activities.length === 0 && (
-        <EmptyState icon="🏃" title="Nenhuma atividade registrada" description="Clique em “Nova atividade” para começar a pontuar." />
+        <EmptyState
+          icon="🏃"
+          title={hasFilters ? 'Nenhuma atividade encontrada' : 'Nenhuma atividade registrada'}
+          description={hasFilters ? 'Tente ajustar os filtros de período, ciclo ou modalidade.' : 'Clique em “Nova atividade” para começar a pontuar.'}
+        />
       )}
 
       {!loading && !error && activities.length > 0 && (
@@ -105,6 +226,17 @@ export function ActivitiesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && !error && page < totalPages && (
+        <div style={{ textAlign: 'center' }}>
+          <button type="button" className="btn btn--secondary" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Carregando…' : 'Carregar mais atividades'}
+          </button>
+          <div className="table__subtext" style={{ marginTop: 8 }}>
+            Mostrando {activities.length} de {total} atividades
+          </div>
         </div>
       )}
 

@@ -59,6 +59,11 @@ export const ListActivitiesQuerySchema = z.object({
   // Usados pela seção de calendário (Meu Perfil / Atividades) para buscar só o mês exibido.
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
+  // Histórico de atividades (a pedido do usuário) — filtra pelo ciclo em que a
+  // atividade pontuou de verdade (via PointsTransaction.cycleId), não por um
+  // intervalo de data aproximado: a atribuição ao ciclo é decidida no momento
+  // do crédito (cycleReferenceDate), não necessariamente pela activityDate.
+  cycleId: z.string().uuid().optional(),
   page: z
     .string()
     .optional()

@@ -134,3 +134,14 @@ O calendário com a fotinho de cada dia (ver seção do app) busca atividades po
 ## Visibilidade
 
 Um participante só vê e lista as próprias atividades — nunca as de outro colega (diferente do perfil, que hoje expõe atividades recentes entre colegas; ver [ranking-e-participantes.md](./ranking-e-participantes.md)). Um admin vê e filtra por qualquer usuário.
+
+## Histórico completo, filtros e soma de pontos ("Minhas Atividades")
+
+A pedido do usuário: a tela de "Minhas Atividades" buscava só as ~50 atividades mais recentes, sem filtro nenhum — qualquer registro além disso ficava invisível na prática, mesmo intacto no banco. Agora `GET /activities` suporta:
+
+- **Paginação** (`page`/`limit`, padrão 20, máx. 100) com o mesmo padrão "Carregar mais" do Mural (ver [mural.md](./mural.md)) — cada filtro trocado reinicia da página 1.
+- **Filtro de período** (`dateFrom`/`dateTo`, por `activityDate`) e **de modalidade** (`activityTypeId`) — já existiam na API, só não eram usados pela tela.
+- **Filtro por ciclo de premiação** (`cycleId`, novo): diferente do atalho usado no Mural (ciclo → intervalo de data aproximado, porque `Post` não tem relação com ciclo), aqui o filtro é **preciso de verdade** — busca os `activityId` de toda `PointsTransaction` daquele `cycleId` (`transactionType: 'ACTIVITY'`) e filtra as atividades por esse conjunto de IDs. Isso importa porque a atribuição de uma atividade a um ciclo é decidida no momento do crédito (`cycleReferenceDate`, ver [pontuacao.md](./pontuacao.md)), não necessariamente pela `activityDate` dela — uma atividade registrada com atraso, por exemplo, pode ter sido creditada num ciclo diferente do que a data dela sugeriria.
+- **Soma de pontos do filtro** (`meta.pointsSum`): soma `calculatedPoints` de **todas** as atividades que batem o filtro atual, não só da página carregada — uma agregação separada (`aggregate` com `_sum`), calculada com o mesmo `where` da busca paginada, sem a paginação.
+
+Nenhum desses filtros é exclusivo de admin — qualquer participante os usa sobre o próprio histórico, do mesmo jeito que já usava o filtro de modalidade do formulário de registro.

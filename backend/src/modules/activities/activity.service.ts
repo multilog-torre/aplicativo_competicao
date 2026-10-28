@@ -138,9 +138,23 @@ export class ActivityService {
         ...(query.dateTo ? { lte: query.dateTo } : {}),
       };
     }
+    if (query.cycleId) {
+      // Filtra pelo ciclo em que a atividade de fato pontuou (join por
+      // PointsTransaction.cycleId), não por um intervalo de data aproximado —
+      // a atribuição ao ciclo é decidida no momento do crédito
+      // (cycleReferenceDate), não necessariamente pela activityDate dela.
+      const txs = await prisma.pointsTransaction.findMany({
+        where: { cycleId: query.cycleId, transactionType: 'ACTIVITY', activityId: { not: null } },
+        select: { activityId: true },
+      });
+      where.id = { in: txs.map((t) => t.activityId as string) };
+    }
 
-    const [total, activities] = await Promise.all([
+    const [total, pointsSumResult, activities] = await Promise.all([
       prisma.userActivity.count({ where }),
+      // Soma de TODAS as atividades que casam com o filtro, não só a página
+      // atual — pro resumo do histórico (a pedido do usuário).
+      prisma.userActivity.aggregate({ where, _sum: { calculatedPoints: true } }),
       prisma.userActivity.findMany({
         where,
         orderBy: { activityDate: 'desc' },
@@ -174,6 +188,7 @@ export class ActivityService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
+        pointsSum: pointsSumResult._sum.calculatedPoints ?? 0,
       },
     };
   }
