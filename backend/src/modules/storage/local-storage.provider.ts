@@ -39,6 +39,8 @@ export class LocalStorageProvider implements StorageProvider {
     return { storagePath: relativePath, storageUrl: null };
   }
 
+  // `transform` é ignorado aqui de propósito: o storage local só existe em desenvolvimento,
+  // onde o tráfego não custa nada — redimensionar é uma otimização só do Cloudinary.
   public async read(storagePath: string): Promise<Buffer> {
     const absolutePath = this.resolveSafePath(storagePath);
     try {

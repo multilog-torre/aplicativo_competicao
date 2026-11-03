@@ -34,6 +34,18 @@ Toda vez que uma atividade é **aprovada** (manual ou automaticamente — `Admin
 - **Filtro por ciclo**: um seletor com os ciclos de premiação cadastrados (`GET /cycles`). `Post` não guarda o ciclo em que caiu — selecionar um ciclo só preenche os dois campos de data acima com o `startDate`/`endDate` daquele ciclo (no fuso local, mesmo cuidado de `ActivitiesPage`), então por trás é o mesmo filtro de período. Editar a data manualmente depois de escolher um ciclo limpa a seleção do seletor (os dois filtros não ficam "presos" um ao outro de forma inconsistente).
 - Trocar qualquer filtro (ciclo, data, status de moderação, aba de evento) recarrega a página 1 do zero — "carregar mais" só soma páginas dentro do filtro atual.
 
+## Otimização de tráfego de imagem (Render suspenso por estourar bandwidth)
+
+Toda foto do sistema (post do Mural, avatar, ícone de conquista, evidência) é sempre servida pelo backend — ele busca o arquivo no Cloudinary e reenvia pro navegador (`res.send(buffer)`), nunca expõe a URL do Cloudinary direto. Isso é de propósito (controla quem pode ver o quê), mas tem um custo: **toda visualização de foto soma o tamanho do arquivo inteiro contra a cota de bandwidth do Render**, mesmo fotos já vistas antes. Isso suspendeu o workspace do Render em 28/10/2026 (estourou os 5 GB/mês do plano gratuito — cortado de 100 GB pra 5 GB em abril/2026).
+
+Duas otimizações implementadas pra reduzir isso (`StorageProvider.read()` agora aceita um `transform?: ReadImageTransform` opcional — só o `CloudinaryStorageProvider` usa, pedindo ao próprio Cloudinary uma versão já redimensionada em vez do arquivo original; `LocalStorageProvider` ignora, porque dev não tem custo de tráfego):
+
+- **Cache no navegador**: todo endpoint que serve buffer de imagem (`posts/:id/image`, `profile/:userId/avatar`, `achievements/:id/icon`, `.../evidence/.../download`) agora manda `Cache-Control: private, max-age=...` — evita rebuscar a mesma foto quando a pessoa reabre a mesma tela. `private` (não `public`) porque o acesso é autorizado por usuário, nunca deve ficar num cache compartilhado. Duração varia por o quão "mutável" é o conteúdo: avatar 5 min (pode trocar a qualquer momento), post/evidência 1 dia (nunca são editados depois de criados), ícone de conquista 7 dias (asset administrativo raro de mudar).
+- **Thumbnails**: avatar (sempre `width:200,height:200,crop:fill`) e ícone de conquista (`128x128,fill`) são sempre pedidos em tamanho reduzido — nunca são exibidos grandes na UI, então servir o arquivo original (ex.: foto de celular de vários MB) é desperdício puro. Foto de post do Mural é diferente: o feed pede uma prévia (`GET .../image?thumb=1`, vira `width:480,crop:limit` — só reduz o que for maior, preserva a proporção) e a foto em tamanho original só é buscada quando a pessoa abre o lightbox (`MuralPage.tsx`, dois `useAuthedImage` — um sempre ativo pro feed, outro só quando `lightboxOpen`).
+- Evidência (`evidence.controller.ts`/`event.controller.ts`) **não** tem thumbnail — é prova de atividade, tem que manter a qualidade original pra quem for aprovar/auditar.
+
+Essas duas otimizações **reduzem** o consumo mas não o eliminam (o proxy pelo Render continua existindo). Se não for suficiente, a opção que resolve a causa de raiz — servir a foto direto do Cloudinary por link assinado, sem passar pelo Render — não foi implementada ainda (exige cuidado pra não vazar acesso indevido a foto de outro usuário).
+
 ## Exclusão e moderação
 
 - O próprio autor pode excluir a qualquer momento (sem gerar auditoria — é rotina). Botão 🗑️ direto no card da publicação.

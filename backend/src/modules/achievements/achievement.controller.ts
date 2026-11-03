@@ -73,6 +73,8 @@ export class AchievementController {
     const { id } = req.params;
     const { buffer, mimeType } = await AchievementService.getIconForDownload(id);
     res.setHeader('Content-Type', mimeType);
+    // Ícone é um asset administrativo que quase nunca muda — pode cachear por mais tempo.
+    res.setHeader('Cache-Control', 'private, max-age=604800');
     return res.send(buffer);
   }
 }

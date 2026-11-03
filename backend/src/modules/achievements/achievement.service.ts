@@ -310,7 +310,8 @@ export class AchievementService {
     }
 
     const storage = getStorageProvider();
-    const buffer = await storage.read(achievement.icon);
+    // Ícone nunca é exibido grande na UI — mesmo motivo do avatar (profile.service.ts).
+    const buffer = await storage.read(achievement.icon, { width: 128, height: 128, crop: 'fill' });
     const extension = achievement.icon.split('.').pop()?.toLowerCase() ?? '';
     const mimeType = EXTENSION_MIME_MAP[extension]?.[0] ?? 'application/octet-stream';
     return { buffer, mimeType };

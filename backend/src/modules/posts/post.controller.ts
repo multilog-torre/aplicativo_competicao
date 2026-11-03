@@ -52,8 +52,12 @@ export class PostController {
     const { id } = req.params;
     const userId = req.user!.id;
     const isAdmin = isAdminRequest(req);
-    const { buffer } = await PostService.getImageForDownload(id, userId, isAdmin);
+    const thumbnail = req.query.thumb === '1';
+    const { buffer } = await PostService.getImageForDownload(id, userId, isAdmin, thumbnail);
     res.setHeader('Content-Type', 'image/jpeg');
+    // Foto de post nunca é editada depois de publicada (só criada/excluída) — pode
+    // cachear por bastante tempo sem risco de mostrar versão desatualizada.
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     return res.send(buffer);
   }
 

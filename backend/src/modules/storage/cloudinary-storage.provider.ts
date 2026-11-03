@@ -2,7 +2,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 import { env } from '../../config/env';
 import { AppError } from '../../shared/errors/AppError';
-import { SaveFileParams, SaveFileResult, StorageProvider } from './storage.provider';
+import { ReadImageTransform, SaveFileParams, SaveFileResult, StorageProvider } from './storage.provider';
 
 /**
  * Storage no Cloudinary — usado em hospedagens sem disco persistente (ex.:
@@ -68,9 +68,20 @@ export class CloudinaryStorageProvider implements StorageProvider {
     return { storagePath: `${resourceType}/${uploadResult.public_id}`, storageUrl: uploadResult.secure_url };
   }
 
-  public async read(storagePath: string): Promise<Buffer> {
+  public async read(storagePath: string, transform?: ReadImageTransform): Promise<Buffer> {
     const { resourceType, publicId } = this.parsePath(storagePath);
-    const url = cloudinary.url(publicId, { resource_type: resourceType, secure: true });
+    // Transformação só faz sentido pra imagem — pedir isso num PDF/raw o Cloudinary rejeitaria.
+    const applyTransform = transform && resourceType === 'image';
+    const url = cloudinary.url(publicId, {
+      resource_type: resourceType,
+      secure: true,
+      ...(applyTransform && {
+        width: transform.width,
+        height: transform.height,
+        crop: transform.crop,
+        quality: 'auto',
+      }),
+    });
 
     const res = await fetch(url);
     if (!res.ok) {

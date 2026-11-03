@@ -52,6 +52,8 @@ export class EvidenceController {
 
     res.setHeader('Content-Type', fileType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+    // Evidência nunca é substituída depois de enviada (só criada/excluída) — cache longo é seguro.
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     return res.send(buffer);
   }
 }

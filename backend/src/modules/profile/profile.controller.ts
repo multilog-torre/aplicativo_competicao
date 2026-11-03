@@ -52,6 +52,9 @@ export class ProfileController {
     const { userId } = req.params;
     const { buffer } = await ProfileService.getAvatarForDownload(userId);
     res.setHeader('Content-Type', 'image/jpeg');
+    // Curto o suficiente pra quem troca de avatar ver a mudança rápido, mas evita
+    // rebuscar a mesma foto a cada tela (ranking, mural, participantes...) sem necessidade.
+    res.setHeader('Cache-Control', 'private, max-age=300');
     return res.send(buffer);
   }
 }

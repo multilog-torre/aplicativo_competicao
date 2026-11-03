@@ -268,7 +268,9 @@ export class ProfileService {
     }
 
     const storage = getStorageProvider();
-    const buffer = await storage.read(user.avatarUrl);
+    // Avatar nunca é exibido acima de ~72px na UI — pedir a versão redimensionada do
+    // Cloudinary evita reenviar a foto em resolução de câmera de celular à toa.
+    const buffer = await storage.read(user.avatarUrl, { width: 200, height: 200, crop: 'fill' });
     return { buffer };
   }
 }

@@ -21,10 +21,22 @@ export interface SaveFileResult {
   storageUrl: string | null;
 }
 
+/** Redimensionamento opcional ao ler uma imagem — pedido pelo chamador quando só precisa
+ * de uma versão pequena (thumbnail de lista, avatar, ícone), pra economizar o tráfego que
+ * seria gasto reenviando o arquivo em tamanho original à toa (ver docs/sistema/mural.md). */
+export interface ReadImageTransform {
+  width: number;
+  height?: number;
+  /** 'fill' corta pra um quadrado exato (avatar/ícone); 'limit' só reduz, mantendo a proporção (foto). */
+  crop: 'fill' | 'limit';
+}
+
 export interface StorageProvider {
   readonly providerName: string;
   save(params: SaveFileParams): Promise<SaveFileResult>;
-  /** Retorna o Buffer do arquivo para ser servido pelo backend (acesso privado/controlado). */
-  read(storagePath: string): Promise<Buffer>;
+  /** Retorna o Buffer do arquivo para ser servido pelo backend (acesso privado/controlado).
+   * `transform`, quando suportado pelo provider, pede uma versão redimensionada em vez do
+   * arquivo original — providers que não sabem redimensionar (ex.: local) o ignoram. */
+  read(storagePath: string, transform?: ReadImageTransform): Promise<Buffer>;
   delete(storagePath: string): Promise<void>;
 }

@@ -130,6 +130,9 @@ export class EventController {
 
     res.setHeader('Content-Type', fileType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+    // Evidência nunca é substituída depois de enviada — cache longo é seguro (mesma regra
+    // de evidence.controller.ts).
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     return res.send(buffer);
   }
 }

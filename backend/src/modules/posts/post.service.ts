@@ -278,7 +278,7 @@ export class PostService {
   }
 
   /** Recupera o conteúdo binário da foto do post (acesso autorizado, mesmo padrão da Fase 7). */
-  public static async getImageForDownload(postId: string, requestingUserId: string, isAdmin: boolean) {
+  public static async getImageForDownload(postId: string, requestingUserId: string, isAdmin: boolean, thumbnail: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post || !post.imageUrl) throw new NotFoundError('Esta publicação não possui uma foto.');
     await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
@@ -288,7 +288,10 @@ export class PostService {
     }
 
     const storage = getStorageProvider();
-    const buffer = await storage.read(post.imageUrl);
+    // O feed do Mural só precisa de uma prévia pequena (thumbnail=true); a foto em
+    // tamanho original só é buscada quando a pessoa abre o lightbox (ver MuralPage.tsx).
+    // 'limit' só reduz o que for maior que isso, mantendo a proporção da foto.
+    const buffer = await storage.read(post.imageUrl, thumbnail ? { width: 480, crop: 'limit' } : undefined);
     return { buffer };
   }
 

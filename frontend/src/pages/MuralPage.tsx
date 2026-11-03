@@ -324,11 +324,16 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   // enquanto API_URL/useAuthedImage já incluem esse mesmo prefixo — removê-lo aqui
   // evita duplicar "/api/v1/api/v1/..." na requisição (mesmo padrão de ActivitiesPage.tsx).
   const postImageRelativePath = post.imageDownloadUrl?.replace(/^\/api\/v1/, '') ?? null;
-  const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? postImageRelativePath : null);
+  // Feed carrega só uma prévia pequena (?thumb=1) — a foto em tamanho original só é buscada
+  // quando a pessoa abre o lightbox, pra não gastar banda com resolução cheia à toa numa
+  // lista com várias fotos (ver docs/sistema/mural.md).
+  const thumbPath = postImageRelativePath ? `${postImageRelativePath}?thumb=1` : null;
+  const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? thumbPath : null);
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [reactionsSummary, setReactionsSummary] = useState(post.reactionsSummary);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const { url: fullImageUrl } = useAuthedImage(lightboxOpen ? postImageRelativePath : null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [moderateAction, setModerateAction] = useState<'HIDE' | 'MODERATE' | null>(null);
@@ -467,8 +472,8 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
         </div>
       )}
 
-      {lightboxOpen && imageUrl && (
-        <ImageLightbox src={imageUrl} alt="Foto da publicação" onClose={() => setLightboxOpen(false)} />
+      {lightboxOpen && (fullImageUrl ?? imageUrl) && (
+        <ImageLightbox src={fullImageUrl ?? imageUrl!} alt="Foto da publicação" onClose={() => setLightboxOpen(false)} />
       )}
 
       <footer className="post-card__footer">
