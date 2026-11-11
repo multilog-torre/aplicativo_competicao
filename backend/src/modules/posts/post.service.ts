@@ -18,6 +18,12 @@ function attachmentTypeForExtension(extension: string): 'IMAGE' | 'PDF' {
   return extension === 'pdf' ? 'PDF' : 'IMAGE';
 }
 
+/** Mesma decisão de attachmentTypeForExtension, mas a partir do mimeType — usado onde só
+ * se tem o mimeType da evidência à mão (createFromActivity/attachEvidenceImageIfMissing). */
+function attachmentTypeForMimeType(mimeType: string): 'IMAGE' | 'PDF' {
+  return mimeType === 'application/pdf' ? 'PDF' : 'IMAGE';
+}
+
 const MODERATION_ACTION_TO_STATUS: Record<string, string> = {
   HIDE: 'HIDDEN',
   MODERATE: 'MODERATED',
@@ -105,9 +111,9 @@ export class PostService {
   /**
    * Cria automaticamente o post de "atividade aprovada" no Mural geral,
    * dentro da MESMA transação atômica de `AdminActivityService.approve()`.
-   * Se a atividade tiver uma evidência em formato de imagem, ela é copiada
-   * para o storage do próprio post (mesma pasta/mecanismo de uma foto
-   * manual) — assim a foto passa a valer as regras de acesso do Post
+   * Se a atividade tiver uma evidência em formato de imagem OU PDF, ela é
+   * copiada para o storage do próprio post (mesma pasta/mecanismo de um
+   * anexo manual) — assim o anexo passa a valer as regras de acesso do Post
    * (público a qualquer autenticado quando PUBLISHED), sem afrouxar o
    * acesso privado da evidência original em activity_evidence.
    */
@@ -122,8 +128,10 @@ export class PostService {
   ) {
     const postId = uuidv4();
     let imageUrl: string | null = null;
+    let attachmentType: 'IMAGE' | 'PDF' | null = null;
 
     if (params.imageSource) {
+      attachmentType = attachmentTypeForMimeType(params.imageSource.mimeType);
       const storage = getStorageProvider();
       const { storagePath } = await storage.save({
         buffer: params.imageSource.buffer,
@@ -140,9 +148,7 @@ export class PostService {
         userId: params.userId,
         content: params.content,
         imageUrl,
-        // Sempre IMAGE (nunca PDF): só evidência em formato de imagem vira foto de
-        // post automático (ver IMAGE_EVIDENCE_MIME_TYPES em post.dto.ts).
-        attachmentType: imageUrl ? 'IMAGE' : null,
+        attachmentType,
         status: 'PUBLISHED',
         eventId: null,
         activityId: params.activityId,
@@ -151,13 +157,13 @@ export class PostService {
   }
 
   /**
-   * Anexa a foto de uma evidência que chegou DEPOIS que o post automático já
-   * tinha sido criado sem foto — cenário comum quando a modalidade não
+   * Anexa a evidência (imagem ou PDF) que chegou DEPOIS que o post automático já
+   * tinha sido criado sem anexo — cenário comum quando a modalidade não
    * exige evidência (a auto-aprovação roda no ato de criar a atividade,
-   * antes de qualquer evidência opcional existir) e a pessoa anexa uma foto
+   * antes de qualquer evidência opcional existir) e a pessoa anexa algo
    * mesmo assim logo em seguida (chamado por EvidenceService.upload). Não
    * faz nada se não houver post vinculado a essa atividade, ou se o post já
-   * tiver uma foto — a primeira evidência de imagem "ganha", não fica
+   * tiver um anexo — o primeiro evidência compatível "ganha", não fica
    * trocando a cada novo anexo.
    */
   public static async attachEvidenceImageIfMissing(
@@ -175,7 +181,10 @@ export class PostService {
       folder: `mural/${post.id}`,
     });
 
-    await prisma.post.update({ where: { id: post.id }, data: { imageUrl: storagePath, attachmentType: 'IMAGE' } });
+    await prisma.post.update({
+      where: { id: post.id },
+      data: { imageUrl: storagePath, attachmentType: attachmentTypeForMimeType(imageSource.mimeType) },
+    });
   }
 
   public static async list(query: ListPostsQueryDTO, requestingUserId: string, isAdmin: boolean) {

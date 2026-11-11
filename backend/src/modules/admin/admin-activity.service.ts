@@ -1,7 +1,7 @@
 import { prisma } from '../../config/database';
 import { AppError, NotFoundError } from '../../shared/errors/AppError';
 import { NotificationService } from '../notifications/notification.service';
-import { IMAGE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
+import { ATTACHABLE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
 import { PostService } from '../posts/post.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { getStorageProvider } from '../storage/storage.factory';
@@ -94,16 +94,16 @@ export class AdminActivityService {
     // (15s, acima do padrão de 5s do Prisma) fica como margem de segurança
     // extra — essa transação faz várias consultas em sequência (ranking,
     // nível, conquistas, sequência de dias, post do Mural).
-    const imageEvidence = await prisma.activityEvidence.findFirst({
-      where: { activityId, fileType: { in: IMAGE_EVIDENCE_MIME_TYPES } },
+    const attachableEvidence = await prisma.activityEvidence.findFirst({
+      where: { activityId, fileType: { in: ATTACHABLE_EVIDENCE_MIME_TYPES } },
       orderBy: { createdAt: 'asc' },
     });
 
     let imageSource: { buffer: Buffer; fileName: string; mimeType: string } | undefined;
-    if (imageEvidence) {
+    if (attachableEvidence) {
       const storage = getStorageProvider();
-      const buffer = await storage.read(imageEvidence.storagePath);
-      imageSource = { buffer, fileName: imageEvidence.fileName, mimeType: imageEvidence.fileType };
+      const buffer = await storage.read(attachableEvidence.storagePath);
+      imageSource = { buffer, fileName: attachableEvidence.fileName, mimeType: attachableEvidence.fileType };
     }
 
     return prisma.$transaction(async (tx) => {

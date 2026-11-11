@@ -74,7 +74,8 @@ export const SetReactionSchema = z.object({
 
 export type SetReactionDTO = z.infer<typeof SetReactionSchema>;
 
-// Formatos de evidência que viram foto de post (manual ou automático de
-// atividade aprovada) — outros formatos (PDF, vídeo etc.) não têm como
-// virar imagem no card, só o texto do post em si.
-export const IMAGE_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+// Formatos de evidência que viram anexo do post automático de atividade
+// aprovada (foto direto, ou PDF com prévia rasterizada — mesmo suporte do
+// post manual, ver post.service.ts). Outros formatos (vídeo etc.) não têm
+// como virar anexo no card, só o texto do post em si.
+export const ATTACHABLE_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];

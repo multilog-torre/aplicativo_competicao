@@ -2,7 +2,7 @@ import { env } from '../../config/env';
 import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { AdminActivityService } from '../admin/admin-activity.service';
-import { IMAGE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
+import { ATTACHABLE_EVIDENCE_MIME_TYPES } from '../posts/post.dto';
 import { PostService } from '../posts/post.service';
 import { SettingsService } from '../settings/settings.service';
 import { UploadedFile } from '../../shared/types/upload';
@@ -102,10 +102,10 @@ export class EvidenceService {
 
     // Modalidade que NÃO exige evidência: a auto-aprovação (e o post
     // automático do Mural) já rodou na criação da atividade, ANTES desta
-    // evidência opcional existir — o post nasceu sem foto. Se essa
-    // evidência é uma imagem, anexa agora, retroativamente, ao post que já
-    // existe (não faz nada se o post já tiver foto ou não existir).
-    if (IMAGE_EVIDENCE_MIME_TYPES.includes(file.mimetype)) {
+    // evidência opcional existir — o post nasceu sem anexo. Se essa
+    // evidência é uma imagem ou PDF, anexa agora, retroativamente, ao post
+    // que já existe (não faz nada se o post já tiver anexo ou não existir).
+    if (ATTACHABLE_EVIDENCE_MIME_TYPES.includes(file.mimetype)) {
       await PostService.attachEvidenceImageIfMissing(activityId, {
         buffer: file.buffer,
         fileName: file.originalname,
