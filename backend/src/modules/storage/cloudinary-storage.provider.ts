@@ -99,6 +99,13 @@ export class CloudinaryStorageProvider implements StorageProvider {
 
     const res = await fetch(url);
     if (!res.ok) {
+      // Log de diagnóstico (só no servidor, nunca exposto ao usuário) — sem isso, qualquer
+      // falha aqui (URL mal formada, restrição de segurança da conta Cloudinary pra PDF/ZIP,
+      // arquivo de fato ausente) vira o mesmo erro genérico pro usuário, impossível de
+      // diferenciar de fora. Suspeita concreta: contas Free do Cloudinary bloqueiam por
+      // padrão a entrega de PDF como resource_type 'image' ("Allow delivery of PDF and ZIP
+      // files", em Settings → Security) — precisaria ser habilitado manualmente no console.
+      console.error(`[CloudinaryStorageProvider.read] Falha ao buscar arquivo: status=${res.status} url=${url}`);
       throw new AppError('Arquivo não encontrado no armazenamento.', 404, 'FILE_NOT_FOUND');
     }
     const arrayBuffer = await res.arrayBuffer();
