@@ -2,7 +2,13 @@
 
 ## Publicações (`Post`)
 
-Texto + foto opcional (armazenada como qualquer outro arquivo do sistema, servida só por endpoint autorizado). Um post pode pertencer a dois contextos:
+Texto + anexo opcional de **foto OU PDF** (armazenado como qualquer outro arquivo do sistema, servido só por endpoint autorizado) — vale para qualquer pessoa, não só admin. `Post.attachmentType` (`'IMAGE' | 'PDF' | null`) guarda qual é; extensões aceitas no upload (`ALLOWED_ATTACHMENT_EXTENSIONS`, `post.service.ts`): `jpg`, `jpeg`, `png`, `pdf` — qualquer outra é rejeitada com 422 antes mesmo de criar o post (nem o texto é salvo).
+
+- **Foto**: exibida direto no card, como sempre (ver seção de thumbnails/cache abaixo).
+- **PDF**: o card mostra uma **prévia em imagem da 1ª página**, rasterizada sob demanda pelo Cloudinary (`CloudinaryStorageProvider.read(..., { pdfFirstPageAsImage: true })` — pede `format: 'jpg', page: 1` na própria URL de transformação; só funciona porque o PDF é salvo como `resource_type: 'image'` no Cloudinary, não `'raw'`, que é o que habilita essa rasterização). Clicar na prévia abre o PDF **original** (não a prévia) numa nova aba, via `GET /posts/:id/file` (endpoint novo, separado do `/image` que serve só a prévia). Essa rasterização **não existe no storage local** (dev sem Cloudinary) — o backend expõe isso como `hasImagePreview: false` na resposta do post, e o frontend já nem tenta buscar a prévia nesse caso, indo direto pro botão "📄 Abrir PDF".
+- Evidência de atividade continua só aceitando imagem pra virar foto de post automático (`IMAGE_EVIDENCE_MIME_TYPES`, post.dto.ts) — isso não mudou; só a publicação manual (`PostService.create`) ganhou suporte a PDF.
+
+Um post pode pertencer a dois contextos:
 
 - **Mural geral** (`eventId = null`): visível a qualquer autenticado.
 - **Grupo de um evento** (`eventId` preenchido): visível só a quem participa daquele evento (qualquer status: `REGISTERED`/`ATTENDED`/`NO_SHOW`) ou a um admin — reaproveita a mesma estrutura de posts/comentários/reações do Mural geral, checada por `assertEventGroupAccess` em todo endpoint de posts, comentários e reações.

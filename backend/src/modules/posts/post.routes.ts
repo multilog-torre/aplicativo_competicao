@@ -27,6 +27,7 @@ router.post(
 router.get('/:id', asyncHandler(PostController.getById));
 router.delete('/:id', asyncHandler(PostController.delete));
 router.get('/:id/image', asyncHandler(PostController.getImage));
+router.get('/:id/file', asyncHandler(PostController.getFile));
 
 router.post(
   '/:id/moderate',

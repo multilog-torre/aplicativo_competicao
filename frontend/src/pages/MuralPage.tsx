@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, API_URL, getToken } from '../api/client';
 import { useAuthedImage } from '../api/useAuthedImage';
 import { AwardCycle, Comment, CommunityEvent, Post, ReactionEmojiCode } from '../types/api';
 import { LoadingState, EmptyState, ErrorState } from '../components/ui/States';
@@ -324,16 +324,21 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
   // enquanto API_URL/useAuthedImage já incluem esse mesmo prefixo — removê-lo aqui
   // evita duplicar "/api/v1/api/v1/..." na requisição (mesmo padrão de ActivitiesPage.tsx).
   const postImageRelativePath = post.imageDownloadUrl?.replace(/^\/api\/v1/, '') ?? null;
-  // Feed carrega só uma prévia pequena (?thumb=1) — a foto em tamanho original só é buscada
-  // quando a pessoa abre o lightbox, pra não gastar banda com resolução cheia à toa numa
-  // lista com várias fotos (ver docs/sistema/mural.md).
+  const isPdf = post.attachmentType === 'PDF';
+  // Feed carrega só uma prévia pequena (?thumb=1) — a foto (ou, no caso de PDF, a prévia
+  // rasterizada da 1ª página) em tamanho original só é buscada quando a pessoa abre o
+  // lightbox, pra não gastar banda com resolução cheia à toa numa lista com várias fotos
+  // (ver docs/sistema/mural.md). Pra PDF sem suporte a rasterização (hasImagePreview
+  // false — ambiente sem Cloudinary), nem tenta: vai direto pro botão de abrir o arquivo.
   const thumbPath = postImageRelativePath ? `${postImageRelativePath}?thumb=1` : null;
-  const { url: imageUrl, loading: imageLoading } = useAuthedImage(post.hasImage ? thumbPath : null);
+  const canTryImagePreview = post.hasImage && post.hasImagePreview;
+  const { url: imageUrl, loading: imageLoading, error: imageError } = useAuthedImage(canTryImagePreview ? thumbPath : null);
+  const [openingFile, setOpeningFile] = useState(false);
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [reactionsSummary, setReactionsSummary] = useState(post.reactionsSummary);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const { url: fullImageUrl } = useAuthedImage(lightboxOpen ? postImageRelativePath : null);
+  const { url: fullImageUrl } = useAuthedImage(lightboxOpen && !isPdf ? postImageRelativePath : null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [moderateAction, setModerateAction] = useState<'HIDE' | 'MODERATE' | null>(null);
@@ -371,6 +376,24 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
       setMyReaction(previousReaction);
       setReactionsSummary(previousSummary);
       showToast('Não foi possível remover sua reação.', 'error');
+    }
+  }
+
+  /** Abre o PDF original (não a prévia rasterizada) numa nova aba — mesmo padrão autenticado de EvidencePreview.tsx. */
+  async function openFile() {
+    if (!post.fileDownloadUrl) return;
+    const relativePath = post.fileDownloadUrl.replace(/^\/api\/v1/, '');
+    setOpeningFile(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_URL}${relativePath}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error('Falha ao carregar arquivo');
+      const blob = await res.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch {
+      showToast('Não foi possível abrir o PDF.', 'error');
+    } finally {
+      setOpeningFile(false);
     }
   }
 
@@ -462,7 +485,20 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
 
       {post.hasImage && (
         <div className="post-card__image-wrap">
-          {imageLoading ? (
+          {isPdf ? (
+            canTryImagePreview && imageLoading ? (
+              <LoadingState label="Carregando prévia do PDF…" />
+            ) : canTryImagePreview && imageUrl && !imageError ? (
+              <button type="button" className="post-card__image-button post-card__image-button--pdf" onClick={openFile} disabled={openingFile} aria-label="Abrir PDF">
+                <img src={imageUrl} alt="Prévia da 1ª página do PDF" className="post-card__image" />
+                <span className="post-card__pdf-badge">📄 PDF</span>
+              </button>
+            ) : (
+              <button type="button" className="btn btn--small btn--secondary" onClick={openFile} disabled={openingFile}>
+                {openingFile ? 'Abrindo…' : '📄 Abrir PDF'}
+              </button>
+            )
+          ) : imageLoading ? (
             <LoadingState label="Carregando foto…" />
           ) : imageUrl ? (
             <button type="button" className="post-card__image-button" onClick={() => setLightboxOpen(true)} aria-label="Ver foto em tamanho grande">
@@ -472,7 +508,7 @@ function PostCard({ post, onChanged }: { post: Post; onChanged: () => void }) {
         </div>
       )}
 
-      {lightboxOpen && (fullImageUrl ?? imageUrl) && (
+      {lightboxOpen && !isPdf && (fullImageUrl ?? imageUrl) && (
         <ImageLightbox src={fullImageUrl ?? imageUrl!} alt="Foto da publicação" onClose={() => setLightboxOpen(false)} />
       )}
 
@@ -790,8 +826,12 @@ function ComposerModal({ eventId, onClose, onCreated }: { eventId: string | null
           <textarea rows={4} required maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)} />
         </label>
         <label className="field">
-          <span className="field__label">Foto (opcional)</span>
-          <input type="file" accept="image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <span className="field__label">Foto ou PDF (opcional)</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
         </label>
         <div className="form__actions">
           <button type="button" className="btn btn--secondary" onClick={onClose} disabled={submitting}>

@@ -537,6 +537,10 @@ model Post {
   userId    String   @map("user_id")
   content   String
   imageUrl  String?  @map("image_url")
+  // IMAGE | PDF — null quando o post não tem anexo. Define como o card do
+  // Mural exibe o arquivo (foto direto, ou prévia renderizada da 1ª página
+  // pro PDF) e qual endpoint devolve o arquivo original (post.routes.ts).
+  attachmentType String? @map("attachment_type")
   status    String   @default("PUBLISHED") // PUBLISHED, HIDDEN, MODERATED
   // Null = publicação do Mural geral (visível a todo autenticado). Preenchido
   // = publicação do "grupo" de um evento — só visível/postável por quem

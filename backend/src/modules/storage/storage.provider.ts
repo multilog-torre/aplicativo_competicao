@@ -29,6 +29,10 @@ export interface ReadImageTransform {
   height?: number;
   /** 'fill' corta pra um quadrado exato (avatar/ícone); 'limit' só reduz, mantendo a proporção (foto). */
   crop: 'fill' | 'limit';
+  /** Quando o arquivo original é um PDF, pede a 1ª página já rasterizada como JPG em vez
+   * do PDF cru — é assim que o Mural mostra uma "prévia de imagem" de um PDF anexado.
+   * Só tem efeito no CloudinaryStorageProvider (local nunca rasteriza PDF). */
+  pdfFirstPageAsImage?: boolean;
 }
 
 export interface StorageProvider {

@@ -41,9 +41,11 @@ export class CloudinaryStorageProvider implements StorageProvider {
     });
   }
 
-  /** PDFs/TXT viajam como 'raw'; imagens como 'image' — Cloudinary exige o tipo certo para buscar/apagar depois. */
+  /** TXT viaja como 'raw'; imagens E PDF como 'image' — PDF precisa desse tipo no Cloudinary
+   * pra poder ser rasterizado página-a-página sob demanda (ver `read()` com
+   * `pdfFirstPageAsImage`), senão o arquivo só poderia ser baixado inteiro. */
   private resourceTypeFor(mimeType: string): 'image' | 'raw' {
-    return mimeType.startsWith('image/') ? 'image' : 'raw';
+    return mimeType.startsWith('image/') || mimeType === 'application/pdf' ? 'image' : 'raw';
   }
 
   public async save(params: SaveFileParams): Promise<SaveFileResult> {
@@ -80,6 +82,8 @@ export class CloudinaryStorageProvider implements StorageProvider {
         height: transform.height,
         crop: transform.crop,
         quality: 'auto',
+        // Rasteriza a 1ª página do PDF como JPG em vez de devolver o PDF cru.
+        ...(transform.pdfFirstPageAsImage && { format: 'jpg', page: 1 }),
       }),
     });
 

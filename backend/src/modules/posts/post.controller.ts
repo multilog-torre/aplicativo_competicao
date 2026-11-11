@@ -61,6 +61,18 @@ export class PostController {
     return res.send(buffer);
   }
 
+  /** GET /posts/:id/file — arquivo original anexado (hoje só relevante pro PDF; a foto já é servida por getImage). */
+  public static async getFile(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const isAdmin = isAdminRequest(req);
+    const { buffer, attachmentType } = await PostService.getFileForDownload(id, userId, isAdmin);
+    res.setHeader('Content-Type', attachmentType === 'PDF' ? 'application/pdf' : 'image/jpeg');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    return res.send(buffer);
+  }
+
   public static async setReaction(req: Request, res: Response): Promise<Response> {
     const { id } = req.params;
     const { emoji } = req.body as SetReactionDTO;

@@ -3,13 +3,20 @@ import { prisma } from '../../config/database';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { TransactionClient } from '../../shared/types/prisma';
 import { UploadedFile } from '../../shared/types/upload';
-import { assertAllowedFile } from '../../shared/utils/fileValidation';
+import { assertAllowedFile, getFileExtension } from '../../shared/utils/fileValidation';
 import { assertEventGroupAccess } from '../events/event-access.util';
 import { NotificationService } from '../notifications/notification.service';
 import { getStorageProvider } from '../storage/storage.factory';
 import { ListPostsQueryDTO, ModeratePostDTO, ReactionEmojiCode } from './post.dto';
 
-const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png'];
+// PDF é aceito como anexo de post (a pedido do usuário) além de foto — o card do
+// Mural mostra uma prévia rasterizada da 1ª página (ver getImageForDownload) e um
+// botão pra abrir o arquivo original (getFileForDownload).
+const ALLOWED_ATTACHMENT_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf'];
+
+function attachmentTypeForExtension(extension: string): 'IMAGE' | 'PDF' {
+  return extension === 'pdf' ? 'PDF' : 'IMAGE';
+}
 
 const MODERATION_ACTION_TO_STATUS: Record<string, string> = {
   HIDE: 'HIDDEN',
@@ -22,6 +29,7 @@ type PostRow = {
   userId: string;
   content: string;
   imageUrl: string | null;
+  attachmentType: string | null;
   status: string;
   eventId: string | null;
   activityId: string | null;
@@ -58,8 +66,8 @@ const POST_INCLUDE = {
 
 export class PostService {
   /**
-   * Cria uma publicação no mural, opcionalmente com uma foto anexada.
-   * A foto reaproveita o mesmo StorageProvider das evidências (Fase 7) —
+   * Cria uma publicação no mural, opcionalmente com uma foto OU um PDF anexado.
+   * O arquivo reaproveita o mesmo StorageProvider das evidências (Fase 7) —
    * privado por padrão, servido apenas pelo endpoint de download autorizado.
    */
   public static async create(userId: string, content: string, isAdmin: boolean, file?: UploadedFile, eventId?: string) {
@@ -71,9 +79,11 @@ export class PostService {
 
     const postId = uuidv4();
     let imageUrl: string | null = null;
+    let attachmentType: 'IMAGE' | 'PDF' | null = null;
 
     if (file) {
-      assertAllowedFile(file, ALLOWED_IMAGE_EXTENSIONS);
+      assertAllowedFile(file, ALLOWED_ATTACHMENT_EXTENSIONS);
+      attachmentType = attachmentTypeForExtension(getFileExtension(file.originalname));
       const storage = getStorageProvider();
       const { storagePath } = await storage.save({
         buffer: file.buffer,
@@ -85,7 +95,7 @@ export class PostService {
     }
 
     const post = await prisma.post.create({
-      data: { id: postId, userId, content, imageUrl, status: 'PUBLISHED', eventId: eventId ?? null },
+      data: { id: postId, userId, content, imageUrl, attachmentType, status: 'PUBLISHED', eventId: eventId ?? null },
       include: POST_INCLUDE,
     });
 
@@ -130,6 +140,9 @@ export class PostService {
         userId: params.userId,
         content: params.content,
         imageUrl,
+        // Sempre IMAGE (nunca PDF): só evidência em formato de imagem vira foto de
+        // post automático (ver IMAGE_EVIDENCE_MIME_TYPES em post.dto.ts).
+        attachmentType: imageUrl ? 'IMAGE' : null,
         status: 'PUBLISHED',
         eventId: null,
         activityId: params.activityId,
@@ -162,7 +175,7 @@ export class PostService {
       folder: `mural/${post.id}`,
     });
 
-    await prisma.post.update({ where: { id: post.id }, data: { imageUrl: storagePath } });
+    await prisma.post.update({ where: { id: post.id }, data: { imageUrl: storagePath, attachmentType: 'IMAGE' } });
   }
 
   public static async list(query: ListPostsQueryDTO, requestingUserId: string, isAdmin: boolean) {
@@ -277,7 +290,11 @@ export class PostService {
     return updated;
   }
 
-  /** Recupera o conteúdo binário da foto do post (acesso autorizado, mesmo padrão da Fase 7). */
+  /**
+   * Recupera o conteúdo binário da "imagem" do post — a foto em si, OU, quando o
+   * anexo é um PDF, uma prévia rasterizada da 1ª página (sempre JPG). Acesso
+   * autorizado, mesmo padrão da Fase 7.
+   */
   public static async getImageForDownload(postId: string, requestingUserId: string, isAdmin: boolean, thumbnail: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post || !post.imageUrl) throw new NotFoundError('Esta publicação não possui uma foto.');
@@ -288,11 +305,43 @@ export class PostService {
     }
 
     const storage = getStorageProvider();
+
+    if (post.attachmentType === 'PDF') {
+      // Rasterização de PDF só existe no CloudinaryStorageProvider — no storage
+      // local (dev) não há como gerar a prévia; o frontend trata esse 404 como
+      // "sem prévia disponível" e mostra o botão de abrir o PDF original.
+      if (storage.providerName !== 'cloudinary') {
+        throw new NotFoundError('Pré-visualização de PDF não está disponível neste ambiente.');
+      }
+      const buffer = await storage.read(post.imageUrl, {
+        width: thumbnail ? 480 : 1000,
+        crop: 'limit',
+        pdfFirstPageAsImage: true,
+      });
+      return { buffer };
+    }
+
     // O feed do Mural só precisa de uma prévia pequena (thumbnail=true); a foto em
     // tamanho original só é buscada quando a pessoa abre o lightbox (ver MuralPage.tsx).
     // 'limit' só reduz o que for maior que isso, mantendo a proporção da foto.
     const buffer = await storage.read(post.imageUrl, thumbnail ? { width: 480, crop: 'limit' } : undefined);
     return { buffer };
+  }
+
+  /** Recupera o arquivo ORIGINAL do post (sem rasterizar) — usado pelo botão "Abrir PDF"
+   * do Mural pra abrir o PDF de verdade, não a prévia em imagem dele. */
+  public static async getFileForDownload(postId: string, requestingUserId: string, isAdmin: boolean) {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post || !post.imageUrl) throw new NotFoundError('Esta publicação não possui um arquivo anexado.');
+    await assertEventGroupAccess(post.eventId, requestingUserId, isAdmin);
+
+    if (post.status !== 'PUBLISHED' && !isAdmin && post.userId !== requestingUserId) {
+      throw new ForbiddenError('Esta publicação não está mais disponível.');
+    }
+
+    const storage = getStorageProvider();
+    const buffer = await storage.read(post.imageUrl); // sem transform = arquivo original
+    return { buffer, attachmentType: post.attachmentType };
   }
 
   // ─── Reações ─────────────────────────────────────────────────────────────────
@@ -401,7 +450,12 @@ export class PostService {
       content: post.content,
       eventId: post.eventId,
       hasImage: !!post.imageUrl,
+      attachmentType: post.attachmentType,
       imageDownloadUrl: post.imageUrl ? `/api/v1/posts/${post.id}/image` : null,
+      // Só relevante pro card decidir se tenta buscar a prévia de PDF ou já mostra
+      // direto o botão "Abrir PDF" — rasterização de PDF só existe no Cloudinary.
+      hasImagePreview: post.attachmentType !== 'PDF' || getStorageProvider().providerName === 'cloudinary',
+      fileDownloadUrl: post.attachmentType === 'PDF' ? `/api/v1/posts/${post.id}/file` : null,
       status: post.status,
       activity: post.activity
         ? {

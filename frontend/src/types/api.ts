@@ -251,7 +251,13 @@ export interface Post {
   content: string;
   eventId: string | null;
   hasImage: boolean;
+  attachmentType: 'IMAGE' | 'PDF' | null;
   imageDownloadUrl: string | null;
+  /** true quando dá pra buscar uma prévia em imagem do anexo (sempre true pra foto;
+   * pra PDF, só true se o ambiente souber rasterizar — ver post.service.ts). */
+  hasImagePreview: boolean;
+  /** Arquivo original (não a prévia rasterizada) — só preenchido quando attachmentType é PDF. */
+  fileDownloadUrl: string | null;
   status: string;
   /** Preenchido só em posts automáticos, criados quando uma atividade é aprovada. */
   activity: PostActivityInfo | null;
