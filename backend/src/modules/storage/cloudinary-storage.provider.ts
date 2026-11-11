@@ -52,7 +52,7 @@ export class CloudinaryStorageProvider implements StorageProvider {
     const resourceType = this.resourceTypeFor(params.mimeType);
     const publicId = `torre/${params.folder}/${uuidv4()}`;
 
-    const uploadResult = await new Promise<{ public_id: string; secure_url: string }>((resolve, reject) => {
+    const uploadResult = await new Promise<{ public_id: string; secure_url: string; format: string }>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { public_id: publicId, resource_type: resourceType, overwrite: false },
         (error, result) => {
@@ -66,17 +66,27 @@ export class CloudinaryStorageProvider implements StorageProvider {
       uploadStream.end(params.buffer);
     });
 
-    // storagePath carrega o resource_type junto — necessário para buscar/apagar depois.
-    return { storagePath: `${resourceType}/${uploadResult.public_id}`, storageUrl: uploadResult.secure_url };
+    // storagePath carrega o resource_type E o formato real (ex.: 'pdf', 'jpg') — o formato
+    // é necessário pra resolver a URL de busca de um recurso 'image' sem ambiguidade (ver
+    // read(): sem ele, pedir de volta o arquivo ORIGINAL de um PDF, que agora sobe como
+    // 'image' pra poder ser rasterizado, dava 404 — bug real em produção, corrigido aqui).
+    return {
+      storagePath: `${resourceType}/${uploadResult.format}/${uploadResult.public_id}`,
+      storageUrl: uploadResult.secure_url,
+    };
   }
 
   public async read(storagePath: string, transform?: ReadImageTransform): Promise<Buffer> {
-    const { resourceType, publicId } = this.parsePath(storagePath);
+    const { resourceType, format, publicId } = this.parsePath(storagePath);
     // Transformação só faz sentido pra imagem — pedir isso num PDF/raw o Cloudinary rejeitaria.
     const applyTransform = transform && resourceType === 'image';
     const url = cloudinary.url(publicId, {
       resource_type: resourceType,
       secure: true,
+      // Formato explícito do arquivo original (quando conhecido) — evita ambiguidade/404
+      // ao buscar um recurso 'image' sem transformação (ver nota em save()). Quando uma
+      // transformação rasteriza o PDF como JPG, o format abaixo já sobrescreve este.
+      ...(format && { format }),
       ...(applyTransform && {
         width: transform.width,
         height: transform.height,
@@ -100,11 +110,19 @@ export class CloudinaryStorageProvider implements StorageProvider {
     await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
   }
 
-  private parsePath(storagePath: string): { resourceType: 'image' | 'raw'; publicId: string } {
-    const [resourceType, ...rest] = storagePath.split('/');
-    if ((resourceType !== 'image' && resourceType !== 'raw') || rest.length === 0) {
+  /** storagePath tem 2 formatos possíveis: antigo (`resourceType/publicId`, sem formato —
+   * arquivos salvos antes desta correção) e novo (`resourceType/format/publicId`). Como
+   * todo publicId começa com o literal "torre/" (ver save()), dá pra diferenciar os dois
+   * sem precisar de uma migração: se o 2º segmento for "torre", é o formato antigo. */
+  private parsePath(storagePath: string): { resourceType: 'image' | 'raw'; format: string | null; publicId: string } {
+    const segments = storagePath.split('/');
+    const [resourceType] = segments;
+    if ((resourceType !== 'image' && resourceType !== 'raw') || segments.length < 2) {
       throw new AppError('Caminho de armazenamento inválido.', 400, 'INVALID_STORAGE_PATH');
     }
-    return { resourceType, publicId: rest.join('/') };
+    if (segments[1] === 'torre') {
+      return { resourceType, format: null, publicId: segments.slice(1).join('/') };
+    }
+    return { resourceType, format: segments[1], publicId: segments.slice(2).join('/') };
   }
 }
